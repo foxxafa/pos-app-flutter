@@ -1,0 +1,51 @@
+{
+  "app": {
+    "title": "POS Terminal"
+  },
+  "home": {
+    "welcome": "Welcome",
+    "customer_list": "Customer List",
+    "customer_list_subtitle": "View customers",
+    "reports": "Reports",
+    "reports_subtitle": "Sales reports",
+    "terminal_sync": "Terminal Sync",
+    "terminal_sync_subtitle": "Synchronize data",
+    "settings": "Settings",
+    "settings_subtitle": "App settings",
+    "settings_not_ready": "Settings page is being prepared...",
+    "saved_carts": "Saved Carts",
+    "saved_carts_subtitle": "View saved carts"
+  },
+  "auth": {
+    "logout": "Logout",
+    "logout_title": "Logout",
+    "logout_confirmation": "Are you sure you want to logout?",
+    "logout_error": "An error occurred while logging out: {error}",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
+  "buttons": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "yes": "Yes",
+    "no": "No",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "close": "Close"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information",
+    "no_data": "No data available",
+    "confirm_action": "Are you sure?"
+  }
+}

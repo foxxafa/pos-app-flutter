@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:path/path.dart' as p;
 import 'package:pos_app/providers/user_provider.dart';
 import 'package:pos_app/views/cartsavedview.dart';
@@ -29,7 +30,7 @@ class _MenuViewState extends State<MenuView> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (mounted) {
       setState(() {
-        _userName = userProvider.username ?? 'Kullanıcı';
+        _userName = userProvider.username ?? 'User';
       });
     }
   }
@@ -40,16 +41,16 @@ class _MenuViewState extends State<MenuView> {
 
   Future<void> _performLogout() async {
     try {
-      // Veritabanı yolunu al
+      // Get database path
       var databasesPath = await getDatabasesPath();
       String path = p.join(databasesPath, 'pos_database.db');
 
-      // Veritabanını aç ve tabloyu sil
+      // Open database and delete table
       Database db = await openDatabase(path);
       await db.delete('Login');
       await db.close();
 
-      // Login ekranına yönlendir
+      // Navigate to login screen
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -58,7 +59,14 @@ class _MenuViewState extends State<MenuView> {
         );
       }
     } catch (e) {
-      print('Logout error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('auth.logout_error'.tr(args: [e.toString()])),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
@@ -67,11 +75,11 @@ class _MenuViewState extends State<MenuView> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Çıkış Yap'),
-          content: const Text('Uygulamadan çıkış yapmak istediğinize emin misiniz?'),
+          title: Text('auth.logout_title'.tr()),
+          content: Text('auth.logout_confirmation'.tr()),
           actions: <Widget>[
             TextButton(
-              child: const Text('İptal'),
+              child: Text('auth.cancel'.tr()),
               onPressed: () {
                 Navigator.of(context).pop();
               },
@@ -80,7 +88,7 @@ class _MenuViewState extends State<MenuView> {
               style: TextButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.error,
               ),
-              child: const Text('Çıkış'),
+              child: Text('auth.logout'.tr()),
               onPressed: () {
                 Navigator.of(context).pop();
                 _performLogout();
@@ -98,12 +106,12 @@ class _MenuViewState extends State<MenuView> {
       canPop: false,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('POS Terminal'),
+          title: Text('app.title'.tr()),
           automaticallyImplyLeading: false,
           actions: [
             IconButton(
               icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
-              tooltip: 'Çıkış Yap',
+              tooltip: 'auth.logout'.tr(),
               onPressed: _handleLogoutAttempt,
             ),
           ],
@@ -129,7 +137,7 @@ class _MenuViewState extends State<MenuView> {
                     const SizedBox(height: 24),
                     _HomeButton(
                       icon: Icons.people_outline,
-                      label: 'Müşteri Listesi',
+                      label: 'home.customer_list'.tr(),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -142,7 +150,7 @@ class _MenuViewState extends State<MenuView> {
                     const SizedBox(height: 16),
                     _HomeButton(
                       icon: Icons.assessment_outlined,
-                      label: 'Raporlar',
+                      label: 'home.reports'.tr(),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -155,7 +163,7 @@ class _MenuViewState extends State<MenuView> {
                     const SizedBox(height: 16),
                     _HomeButton(
                       icon: Icons.sync_outlined,
-                      label: 'Terminal Sync',
+                      label: 'home.terminal_sync'.tr(),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -167,25 +175,25 @@ class _MenuViewState extends State<MenuView> {
                     ),
                     const SizedBox(height: 16),
                     _HomeButton(
-                      icon: Icons.settings_outlined,
-                      label: 'Ayarlar',
+                      icon: Icons.shopping_cart_outlined,
+                      label: 'home.saved_carts'.tr(),
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Ayarlar sayfası hazırlanıyor...'),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CartListPage(),
                           ),
                         );
                       },
                     ),
                     const SizedBox(height: 16),
                     _HomeButton(
-                      icon: Icons.shopping_cart_outlined,
-                      label: 'Kayıtlı Sepetler',
+                      icon: Icons.settings_outlined,
+                      label: 'home.settings'.tr(),
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CartListPage(),
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('home.settings_not_ready'.tr()),
                           ),
                         );
                       },
@@ -224,7 +232,7 @@ class _MenuViewState extends State<MenuView> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Hoş Geldiniz',
+                    'home.welcome'.tr(),
                     style: theme.textTheme.titleSmall
                         ?.copyWith(color: theme.textTheme.bodySmall?.color),
                   ),
@@ -245,7 +253,7 @@ class _MenuViewState extends State<MenuView> {
   }
 }
 
-// DIAPALET'teki _HomeButton widget'ını birebir kopyalıyoruz
+// DIAPALET style _HomeButton widget
 class _HomeButton extends StatelessWidget {
   final IconData icon;
   final String label;

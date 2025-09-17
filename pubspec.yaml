@@ -46,7 +46,8 @@ dependencies:
   path_provider: ^2.1.2  # Veya daha güncel versiyon
   shared_preferences: ^2.5.3
   audioplayers: ^6.5.0
-  
+  easy_localization: ^3.0.7
+
 dev_dependencies:
   flutter_launcher_icons: ^0.14.3
   flutter_test:
@@ -76,6 +77,7 @@ flutter:
     - assets/logo.png
     - assets/hand.png
     - assets/wrong.mp3
+    - assets/translations/
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
