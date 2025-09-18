@@ -44,6 +44,25 @@
     "statement": "Statement",
     "back_to_list": "Back to Customer List"
   },
+  "customer_detail": {
+    "title": "Customer Detail",
+    "company_name": "Company Name",
+    "customer_code": "Customer Code",
+    "tax_number": "Tax Number",
+    "tax_office": "Tax Office",
+    "address": "Address",
+    "postcode": "Postcode",
+    "city": "City",
+    "phone": "Phone",
+    "mobile": "Mobile",
+    "email": "Email",
+    "contact_person": "Contact Person",
+    "balance": "Balance",
+    "not_provided": "Not provided",
+    "customer_not_found": "Customer not found",
+    "tap_to_open_map": "Tap to open in maps",
+    "loading": "Loading..."
+  },
   "order": {
     "title": "Order",
     "order_no": "Order No",
@@ -100,6 +119,18 @@
     "error_message": "Transaction error.",
     "offline_message": "No internet, order saved to Pending.",
     "validation_message": "Please enter description and amount."
+  },
+  "statement": {
+    "title": "Statement",
+    "date": "Date",
+    "description": "Description",
+    "amount": "Amount",
+    "transaction_no": "Transaction No",
+    "payment_received": "Payment Received",
+    "purchase": "Purchase",
+    "credit_note": "Credit Note",
+    "no_transactions": "No transactions found",
+    "total_balance": "Total Balance"
   },
   "messages": {
     "loading": "Loading...",
