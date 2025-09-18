@@ -16,6 +16,37 @@
     "saved_carts": "Saved Carts",
     "saved_carts_subtitle": "View saved carts"
   },
+  "customers": {
+    "title": "Customers",
+    "search_placeholder": "Search customers...",
+    "no_customers": "No customers found",
+    "no_customers_subtitle": "Try adjusting your search or sync data",
+    "unknown_customer": "Unknown Customer",
+    "no_code": "No Code",
+    "active": "Active",
+    "inactive": "Inactive",
+    "phone": "Phone",
+    "address": "Address",
+    "email": "Email",
+    "not_provided": "Not provided",
+    "sync_data_first": "Please download data first.\\nGo to MENU>SYNC>INITIAL SETUP."
+  },
+  "customer_menu": {
+    "title": "Customer Menu",
+    "customer_label": "Customer:",
+    "balance_label": "Balance:",
+    "no_customer_selected": "No Customer Selected",
+    "select_customer_first": "Please select a customer first.",
+    "order": "Order",
+    "collection": "Collection",
+    "return": "Return",
+    "customer_detail": "Customer Detail",
+    "statement": "Statement",
+    "back_to_list": "Back to Customer List"
+  },
+  "order": {
+    "title": "Order"
+  },
   "auth": {
     "logout": "Logout",
     "logout_title": "Logout",

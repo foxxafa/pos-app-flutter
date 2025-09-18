@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:path/path.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
 import 'package:pos_app/models/customer_balance.dart';
@@ -18,6 +19,7 @@ import 'package:provider/provider.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/theme/app_theme.dart';
 
 class CustomerView extends StatefulWidget {
     final String bakiye;
@@ -75,131 +77,168 @@ print("DB CLOSE TIME 6");
 
     if (customer == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text("No Customer Selected")),
-        body: const Center(child: Text("Please select a customer first.")),
+        appBar: AppBar(title: Text('customer_menu.no_customer_selected'.tr())),
+        body: Center(child: Text('customer_menu.select_customer_first'.tr())),
       );
     }
 
+    final theme = Theme.of(context);
     return Scaffold(
-      bottomNavigationBar: Container(
-        height: 10.h,
-        width: 100.w,
-  color: Colors.red,
-  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-  child: Center(
-    child: Text(
-      "Balance: ${widget.bakiye} GBP",
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
+      backgroundColor: AppTheme.lightBackgroundColor,
+      appBar: AppBar(
+        title: Text('customer_menu.title'.tr()),
+        leading: IconButton(
+          icon: Icon(Icons.home),
+          onPressed: () {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MenuView()),
+            );
+          },
+        ),
       ),
-    ),
-  ),
-),
-
-appBar: AppBar(
-  leading: IconButton(
-    icon: const Icon(Icons.home),
-    tooltip: 'Ana Menü',
-    onPressed: () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MenuView()),
-      );
-    },
-  ),
-  title: Text('CUSTOMER MENU', style: TextStyle(fontSize: 22.sp)),
-  centerTitle: true,
-),
-
-      body: Padding(
-        padding: EdgeInsets.all(6.w),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Sadece müşteri unvanı
-            Text(
-              'Customer: ${customer.unvan}',
-              style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 4.h),
-
-            // Menü listesi
-            Expanded(
-              child: ListView(
-                children: [
-                  _buildMenuItem(
-                    context,
-                    title: 'Order',
-                    icon: Icons.shopping_cart,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const InvoiceActivityView()),
-                      );
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'Collection',
-                    icon: Icons.monetization_on,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const CollectionActivity()),
-                      );
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'Return',
-                    icon: Icons.undo,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => RefundActivityView()),
-                      );
-                    },
-                  ),_buildMenuItem(
-                    context,
-                    title: 'Customer Detail',
-                    icon: Icons.people,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => CustomerDetailView()),
-                      );
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'Statement',
-                    icon: Icons.people,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => StatementScreen()),
-                      );
-                    },
-                  ),
-                  _buildMenuItem(
-                    context,
-                    title: 'Back to Customer List',
-                    icon: Icons.arrow_back,
-                    onTap: () {
-                      Navigator.pushAndRemoveUntil(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SalesView()),
-                        (route) => false,
-                      );
-                    },
-                  ),
-                ],
-              ),
+      bottomNavigationBar: Container(
+        padding: EdgeInsets.all(4.w),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primary,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: Offset(0, -2),
             ),
           ],
         ),
+        child: SafeArea(
+          child: Text(
+            '${'customer_menu.balance_label'.tr()} £${widget.bakiye}',
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: theme.colorScheme.onPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+
+      body: Column(
+        children: [
+          // Customer Info Card
+          Container(
+            width: double.infinity,
+            margin: EdgeInsets.all(4.w),
+            padding: EdgeInsets.all(4.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  spreadRadius: 1,
+                  blurRadius: 10,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'customer_menu.customer_label'.tr(),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 1.h),
+                Text(
+                  customer.unvan ?? 'customers.unknown_customer'.tr(),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+
+          // Menu Items
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.symmetric(horizontal: 4.w),
+              children: [
+                _buildMenuItem(
+                  context,
+                  title: 'customer_menu.order'.tr(),
+                  icon: Icons.shopping_cart_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const InvoiceActivityView()),
+                    );
+                  },
+                ),
+                _buildMenuItem(
+                  context,
+                  title: 'customer_menu.collection'.tr(),
+                  icon: Icons.payment_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CollectionActivity()),
+                    );
+                  },
+                ),
+                _buildMenuItem(
+                  context,
+                  title: 'customer_menu.return'.tr(),
+                  icon: Icons.keyboard_return_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => RefundActivityView()),
+                    );
+                  },
+                ),
+                _buildMenuItem(
+                  context,
+                  title: 'customer_menu.customer_detail'.tr(),
+                  icon: Icons.person_outline,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => CustomerDetailView()),
+                    );
+                  },
+                ),
+                _buildMenuItem(
+                  context,
+                  title: 'customer_menu.statement'.tr(),
+                  icon: Icons.description_outlined,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => StatementScreen()),
+                    );
+                  },
+                ),
+                _buildMenuItem(
+                  context,
+                  title: 'customer_menu.back_to_list'.tr(),
+                  icon: Icons.arrow_back_outlined,
+                  onTap: () {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SalesView()),
+                      (route) => false,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -210,14 +249,48 @@ appBar: AppBar(
     required IconData icon,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
     return Card(
-      elevation: 2,
-      margin: EdgeInsets.symmetric(vertical: 1.h),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: ListTile(
-        leading: Icon(icon, size: 24.sp),
-        title: Text(title, style: TextStyle(fontSize: 18.sp)),
-        onTap: onTap,
+      margin: EdgeInsets.only(bottom: 2.h),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.all(4.w),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(3.w),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: theme.colorScheme.primary,
+                    size: 6.w,
+                  ),
+                ),
+                SizedBox(width: 4.w),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.grey[400],
+                  size: 4.w,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

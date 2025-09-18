@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:pos_app/views/cart_view.dart';
@@ -56,7 +57,7 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
     final parsedOrders = parseRefundActivities(_refundActivities);
 
     return Scaffold(
-      appBar: AppBar(title: const Text("-Order-")),
+      appBar: AppBar(title: Text('order.title'.tr())),
       body: Padding(
         padding: EdgeInsets.all(3.h),
         child: Column(
