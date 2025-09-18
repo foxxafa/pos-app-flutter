@@ -80,6 +80,27 @@
     "submit": "Submit",
     "close": "Close"
   },
+  "transaction": {
+    "title": "Transaction",
+    "payment_method": "Payment Method",
+    "document_no": "Document No",
+    "customer": "Customer",
+    "enter_amount": "Enter Amount £",
+    "description": "Description",
+    "cheque_no": "Cheque No",
+    "choose_cheque_date": "Choose Cheque Date",
+    "payment_methods": {
+      "cash": "Cash",
+      "credit_card": "Credit Card",
+      "cheque": "Cheque",
+      "bank": "Bank"
+    },
+    "submit": "SUBMIT",
+    "success_message": "Transaction successful.",
+    "error_message": "Transaction error.",
+    "offline_message": "No internet, order saved to Pending.",
+    "validation_message": "Please enter description and amount."
+  },
   "messages": {
     "loading": "Loading...",
     "success": "Success",

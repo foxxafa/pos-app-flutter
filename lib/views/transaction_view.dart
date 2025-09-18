@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:pos_app/controllers/transaction_controller.dart';
@@ -14,7 +15,8 @@ import 'package:sizer/sizer.dart';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:path/path.dart' as p;
+import 'package:pos_app/core/theme/app_theme.dart';
 
 class TransactionPage extends StatefulWidget {
   const TransactionPage({super.key});
@@ -46,7 +48,7 @@ print("fisnooooooooo $_documentNo");
 
     if (carikod == null || _tutarController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please enter description and amount.", style: TextStyle(fontSize: 14.sp))),
+        SnackBar(content: Text('transaction.validation_message'.tr(), style: TextStyle(fontSize: 14.sp))),
       );
       return;
     }
@@ -74,7 +76,7 @@ print("fisnooooooooo $_documentNo");
     final connectivity = await Connectivity().checkConnectivity();
 
     if (connectivity[0] == ConnectivityResult.none) {
-      final path = join(await getDatabasesPath(), 'pos_database.db');
+      final path = p.join(await getDatabasesPath(), 'pos_database.db');
       final db = await openDatabase(path, version: 1);
       var result = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tahsilatlar';");
       if (result.isEmpty) {
@@ -110,7 +112,7 @@ print("DB CLOSE TIME 12");
             height: 10.h,
             child: Center(
               child: Text(
-                'No internet, order saved to Pending.',
+                'transaction.offline_message'.tr(),
                 style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold),
               ),
             ),
@@ -138,7 +140,7 @@ print("bakişyeee: $bakiye");
               height: 10.h,
               child: Center(
                 child: Text(
-                  'Transaction successful.',
+                  'transaction.success_message'.tr(),
                   style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -165,7 +167,7 @@ ScaffoldMessenger.of(context).showSnackBar(
               height: 10.h,
               child: Center(
                 child: Text(
-                  'Transaction error.',
+                  'transaction.error_message'.tr(),
                   style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -187,126 +189,325 @@ ScaffoldMessenger.of(context).showSnackBar(
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final selectedCustomer = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
+    final dateFormat = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
+      backgroundColor: AppTheme.lightBackgroundColor,
       appBar: AppBar(
-        title: Text("Transaction", style: TextStyle(fontSize: 22.sp)),
-        centerTitle: true,
+        title: Text('transaction.title'.tr()),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(6.w),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.start,
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(3.w),
+              child: Column(
                 children: [
-                  _buildPaymentOption('Cash', Icons.money, 'Cash'),
-                  SizedBox(width: 5.w),
-                  _buildPaymentOption('Credit Card', Icons.credit_card, 'Credit Card'),
-                  SizedBox(width: 5.w),
-                  _buildPaymentOption('Cheque', Icons.receipt_long, 'Cheque'),
-                  SizedBox(width: 5.w),
-                  _buildPaymentOption('Bank', Icons.account_balance, 'Bank'),
-                ],
-              ),
-
-              SizedBox(height: 1.h),
-              Text("Document No: $_documentNo", style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500)),
-              SizedBox(height: 2.h),
-              Text("Customer: ${selectedCustomer?.unvan ?? '-'}", style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
-              SizedBox(height: 2.h),
-
-              TextField(
-                controller: _tutarController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: TextStyle(fontSize: 18.sp),
-                decoration: InputDecoration(
-                  labelText: "Enter Amount £",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              SizedBox(height: 2.h),
-
-              TextField(
-                controller: _aciklamaController,
-                style: TextStyle(fontSize: 18.sp),
-                decoration: InputDecoration(
-                  labelText: "Description",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              SizedBox(height: 2.h),
-
-              if (_selectedPaymentMethod == 'Cheque') ...[
-                TextField(
-                  controller: _chequeNoController,
-                  decoration: InputDecoration(
-                    labelText: "Cheque No",
-                    border: OutlineInputBorder(),
+                  // Document Number Card (moved to top)
+                  _buildInfoCard(
+                    title: 'transaction.document_no'.tr(),
+                    content: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.5.h),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Text(
+                        _documentNo,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    isCompact: true,
                   ),
-                  style: TextStyle(fontSize: 16.sp),
-                ),
-                SizedBox(height: 2.h),
-                TextButton(
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _chequeExpiryDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) {
-                      setState(() => _chequeExpiryDate = picked);
-                    }
-                  },
-                  style: TextButton.styleFrom(
-                    side: BorderSide(color: Colors.blue, width: 1.5),
-                    padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.h),
-                  ),
-                  child: Text("Choose Cheque Date: ${_chequeExpiryDate.toLocal().toString().split(' ')[0]}", style: TextStyle(fontSize: 14.sp)),
-                ),
-              ],
 
-              SizedBox(height: 3.h),
-              if (_loading)
-                Center(child: CircularProgressIndicator())
-              else
-                Center(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _sendTahsilat(_selectedPaymentMethod, context),
-                    icon: Icon(Icons.send, size: 18.sp),
-                    label: Text("SUBMIT", style: TextStyle(fontSize: 16.sp)),
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+                  SizedBox(height: 1.h),
+
+                  // Customer Card
+                  _buildInfoCard(
+                    title: 'transaction.customer'.tr(),
+                    content: Container(
+                      width: double.infinity,
+                      padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.5.h),
+                      child: Text(
+                        selectedCustomer?.unvan ?? '-',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    isCompact: true,
+                  ),
+
+                  SizedBox(height: 1.h),
+
+                  // Payment Method Selection Card
+                  _buildInfoCard(
+                    title: 'transaction.payment_method'.tr(),
+                    content: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildPaymentOption('Cash', Icons.money, 'transaction.payment_methods.cash'.tr()),
+                        _buildPaymentOption('Credit Card', Icons.credit_card, 'transaction.payment_methods.credit_card'.tr()),
+                        _buildPaymentOption('Cheque', Icons.receipt_long, 'transaction.payment_methods.cheque'.tr()),
+                        _buildPaymentOption('Bank', Icons.account_balance, 'transaction.payment_methods.bank'.tr()),
+                      ],
                     ),
                   ),
+
+                  SizedBox(height: 1.h),
+
+                  // Amount Card
+                  _buildInfoCard(
+                    title: 'transaction.enter_amount'.tr(),
+                    content: TextField(
+                      controller: _tutarController,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: theme.textTheme.bodyMedium,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(2.w),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 1.h),
+
+                  // Description Card with more lines
+                  _buildInfoCard(
+                    title: 'transaction.description'.tr(),
+                    content: TextField(
+                      controller: _aciklamaController,
+                      maxLines: 4,
+                      minLines: 4,
+                      style: theme.textTheme.bodyMedium,
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.all(2.w),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 1.h),
+
+                  // Cheque Fields (if cheque is selected)
+                  if (_selectedPaymentMethod == 'Cheque') ...[
+                    _buildInfoCard(
+                      title: 'transaction.cheque_no'.tr(),
+                      content: TextField(
+                        controller: _chequeNoController,
+                        style: theme.textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.all(2.w),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 1.h),
+                    _buildActionCard(
+                      icon: Icons.calendar_today_outlined,
+                      title: 'transaction.choose_cheque_date'.tr(),
+                      subtitle: dateFormat.format(_chequeExpiryDate),
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _chequeExpiryDate,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2100),
+                        );
+                        if (picked != null) {
+                          setState(() => _chequeExpiryDate = picked);
+                        }
+                      },
+                    ),
+                    SizedBox(height: 1.h),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          // Submit Button at absolute bottom
+          Container(
+            padding: EdgeInsets.only(left: 3.w, right: 3.w, top: 2.h, bottom: 5.h),
+            child: Card(
+              child: SizedBox(
+                width: double.infinity,
+                height: 6.h,
+                child: _loading
+                    ? Center(child: CircularProgressIndicator())
+                    : ElevatedButton.icon(
+                        onPressed: () => _sendTahsilat(_selectedPaymentMethod, context),
+                        icon: Icon(Icons.send_outlined, size: 5.w),
+                        label: Text(
+                          'transaction.submit'.tr(),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accentColor,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaymentOption(String value, IconData icon, String label) {
+    final theme = Theme.of(context);
+    final isSelected = _selectedPaymentMethod == value;
+
+    return Flexible(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => setState(() => _selectedPaymentMethod = value),
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 2.5.w),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: isSelected
+                    ? theme.colorScheme.primary
+                    : Colors.grey[300]!,
+                width: isSelected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              color: isSelected
+                  ? theme.colorScheme.primary.withOpacity(0.05)
+                  : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 7.w,
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : Colors.grey[600],
                 ),
-            ],
+                SizedBox(height: 0.8.h),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? theme.colorScheme.primary : null,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPaymentOption(String value, IconData icon, String label) {
-    return Flexible(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Radio<String>(
-            value: value,
-            groupValue: _selectedPaymentMethod,
-            onChanged: (val) {
-              setState(() => _selectedPaymentMethod = val!);
-            },
+  Widget _buildInfoCard({required String title, required Widget content, bool isCompact = false}) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(3.w),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: isCompact ? 0.5.h : 1.h),
+            content,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCard({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.all(3.w),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(3.w),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: theme.colorScheme.primary,
+                    size: 6.w,
+                  ),
+                ),
+                SizedBox(width: 4.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        SizedBox(height: 0.5.h),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.grey[400],
+                  size: 4.w,
+                ),
+              ],
+            ),
           ),
-          Icon(icon, size: 18.sp),
-          Text(label, style: TextStyle(fontSize: 14.sp)),
-        ],
+        ),
       ),
     );
   }
