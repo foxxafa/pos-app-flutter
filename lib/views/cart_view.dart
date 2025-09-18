@@ -1601,7 +1601,7 @@ if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
                                                         product.birimKey2 !=
                                                             "0")) {
                                                   final bool newValue =
-                                                      (val == 'Unit');
+                                                      (val == 'Box'); // Box seçilmişse true, Unit seçilmişse false
                                                   setState(() {
                                                     _isBoxMap[key] = newValue;
                                                   });
@@ -2218,14 +2218,27 @@ if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
   }
   
   String? getBirimTipiFromProduct(ProductModel product) {
-   if (product.birimKey2 != "0") {
-    return 'Box';
+    final key = product.stokKodu ?? '';
+    final isBox = _isBoxMap[key] ?? false;
+
+    // Eğer Box seçili ve Box mevcut ise
+    if (isBox && product.birimKey2 != "0") {
+      return 'Box';
+    }
+    // Eğer Unit seçili (Box değil) ve Unit mevcut ise
+    else if (!isBox && product.birimKey1 != 0) {
+      return 'Unit';
+    }
+
+    // Varsayılan olarak mevcut olan ilk seçeneği döndür
+    if (product.birimKey1 != 0) {
+      return 'Unit';
+    } else if (product.birimKey2 != "0") {
+      return 'Box';
+    }
+
+    return null;
   }
-  else if (product.birimKey1 != 0) {
-    return 'Unit';
-  }
-  return null;
-}
 }
 
 class BarcodeScannerPage extends StatefulWidget {
