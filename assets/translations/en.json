@@ -45,7 +45,17 @@
     "back_to_list": "Back to Customer List"
   },
   "order": {
-    "title": "Order"
+    "title": "Order",
+    "order_no": "Order No",
+    "comment": "Comment",
+    "enter_comment": "Enter comment...",
+    "choose_payment_type": "Choose Payment Type",
+    "selected_payment": "Selected Payment:",
+    "date": "Date",
+    "delivery_date": "Delivery Date",
+    "select_date": "Select Date",
+    "select_payment_method": "Select Payment Method",
+    "select_products": "Select Products"
   },
   "auth": {
     "logout": "Logout",

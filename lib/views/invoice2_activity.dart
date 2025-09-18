@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/controllers/refundlist_controller.dart';
 import 'package:pos_app/models/refundlist_model.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
@@ -9,6 +10,7 @@ import 'package:pos_app/views/cart_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:intl/intl.dart';
+import 'package:pos_app/core/theme/app_theme.dart';
 
 class Invoice2Activity extends StatefulWidget {
   const Invoice2Activity({Key? key}) : super(key: key);
@@ -83,36 +85,111 @@ print("bunlarrr $_refundProductNames");
   }
 
   void _showPaymentBottomSheet() {
+    final theme = Theme.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (ctx) {
-        return Padding(
+        return Container(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom,
-            left: 5.w,
-            right: 5.w,
+            left: 4.w,
+            right: 4.w,
             top: 3.h,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text("Select Payment Method", style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold)),
-              SizedBox(height: 2.h),
+              // Handle bar
+              Container(
+                width: 10.w,
+                height: 0.5.h,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+              SizedBox(height: 3.h),
+
+              Text(
+                'order.select_payment_method'.tr(),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 3.h),
+
               ...paymentMethods.map((method) {
-                return RadioListTile<String>(
-                  title: Text(method, style: TextStyle(fontSize: 16.sp)),
-                  value: method,
-                  groupValue: selectedPaymentMethod,
-                  onChanged: (value) {
-                          final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
-                          orderInfoProvider.paymentType=value??"No Payment";
-                    setState(() => selectedPaymentMethod = value);
-                    Navigator.pop(context);
-                  },
+                final isSelected = selectedPaymentMethod == method;
+                return Container(
+                  margin: EdgeInsets.only(bottom: 1.h),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+                        orderInfoProvider.paymentType = method;
+                        setState(() => selectedPaymentMethod = method);
+                        Navigator.pop(context);
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(4.w),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : Colors.grey[300]!,
+                            width: isSelected ? 2 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          color: isSelected
+                              ? theme.colorScheme.primary.withOpacity(0.05)
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.all(2.w),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                    : Colors.grey[200],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                isSelected ? Icons.check : Icons.payment,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.grey[600],
+                                size: 4.w,
+                              ),
+                            ),
+                            SizedBox(width: 4.w),
+                            Expanded(
+                              child: Text(
+                                method,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? theme.colorScheme.primary
+                                      : null,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 );
               }),
-              SizedBox(height: 2.h),
+              SizedBox(height: 4.h),
             ],
           ),
         );
@@ -121,127 +198,221 @@ print("bunlarrr $_refundProductNames");
   }
 
   @override
-  Widget build(BuildContext context) {    
-    final customer =
-        Provider.of<SalesCustomerProvider>(context).selectedCustomer;
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final customer = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
     final dateFormat = DateFormat('dd.MM.yyyy');
-                              final now = DateTime.now();
-  final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
-  String orderNo=generateFisNo(now);
-    orderInfoProvider.orderNo=orderNo;
+    final now = DateTime.now();
+    final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+    String orderNo = generateFisNo(now);
+    orderInfoProvider.orderNo = orderNo;
 
     return Scaffold(
+      backgroundColor: AppTheme.lightBackgroundColor,
       appBar: AppBar(
-        title: Text("Order", style: TextStyle(fontSize: 18.sp)),
-        centerTitle: true,
+        title: Text('order.title'.tr()),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(5.w),
-        child: SingleChildScrollView(
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(5.w),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(3.w),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.shade400,
-                  blurRadius: 4,
-                  offset: Offset(2, 2),
-                )
-              ],
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(4.w),
+        child: Column(
+          children: [
+            // Order Number Card
+            _buildInfoCard(
+              title: 'order.order_no'.tr(),
+              content: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.5.h),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  orderNo,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              isCompact: true,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+
+            SizedBox(height: 2.h),
+
+            // Comment Card
+            _buildInfoCard(
+              title: 'order.comment'.tr(),
+              content: TextField(
+                maxLines: 5,
+                onChanged: (val) => comment = val,
+                onSubmitted: (value) {
+                  FocusScope.of(context).unfocus();
+                },
+                style: theme.textTheme.bodyMedium,
+                decoration: InputDecoration(
+                  hintText: 'order.enter_comment'.tr(),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(2.w),
+                  isDense: true,
+                ),
+              ),
+            ),
+
+            SizedBox(height: 2.h),
+
+            // Payment Method Card
+            _buildActionCard(
+              icon: Icons.payment_outlined,
+              title: 'order.choose_payment_type'.tr(),
+              subtitle: selectedPaymentMethod != null
+                  ? "${'order.selected_payment'.tr()} $selectedPaymentMethod"
+                  : null,
+              onTap: _showPaymentBottomSheet,
+            ),
+
+            SizedBox(height: 1.5.h),
+
+            // Payment Date Card
+            _buildActionCard(
+              icon: Icons.calendar_today_outlined,
+              title: 'order.date'.tr(),
+              subtitle: dateFormat.format(selectedPaymentDate),
+              onTap: () => _selectPaymentDate(context),
+            ),
+
+            SizedBox(height: 1.5.h),
+
+            // Delivery Date Card
+            _buildActionCard(
+              icon: Icons.local_shipping_outlined,
+              title: 'order.delivery_date'.tr(),
+              subtitle: dateFormat.format(selectedDeliveryDate),
+              onTap: () => _selectDeliveryDate(context),
+            ),
+
+            SizedBox(height: 3.h),
+
+            // Select Products Button
+            Card(
+              child: SizedBox(
+                width: double.infinity,
+                height: 7.h,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await _loadRefunds(customer!.kod!);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CartView(
+                          refundProductNames: _refundProductNames,
+                          refunds: refunds,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: Icon(Icons.shopping_cart_outlined),
+                  label: Text(
+                    'order.select_products'.tr(),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({required String title, required Widget content, bool isCompact = false}) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(4.w),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: isCompact ? 1.h : 2.h),
+            content,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCard({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Card(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.all(4.w),
+            child: Row(
               children: [
-                Text("Order No", style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
-                SizedBox(height: 1.h),
-                Text(orderNo, style: TextStyle(fontSize: 15.sp)),
-
-                SizedBox(height: 2.h),
-                Text("Comment", style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
-                SizedBox(height: 1.h),
-                TextField(
-                  maxLines: 3,
-                  onChanged: (val) => comment = val,
- onSubmitted: (value) {
-    FocusScope.of(context).unfocus(); // klavyeyi kapatır
-  },                  style: TextStyle(fontSize: 14.sp),
-                  decoration: InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: "Enter comment...",
-                    contentPadding: EdgeInsets.all(3.w),
+                Container(
+                  padding: EdgeInsets.all(3.w),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: theme.colorScheme.primary,
+                    size: 6.w,
                   ),
                 ),
-
-                SizedBox(height: 2.h),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: _showPaymentBottomSheet,
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 2.5.h),
-                    ),
-                    child: Text("Choose Payment Type", style: TextStyle(fontSize: 16.sp)),
+                SizedBox(width: 4.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        SizedBox(height: 0.5.h),
+                        Text(
+                          subtitle,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-                if (selectedPaymentMethod != null) ...[
-                  SizedBox(height: 2.h),
-                  Center(
-                    child: Text(
-                      "Selected Payment: $selectedPaymentMethod",
-                      style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],Divider(),
-SizedBox(height: 2.h),
-               Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [Divider(),
-    Text("Date", style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold)),
-    Text(dateFormat.format(selectedPaymentDate), style: TextStyle(fontSize: 18.sp)),
- Divider(), ],
-),
-SizedBox(height: 1.h),
-Center(
-  child: ElevatedButton(
-    onPressed: () => _selectPaymentDate(context),
-    child: Text("Select Date", style: TextStyle(fontSize: 14.sp)),
-  ),
-),Divider(),
-
-
-                SizedBox(height: 2.h),
-                Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  children: [
-    Text("Delivery Date", style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold)),
-    Text(dateFormat.format(selectedDeliveryDate), style: TextStyle(fontSize: 18.sp)),
-  ],
-),
-SizedBox(height: 1.h),
-Center(
-  child: ElevatedButton(
-    onPressed: () => _selectDeliveryDate(context),
-    child: Text("Select Date", style: TextStyle(fontSize: 14.sp)),
-  ),
-),Divider(),
-SizedBox(height: 1.h,),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () async{
-                     await _loadRefunds(customer!.kod!);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => CartView(refundProductNames: _refundProductNames, refunds: refunds,)),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 2.5.h),
-                      backgroundColor: Colors.white,
-                    ),
-                    child: Text("Select Products", style: TextStyle(fontSize: 16.sp)),
-                  ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.grey[400],
+                  size: 4.w,
                 ),
               ],
             ),
