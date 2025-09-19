@@ -33,6 +33,7 @@ class CartView extends StatefulWidget {
 
 class _CartViewState extends State<CartView> {
   final Map<String, TextEditingController> _priceControllers = {};
+  final Map<String, TextEditingController> _discountControllers = {};
   final FocusNode _barcodeFocusNode = FocusNode();
   final FocusNode _barcodeFocusNode2 = FocusNode();
   final TextEditingController _searchController = TextEditingController();
@@ -721,7 +722,12 @@ _barcodeFocusNode.requestFocus();
           },
           child: SingleChildScrollView(
             child: Padding(
-              padding: EdgeInsets.all(4.w),
+              padding: EdgeInsets.only(
+                left: 1.w,
+                right: 1.w,
+                top: 0.w,
+                bottom: 1.w,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -809,6 +815,15 @@ _barcodeFocusNode.requestFocus();
 
                             final _priceController = _priceControllers[key2]!;
 
+                            // Discount controller setup - similar to price controller
+                            final discountValue = context.read<CartProvider>().getIskonto(key2);
+                            if (!_discountControllers.containsKey(key2)) {
+                              _discountControllers[key2] = TextEditingController(
+                                text: discountValue == 0 ? '' : discountValue.toString(),
+                              );
+                            }
+                            final _discountController = _discountControllers[key2]!;
+
                             final key = product.stokKodu ?? 'unknown_$index';
                             final providersafdas = Provider.of<CartProvider>(
                               context,
@@ -824,8 +839,8 @@ _barcodeFocusNode.requestFocus();
                             return Card(
                               elevation: 2,
                               margin: EdgeInsets.symmetric(
-                                horizontal: 2.w,
-                                vertical: 1.h,
+                                horizontal: 0.5.w,
+                                vertical: 0.5.h,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -848,7 +863,7 @@ _barcodeFocusNode.requestFocus();
                                     ),
                                   ),
                                   child: Padding(
-                                    padding: EdgeInsets.all(3.w),
+                                    padding: EdgeInsets.all(2.w),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.start,
@@ -1026,9 +1041,9 @@ _barcodeFocusNode.requestFocus();
                                                             ),
                                                         child: Image.file(
                                                           File(snapshot.data!),
-                                                          width: 20.w,
-                                                          height: 20.w,
-                                                          fit: BoxFit.cover,
+                                                          width: 25.w,
+                                                          height: 25.w,
+                                                          fit: BoxFit.contain,
                                                         ),
                                                       ),
                                                       Text("Stk: 0/0"),
@@ -1049,7 +1064,7 @@ _barcodeFocusNode.requestFocus();
                                                       TextOverflow.ellipsis,
 
                                                   product.urunAdi ?? '-',
-                                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                                     fontWeight: FontWeight.w600,
                                                     color: () {
                                                       final urunAdi =
@@ -1090,6 +1105,7 @@ _barcodeFocusNode.requestFocus();
                                                 Row(
                                                   children: [
                                                     Expanded(
+                                                      flex: 3,
                                                       child: TextField(
                                                         controller:
                                                             _priceController,
@@ -1103,6 +1119,11 @@ _barcodeFocusNode.requestFocus();
                                                           fillColor: quantity > 0
                                                               ? Theme.of(context).colorScheme.surface
                                                               : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.38),
+                                                          hintText: "${selectedType == 'Unit' ? 'Normal birim fiyatı: ${product.adetFiyati}' : 'Normal kutu fiyatı: ${product.kutuFiyati}'}",
+                                                          hintStyle: TextStyle(
+                                                            fontSize: 12.sp,
+                                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                                          ),
                                                           border: OutlineInputBorder(
                                                             borderRadius: BorderRadius.circular(8),
                                                             borderSide: BorderSide(
@@ -1146,6 +1167,24 @@ _barcodeFocusNode.requestFocus();
                                                                 customerProvider
                                                                     .selectedCustomer!
                                                                     .kod!;
+
+                                                            // Normal birim fiyatını al
+                                                            final normalPrice = selectedType == 'Unit'
+                                                                ? double.tryParse(product.adetFiyati.toString()) ?? 0
+                                                                : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+
+                                                            // İndirim miktarını hesapla (normal fiyat - girilen fiyat)
+                                                            final calculatedDiscount = normalPrice - parsed;
+                                                            final discountPercentage = normalPrice > 0
+                                                                ? ((calculatedDiscount / normalPrice) * 100).round()
+                                                                : 0;
+
+                                                            // İndirim controller'ını güncelle
+                                                            if (discountPercentage >= 0) {
+                                                              _iskontoMap[key] = discountPercentage;
+                                                              _discountController.text = discountPercentage == 0 ? '' : discountPercentage.toString();
+                                                            }
+
                                                             if ((provider.getBirimTipi(
                                                                           product
                                                                               .stokKodu,
@@ -1180,7 +1219,7 @@ _barcodeFocusNode.requestFocus();
                                                                         .barcode1,
                                                                 miktar: 0,
                                                                 iskonto:
-                                                                    iskonto,
+                                                                    discountPercentage,
                                                                 birimTipi: provider
                                                                     .getBirimTipi(
                                                                       product
@@ -1211,31 +1250,83 @@ _barcodeFocusNode.requestFocus();
                                                               );
                                                             }
                                                           }
+                                                          setState(() {}); // Result alanını güncelle
                                                         },
                                                       ),
                                                     ),
-                                                    SizedBox(width: 3.w),
-                                                    Text(
-                                                      () {
-                                                        final rawText =
-                                                            _priceController
-                                                                .text;
-                                                        final price =
-                                                            double.tryParse(
-                                                              rawText,
-                                                            ) ??
-                                                            0;
-                                                        final discounted =
-                                                            price *
-                                                            (1 -
-                                                                (iskonto /
-                                                                    100));
-                                                        return "Result: ${discounted.toStringAsFixed(2)}"; // örnek: 150.00
-                                                      }(),
-                                                      style: TextStyle(
-                                                        fontSize: 16.sp,
-                                                        fontWeight:
-                                                            FontWeight.w500,
+                                                    SizedBox(width: 2.w),
+                                                    // İndirim alanı buraya taşındı
+                                                    Expanded(
+                                                      flex: 2,
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            Icons.local_offer,
+                                                            size: 16.sp,
+                                                            color: Theme.of(context).colorScheme.error,
+                                                          ),
+                                                          SizedBox(width: 1.w),
+                                                          Expanded(
+                                                            child: TextField(
+                                                            keyboardType:
+                                                                TextInputType.number,
+                                                            controller: _discountController,
+                                                            decoration: InputDecoration(
+                                                              isDense: true,
+                                                              filled: true,
+                                                              fillColor: Theme.of(context).colorScheme.surface,
+                                                              border: OutlineInputBorder(
+                                                                borderRadius: BorderRadius.circular(8),
+                                                                borderSide: BorderSide(
+                                                                  color: Theme.of(context).colorScheme.outline,
+                                                                ),
+                                                              ),
+                                                              enabledBorder: OutlineInputBorder(
+                                                                borderRadius: BorderRadius.circular(8),
+                                                                borderSide: BorderSide(
+                                                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.38),
+                                                                ),
+                                                              ),
+                                                              focusedBorder: OutlineInputBorder(
+                                                                borderRadius: BorderRadius.circular(8),
+                                                                borderSide: BorderSide(
+                                                                  color: Theme.of(context).colorScheme.primary,
+                                                                  width: 2.0,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                            style: TextStyle(
+                                                              fontSize: 18.sp,
+                                                            ),
+                                                            onChanged: (val) {
+                                                              final parsed =
+                                                                  int.tryParse(val) ?? 0;
+                                                              final clamped = parsed.clamp(
+                                                                0,
+                                                                100,
+                                                              );
+                                                              setState(() {
+                                                                _iskontoMap[key] = clamped;
+                                                              });
+
+                                                              // Normal birim fiyatını al
+                                                              final normalPrice = selectedType == 'Unit'
+                                                                  ? double.tryParse(product.adetFiyati.toString()) ?? 0
+                                                                  : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+
+                                                              // İndirim yüzdesine göre yeni fiyatı hesapla
+                                                              final discountAmount = (normalPrice * clamped) / 100;
+                                                              final discountedPrice = normalPrice - discountAmount;
+
+                                                              // Fiyat controller'ını güncelle
+                                                              if (discountedPrice >= 0) {
+                                                                _priceController.text = discountedPrice.toStringAsFixed(2);
+                                                              }
+                                                            },
+                                                            ),
+                                                          ),
+                                                        ],
                                                       ),
                                                     ),
                                                   ],
@@ -1289,9 +1380,6 @@ _barcodeFocusNode.requestFocus();
                                                   width: 15.w,
                                                   height: 20.w,
                                                   decoration: BoxDecoration(
-                                                    border: Border.all(
-                                                      color: Theme.of(context).colorScheme.primary.withOpacity(0.6),
-                                                    ), // tema rengi ile uyumlu
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                           4,
@@ -1776,159 +1864,6 @@ if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
                                           ),
                                         ),
 
-                                        // Discount Field - Compacted
-                                        Expanded(
-                                          flex: 1,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.local_offer,
-                                                size: 16.sp,
-                                                color: Theme.of(context).colorScheme.error,
-                                              ),
-                                              SizedBox(width: 1.w),
-                                              Expanded(
-                                                child: TextField(
-                                                keyboardType:
-                                                    TextInputType.number,
-                                                controller:
-                                                    TextEditingController(
-                                                      text:
-                                                          provider.getIskonto(
-                                                                    key,
-                                                                  ) ==
-                                                                  0
-                                                              ? ''
-                                                              : provider
-                                                                  .getIskonto(
-                                                                    key,
-                                                                  )
-                                                                  .toString(),
-                                                    ),
-                                                decoration: InputDecoration(
-                                                  isDense: true,
-                                                  filled: true,
-                                                  fillColor: Theme.of(context).colorScheme.surface,
-                                                  border: OutlineInputBorder(
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    borderSide: BorderSide(
-                                                      color: Theme.of(context).colorScheme.outline,
-                                                    ),
-                                                  ),
-                                                  enabledBorder: OutlineInputBorder(
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    borderSide: BorderSide(
-                                                      color: Theme.of(context).colorScheme.outline.withOpacity(0.38),
-                                                    ),
-                                                  ),
-                                                  focusedBorder: OutlineInputBorder(
-                                                    borderRadius: BorderRadius.circular(8),
-                                                    borderSide: BorderSide(
-                                                      color: Theme.of(context).colorScheme.primary,
-                                                      width: 2.0,
-                                                    ),
-                                                  ),
-                                                ),
-                                                style: TextStyle(
-                                                  fontSize: 18.sp,
-                                                ),
-                                                onSubmitted: (val) {
-                                                  final parsed =
-                                                      int.tryParse(val) ?? 0;
-                                                  final clamped = parsed.clamp(
-                                                    0,
-                                                    100,
-                                                  );
-                                                  setState(() {
-                                                    _iskontoMap[key] = clamped;
-                                                  });
-
-                                                  final isBox =
-                                                      _isBoxMap[key] ?? false;
-                                                  final birimTipi = provider
-                                                      .getBirimTipi(
-                                                        product.stokKodu,
-                                                      );
-                                                  final fiyat =
-                                                      isBox
-                                                          ? double.tryParse(
-                                                                product
-                                                                    .adetFiyati
-                                                                    .toString(),
-                                                              ) ??
-                                                              0
-                                                          : double.tryParse(
-                                                                product
-                                                                    .kutuFiyati
-                                                                    .toString(),
-                                                              ) ??
-                                                              0;
-
-                                                  final barcode =
-                                                      product.barcode1 ??
-                                                      '0000000000000';
-
-                                                  final miktar =
-                                                      _quantityMap[key] ?? 0;
-                                                  print(
-                                                    "objectttttttttttt $miktar",
-                                                  );
-                                                  int artir = 0;
-                                                  if (miktar == 0 &&
-                                                      clamped != 0) {
-                                                    artir = 1;
-                                                  }
-                                                  provider.customerName =
-                                                      customer!.kod!;
-                                                  if ((birimTipi == 'Unit' &&
-                                                          product.birimKey1 !=
-                                                              0) ||
-                                                      (birimTipi == 'Box' &&
-                                                          product.birimKey2 !=
-                                                              "0")) {
-                                                    provider.addOrUpdateItem(
-                                                      urunAdi: product.urunAdi,
-                                                      stokKodu: key,
-                                                      vat: product.vat,
-
-                                                      birimFiyat: fiyat,
-                                                      adetFiyati:
-                                                          product.adetFiyati,
-                                                      kutuFiyati:
-                                                          product.kutuFiyati,
-                                                      urunBarcode: barcode,
-                                                      miktar: artir,
-                                                      iskonto: clamped,
-                                                      birimTipi: birimTipi,
-                                                    );
-                                                  } else {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          '⚠️ Unit type not available for this product.',
-                                                        ),
-                                                        behavior:
-                                                            SnackBarBehavior
-                                                                .floating,
-                                                        backgroundColor:
-                                                            Colors
-                                                                .orange
-                                                                .shade700,
-                                                        duration: Duration(
-                                                          seconds: 3,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
 
                                         // Quantity Controls - Compacted
                                         Expanded(
