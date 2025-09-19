@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/models/customer_balance.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
+import 'package:path/path.dart' as p;
 import 'package:sizer/sizer.dart';
+import 'package:pos_app/core/theme/app_theme.dart';
 
 class ReportView extends StatefulWidget {
   const ReportView({Key? key}) : super(key: key);
@@ -16,6 +18,7 @@ class _ReportViewState extends State<ReportView> {
   List<CustomerBalanceModel> _allCustomers = [];
   List<CustomerBalanceModel> _filteredCustomers = [];
   TextEditingController _searchController = TextEditingController();
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -42,17 +45,21 @@ class _ReportViewState extends State<ReportView> {
   }
 
   Future<void> loadAllCustomerBalances() async {
+    setState(() => _isLoading = true);
+
     String databasesPath = await getDatabasesPath();
-    String path = join(databasesPath, 'pos_database.db');
+    String path = p.join(databasesPath, 'pos_database.db');
 
     final db = await openReadOnlyDatabase(path);
-    final result = await db.query('CustomerBalance');print("DB CLOSE TIME 9");
+    final result = await db.query('CustomerBalance');
+    print("DB CLOSE TIME 9");
     await db.close();
 
     final customers = await compute(parseCustomerBalanceList, result);
     setState(() {
       _allCustomers = customers;
       _filteredCustomers = customers;
+      _isLoading = false;
     });
   }
 
@@ -66,92 +73,160 @@ class _ReportViewState extends State<ReportView> {
     }).toList();
   }
 
-  TableRow buildHeaderRow() {
-    return TableRow(
-      decoration: const BoxDecoration(color: Colors.grey),
-      children: [
-        Padding(
-          padding: EdgeInsets.all(1.h),
-          child: Text("Code", style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
-        Padding(
-          padding: EdgeInsets.all(1.h),
-          child: Text("Name", style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
-        Padding(
-          padding: EdgeInsets.all(1.h),
-          child: Text("Balance", style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
-      ],
-    );
-  }
 
-  TableRow buildDataRow(CustomerBalanceModel customer) {
-    return TableRow(
-      children: [
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 1.h, horizontal: 1.w),
-          child: Text(customer.kod ?? "-"),
+  Widget _buildCustomerCard(CustomerBalanceModel customer) {
+    final theme = Theme.of(context);
+    final balance = double.tryParse(customer.bakiye ?? '0') ?? 0.0;
+    final isPositive = balance >= 0;
+
+    return Card(
+      margin: EdgeInsets.only(bottom: 1.h),
+      child: Padding(
+        padding: EdgeInsets.all(4.w),
+        child: Row(
+          children: [
+            // Balance indicator circle
+            Container(
+              padding: EdgeInsets.all(2.w),
+              decoration: BoxDecoration(
+                color: isPositive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isPositive ? Icons.arrow_upward : Icons.arrow_downward,
+                color: isPositive ? Colors.green : Colors.red,
+                size: 4.w,
+              ),
+            ),
+            SizedBox(width: 3.w),
+
+            // Customer info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Customer name and balance
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          customer.unvan ?? 'customers.unknown_customer'.tr(),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '£${balance.toStringAsFixed(2)}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: isPositive ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 0.5.h),
+
+                  // Customer code
+                  Text(
+                    customer.kod ?? 'customers.no_code'.tr(),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 1.h, horizontal: 1.w),
-          child: Text(
-            customer.unvan ?? "-",
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 1.h, horizontal: 1.w),
-          child: Text(customer.bakiye ?? "-"),
-        ),
-      ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Customer Report")),
-      body: Padding(
-        padding: EdgeInsets.all(2.w),
-        child: Column(
-          children: [
-            TextField(
+      backgroundColor: AppTheme.lightBackgroundColor,
+      appBar: AppBar(
+        title: Text('reports.title'.tr()),
+      ),
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: EdgeInsets.all(4.w),
+            child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: "Search",
-                prefixIcon: Icon(Icons.search),
+              style: theme.textTheme.bodyMedium,
+              decoration: InputDecoration(
+                hintText: 'reports.search_placeholder'.tr(),
+                prefixIcon: Icon(Icons.search, size: 5.w),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, size: 5.w),
+                        onPressed: () {
+                          _searchController.clear();
+                        },
+                      )
+                    : null,
               ),
             ),
-            SizedBox(height: 2.h),
-            Expanded(
-              child: _filteredCustomers.isEmpty?
-Center(
-  child: SizedBox(
-    height: 4.h,
-    width: 4.h,
-    child: const CircularProgressIndicator(),
-  ),
-)
-                  : ListView(
+          ),
+
+          // Customer List
+          Expanded(
+            child: _isLoading
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Table(
-                          columnWidths: {
-                            0: FixedColumnWidth(20.w),
-                            1: FixedColumnWidth(45.w),
-                            2: FixedColumnWidth(25.w),
-                          },
-                          border: TableBorder.all(width: 0.5, color: Colors.grey),
-                          children: [
-                            buildHeaderRow(),
-                            ..._filteredCustomers.map(buildDataRow).toList(),
-                          ],
+                        CircularProgressIndicator(),
+                        SizedBox(height: 2.h),
+                        Text(
+                          'messages.loading'.tr(),
+                          style: TextStyle(fontSize: 14.sp),
                         ),
                       ],
                     ),
-            ),
-          ],
-        ),
+                  )
+                : _filteredCustomers.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              size: 20.w,
+                              color: Colors.grey[400],
+                            ),
+                            SizedBox(height: 2.h),
+                            Text(
+                              _searchController.text.isNotEmpty
+                                  ? 'reports.no_customers_found'.tr()
+                                  : 'customers.no_customers'.tr(),
+                              style: TextStyle(
+                                fontSize: 16.sp,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: EdgeInsets.symmetric(horizontal: 4.w),
+                        itemCount: _filteredCustomers.length,
+                        itemBuilder: (context, index) {
+                          return _buildCustomerCard(_filteredCustomers[index]);
+                        },
+                      ),
+          ),
+        ],
       ),
     );
   }

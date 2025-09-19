@@ -64,7 +64,7 @@
     "loading": "Loading..."
   },
   "order": {
-    "title": "Order",
+    "title": "Orders",
     "order_no": "Order No",
     "comment": "Comment",
     "enter_comment": "Enter comment...",
@@ -74,7 +74,15 @@
     "delivery_date": "Delivery Date",
     "select_date": "Select Date",
     "select_payment_method": "Select Payment Method",
-    "select_products": "Select Products"
+    "select_products": "Select Products",
+    "load_order": "Load Order",
+    "price": "Price",
+    "cash": "Cash",
+    "load_confirmation": "The current cart will be cleared and products from this order will be loaded. Do you want to continue?",
+    "no_matching_order": "No matching order found.",
+    "products_loaded": "{} product(s) loaded into cart.",
+    "no_orders_found": "No orders found",
+    "create_new_order_hint": "Tap the + button to create a new order"
   },
   "auth": {
     "logout": "Logout",
@@ -83,6 +91,10 @@
     "logout_error": "An error occurred while logging out: {error}",
     "cancel": "Cancel",
     "confirm": "Confirm"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "continue": "Continue"
   },
   "buttons": {
     "ok": "OK",
@@ -131,6 +143,19 @@
     "credit_note": "Credit Note",
     "no_transactions": "No transactions found",
     "total_balance": "Total Balance"
+  },
+  "reports": {
+    "title": "Customer Report",
+    "search_placeholder": "Search customers...",
+    "customer_code": "Customer Code",
+    "customer_name": "Customer Name",
+    "balance": "Balance",
+    "total_customers": "Total Customers",
+    "positive_balance": "Positive Balance",
+    "negative_balance": "Negative Balance",
+    "zero_balance": "Zero Balance",
+    "export_report": "Export Report",
+    "no_customers_found": "No customers found"
   },
   "messages": {
     "loading": "Loading...",
