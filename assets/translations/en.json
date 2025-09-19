@@ -94,7 +94,24 @@
   },
   "common": {
     "cancel": "Cancel",
-    "continue": "Continue"
+    "continue": "Continue",
+    "close": "Close"
+  },
+  "collection": {
+    "title": "Collections",
+    "details": "Collection Details",
+    "document_no": "Document No",
+    "date": "Date",
+    "amount": "Amount",
+    "payment_type": "Payment Type",
+    "description": "Description",
+    "no_document": "No Document",
+    "no_collections": "No collections found",
+    "create_new_hint": "Tap the + button to add a new collection",
+    "payment_cash": "Cash",
+    "payment_card": "Card",
+    "payment_cheque": "Cheque",
+    "payment_bank": "Bank Transfer"
   },
   "buttons": {
     "ok": "OK",
@@ -156,6 +173,17 @@
     "zero_balance": "Zero Balance",
     "export_report": "Export Report",
     "no_customers_found": "No customers found"
+  },
+  "saved_carts": {
+    "title": "Saved Carts",
+    "refresh": "Refresh",
+    "unknown_customer": "Unknown Customer",
+    "items": "items",
+    "quantity": "Qty",
+    "unit_price": "Unit Price",
+    "total": "Total",
+    "no_carts": "No saved carts found",
+    "no_carts_hint": "Saved carts from customers will appear here"
   },
   "messages": {
     "loading": "Loading...",

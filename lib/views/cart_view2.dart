@@ -402,8 +402,11 @@ class _CartView2State extends State<CartView2> {
 
     final customerProvider =
         Provider.of<SalesCustomerProvider>(context, listen: false);
+
+    print("DEBUG Customer: kod=${customerProvider.selectedCustomer!.kod}, unvan=${customerProvider.selectedCustomer!.unvan}");
+
     cartProvider.customerName =
-        customerProvider.selectedCustomer!.kod!;
+        customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
 
     cartProvider.addOrUpdateItem(
       urunAdi: item.urunAdi,
@@ -479,7 +482,7 @@ class _CartView2State extends State<CartView2> {
                                                       SalesCustomerProvider
                                                     >(context, listen: false);
                                                 cartProvider.customerName =
-                                                    customerProvider
+                                                    customerProvider.selectedCustomer!.unvan ?? customerProvider
                                                         .selectedCustomer!
                                                         .kod!;
                                                 cartProvider.addOrUpdateItem(
@@ -518,7 +521,7 @@ class _CartView2State extends State<CartView2> {
                                                       SalesCustomerProvider
                                                     >(context, listen: false);
                                                 cartProvider.customerName =
-                                                    customerProvider
+                                                    customerProvider.selectedCustomer!.unvan ?? customerProvider
                                                         .selectedCustomer!
                                                         .kod!;
                                                 cartProvider.addOrUpdateItem(
@@ -548,7 +551,7 @@ class _CartView2State extends State<CartView2> {
                                                     SalesCustomerProvider
                                                   >(context, listen: false);
                                               cartProvider.customerName =
-                                                  customerProvider
+                                                  customerProvider.selectedCustomer!.unvan ?? customerProvider
                                                       .selectedCustomer!
                                                       .kod!;
                                               cartProvider.addOrUpdateItem(
@@ -739,6 +742,11 @@ class _CartView2State extends State<CartView2> {
                             listen: false,
                           );
                           final customer = customerProvider.selectedCustomer;
+
+                          // Set customer name for saved cart
+                          if (customer?.unvan != null) {
+                            cartProvider.customerName = customer!.unvan!;
+                          }
 
                           if (customer == null) {
                             ScaffoldMessenger.of(context).showSnackBar(

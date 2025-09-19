@@ -104,7 +104,7 @@ print("fisnooooooooo $_documentNo");
 print("DB CLOSE TIME 12");
       await db.close();
 
-      await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama}");
+      await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -132,7 +132,7 @@ print("bakişyeee: $bakiye");
       final success = await TahsilatController().sendTahsilat(context, tahsilat, method, cheque_model: tahsilatCheque);
 
       if (success) {
-        await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama}");
+        await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

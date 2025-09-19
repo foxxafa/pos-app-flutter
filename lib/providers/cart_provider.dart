@@ -191,13 +191,16 @@ class CartProvider extends ChangeNotifier {
   }
 
   void _saveCartToDatabase() async {
+    // Use actual customer name instead of empty string
+    String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
+
+    // Debug: Print what we're saving
+    print("DEBUG CartProvider saving: customerName = '$actualCustomerName'");
+
     final dbHelper = CartDatabaseHelper();
-    await dbHelper.clearCartItemsByCustomer(_customerName);
+    await dbHelper.clearCartItemsByCustomer(actualCustomerName);
     for (final item in _items.values) {
-      await dbHelper.insertCartItem(item, _customerName);
-      print("a1a2a3");
-      dbHelper.printAllCartItems();
-      print("a1a2a3");
+      await dbHelper.insertCartItem(item, actualCustomerName);
     }
   }
 
