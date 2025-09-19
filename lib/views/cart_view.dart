@@ -506,6 +506,20 @@ class _CartViewState extends State<CartView> {
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
           elevation: 2,
+          centerTitle: true,
+          leading: IconButton(
+            icon: Icon(Icons.menu, size: 25.sp),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder:
+                      (context) =>
+                          CartsuggestionView(musteriId: musteriId),
+                ),
+              );
+            },
+          ),
           title: Container(
             height: 40,
             child: TextField(
@@ -595,19 +609,6 @@ class _CartViewState extends State<CartView> {
             ),
           ),
           actions: [
-            IconButton(
-              icon: Icon(Icons.menu, size: 25.sp),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder:
-                        (context) =>
-                            CartsuggestionView(musteriId: musteriId),
-                  ),
-                );
-              },
-            ),
             GestureDetector(
               onTap: () {
                 Navigator.push(
@@ -619,25 +620,22 @@ class _CartViewState extends State<CartView> {
               },
               behavior: HitTestBehavior.translucent,
               child: Container(
-                width: 40.w,
+                width: 18.w,
                 height: 10.h,
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.red,
-                  ),
                   borderRadius: BorderRadius.circular(8),
-                  color: Colors.red.withOpacity(0.05),
+                  color: Colors.transparent,
                 ),
                 child: Stack(
                   clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
-                    Icon(Icons.shopping_cart, size: 10.w),
+                    Icon(Icons.shopping_cart, size: 8.w),
                     Positioned(
-                      right: 40,
-                      top: 0,
+                      right: 1.w,
+                      top: 0.2.h,
                       child: Container(
-                        padding: EdgeInsets.all(1.w),
+                        padding: EdgeInsets.all(0.4.w),
                         decoration: const BoxDecoration(
                           color: Colors.blue,
                           shape: BoxShape.circle,
@@ -651,7 +649,7 @@ class _CartViewState extends State<CartView> {
                             '${cartItems.length}',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 12.sp,
+                              fontSize: 13.sp,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -659,10 +657,10 @@ class _CartViewState extends State<CartView> {
                       ),
                     ),
                     Positioned(
-                      right: 40,
-                      bottom: 0,
+                      right: 1.w,
+                      bottom: 0.2.h,
                       child: Container(
-                        padding: EdgeInsets.all(1.w),
+                        padding: EdgeInsets.all(0.4.w),
                         decoration: const BoxDecoration(
                           color: Colors.orange,
                           shape: BoxShape.circle,
@@ -676,7 +674,7 @@ class _CartViewState extends State<CartView> {
                             '${unitCount + boxCount}',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 12.sp,
+                              fontSize: 13.sp,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -729,30 +727,20 @@ _barcodeFocusNode.requestFocus();
                 children: [
                   Opacity(
                     opacity: 0.0,
-                    child: Container(
-                      width: 50.w,
+                    child: SizedBox(
+                      width: 1.w,
+                      height: 1.h,
                       child: TextField(
                         focusNode: _barcodeFocusNode,
                         controller: _searchController,
-                        style: TextStyle(fontSize: 18.sp),
+                        style: TextStyle(fontSize: 1.sp),
                         decoration: InputDecoration(
-                          labelText: 'gizli kullanma',
-                          labelStyle: TextStyle(fontSize: 16.sp),
-                          border: const OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.search, size: 6.w),
-                          suffixIcon:
-                              _searchController.text.isEmpty
-                                  ? null
-                                  : IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: _clearSearch,
-                                  ),
+                          border: InputBorder.none,
                         ),
                         onChanged: (value) {
                           final onlyDigits = RegExp(r'^\d+$');
 
                           if (value.isEmpty) {
-                            // Input tamamen temizlendiğinde de filtrele
                             _filterProducts();
                           } else if (onlyDigits.hasMatch(value)) {
                             if (value.length >= 11) {
