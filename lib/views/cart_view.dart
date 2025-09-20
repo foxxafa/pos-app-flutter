@@ -12,6 +12,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/product_model.dart';
 import '../providers/cartcustomer_provider.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
@@ -866,6 +867,8 @@ _barcodeFocusNode.requestFocus();
                               _quantityControllers[key] = TextEditingController(
                                 text: (_quantityMap[key] ?? 0).toString(),
                               );
+                            } else {
+                              // Controller zaten var
                             }
 
                             final isBox = _isBoxMap[key] ?? false;
@@ -1540,8 +1543,10 @@ _barcodeFocusNode.requestFocus();
                                                       width: 12.w,
                                                       height: 8.w,
                                                       child: TextField(
+                                                        key: ValueKey('quantity_$key'), // Unique key for debugging
                                                         controller: _quantityControllers[key],
                                                         keyboardType: TextInputType.number,
+                                                        textInputAction: TextInputAction.done,
                                                         textAlign: TextAlign.center,
                                                         style: TextStyle(
                                                           fontSize: 14.sp,
@@ -1555,14 +1560,26 @@ _barcodeFocusNode.requestFocus();
                                                           contentPadding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.w),
                                                           isDense: true,
                                                         ),
-                                                        onSubmitted: (value) => _updateQuantityFromTextField(key, value, product),
+                                                        onSubmitted: (value) {
+                                                          print("DEBUG: onSubmitted called with value='$value', key='$key'");
+                                                          print("DEBUG: controller text='${_quantityControllers[key]?.text}'");
+                                                          _updateQuantityFromTextField(key, value, product);
+                                                        },
                                                         onEditingComplete: () {
+                                                          print("DEBUG: onEditingComplete called for key='$key'");
                                                           final value = _quantityControllers[key]?.text ?? '0';
+                                                          print("DEBUG: onEditingComplete value='$value'");
                                                           _updateQuantityFromTextField(key, value, product);
                                                         },
                                                         onChanged: (value) {
-                                                          // Controller text'ini güncel tut ama setState çağırma
-                                                          _quantityControllers[key]?.text = value;
+                                                          print("DEBUG: onChanged called with value='$value', key='$key'");
+                                                          // Bir süre sonra otomatik olarak güncelle
+                                                          Timer(Duration(seconds: 2), () {
+                                                            if (_quantityControllers[key]?.text == value) {
+                                                              print("DEBUG: Auto-update after 2 seconds with value='$value'");
+                                                              _updateQuantityFromTextField(key, value, product);
+                                                            }
+                                                          });
                                                         },
                                                       ),
                                                     ),
@@ -1862,8 +1879,10 @@ _barcodeFocusNode.requestFocus();
   }
 
   void _updateQuantityFromTextField(String key, String value, ProductModel product) {
+    print("DEBUG: _updateQuantityFromTextField key='$key' value='$value'");
     final provider = Provider.of<CartProvider>(context, listen: false);
     final newQuantity = int.tryParse(value) ?? 0;
+    print("DEBUG: newQuantity=$newQuantity");
     final iskonto = _iskontoMap[key] ?? 0;
     final isBox = _isBoxMap[key] ?? false;
 
@@ -1876,6 +1895,8 @@ _barcodeFocusNode.requestFocus();
           ? double.parse(product.kutuFiyati.toString()) ?? 0
           : double.parse(product.adetFiyati.toString()) ?? 0;
 
+      // addOrUpdateItem mevcut miktara ekler, bu yüzden direk newQuantity'yi veriyoruz
+      // çünkü removeItem ile önceden sildik
       provider.addOrUpdateItem(
         urunAdi: product.urunAdi,
         stokKodu: key,
@@ -1884,10 +1905,11 @@ _barcodeFocusNode.requestFocus();
         kutuFiyati: product.kutuFiyati,
         vat: product.vat,
         urunBarcode: product.barcode1 ?? '',
-        miktar: newQuantity,
+        miktar: newQuantity, // Bu doğru, çünkü removeItem ile sildik
         iskonto: iskonto,
         birimTipi: birimTipi,
       );
+      print("DEBUG: addOrUpdateItem called with miktar=$newQuantity");
     }
 
     setState(() {

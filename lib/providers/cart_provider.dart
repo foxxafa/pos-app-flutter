@@ -138,10 +138,12 @@ class CartProvider extends ChangeNotifier {
     String adetFiyati = '',
     String kutuFiyati = '',
   }) {
+    print("DEBUG CartProvider: addOrUpdateItem stokKodu=$stokKodu, miktar=$miktar");
     if (_items.containsKey(stokKodu)) {
-      print("stokkou $stokKodu");
+      print("DEBUG CartProvider: item exists, current miktar=${_items[stokKodu]!.miktar}");
       final current = _items[stokKodu]!;
       current.miktar += miktar;
+      print("DEBUG CartProvider: after addition, new miktar=${current.miktar}");
       if (current.miktar <= 0) {
         _items.remove(stokKodu);
       } else {
@@ -175,7 +177,9 @@ class CartProvider extends ChangeNotifier {
   }
 
   void removeItem(String stokKodu) {
-    _items.remove(stokKodu);
+    print("DEBUG CartProvider: removeItem stokKodu=$stokKodu");
+    final removed = _items.remove(stokKodu);
+    print("DEBUG CartProvider: removed item: ${removed != null}");
     notifyListeners();
   }
 
