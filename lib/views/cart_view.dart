@@ -1142,6 +1142,10 @@ _barcodeFocusNode.requestFocus();
                                                             TextInputType.numberWithOptions(
                                                               decimal: true,
                                                             ),
+                                                        style: TextStyle(
+                                                          fontSize: 16.sp,
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
                                                         decoration: InputDecoration(
                                                           enabled: quantity > 0,
                                                           filled: true,
@@ -1150,8 +1154,9 @@ _barcodeFocusNode.requestFocus();
                                                               : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.38),
                                                           hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
                                                           hintStyle: TextStyle(
-                                                            fontSize: 12.sp,
+                                                            fontSize: 16.sp,
                                                             color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                                            fontWeight: FontWeight.w500,
                                                           ),
                                                           border: OutlineInputBorder(
                                                             borderRadius: BorderRadius.circular(8),
@@ -1292,7 +1297,7 @@ _barcodeFocusNode.requestFocus();
                                                         children: [
                                                           Icon(
                                                             Icons.local_offer,
-                                                            size: 16.sp,
+                                                            size: 18.sp,
                                                             color: Theme.of(context).colorScheme.error,
                                                           ),
                                                           SizedBox(width: 1.w),
@@ -1303,6 +1308,10 @@ _barcodeFocusNode.requestFocus();
                                                             controller: _discountController,
                                                             decoration: InputDecoration(
                                                               isDense: true,
+                                                              contentPadding: EdgeInsets.symmetric(
+                                                                vertical: 8,
+                                                                horizontal: 8,
+                                                              ),
                                                               filled: true,
                                                               fillColor: Theme.of(context).colorScheme.surface,
                                                               border: OutlineInputBorder(
@@ -1326,7 +1335,8 @@ _barcodeFocusNode.requestFocus();
                                                               ),
                                                             ),
                                                             style: TextStyle(
-                                                              fontSize: 18.sp,
+                                                              fontSize: 16.sp,
+                                                              fontWeight: FontWeight.w500,
                                                             ),
                                                             onChanged: (val) {
                                                               final parsed =
@@ -1396,7 +1406,7 @@ _barcodeFocusNode.requestFocus();
                                     Divider(),
                                     // Tek satırda kompakt düzen - Hepsi bir grup
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
                                         // Type Dropdown
                                         Text(
