@@ -720,17 +720,8 @@ _barcodeFocusNode.requestFocus();
 
             return KeyEventResult.ignored; // Diğer tuşlar serbest
           },
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 1.w,
-                right: 1.w,
-                top: 0.w,
-                bottom: 1.w,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+          child: Column(
+            children: [
                   Opacity(
                     opacity: 0.0,
                     child: SizedBox(
@@ -759,19 +750,23 @@ _barcodeFocusNode.requestFocus();
                       ),
                     ),
                   ),
-                  _filteredProducts.isEmpty
-                      ? Center(
-                        child: Text(
-                          "There is no product..",
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  Expanded(
+                    child: _filteredProducts.isEmpty
+                        ? Center(
+                          child: Text(
+                            "There is no product..",
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ), // yükleme animasyonu
-                      )
-                      : Container(
-                        height: 75.h,
-                        child: ListView.builder(
-                          shrinkWrap: true, // 🔁 dış scroll'a göre boyutlanır
+                        )
+                        : ListView.builder(
+                          padding: EdgeInsets.only(
+                            left: 1.w,
+                            right: 1.w,
+                            top: 0.w,
+                            bottom: 1.h,
+                          ),
                           addAutomaticKeepAlives: false, // Performance optimization
                           addRepaintBoundaries: false, // Performance optimization
                           cacheExtent: 0, // Performance optimization - sadece görünür öğeleri cache'le
@@ -2050,10 +2045,8 @@ _barcodeFocusNode.requestFocus();
                             );
                           },
                         ),
-                      ),
-                ],
-              ),
-            ),
+                  ),
+            ],
           ),
         ),
       ),
