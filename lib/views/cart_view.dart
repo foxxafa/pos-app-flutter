@@ -849,7 +849,7 @@ _barcodeFocusNode.requestFocus();
                             final discountValue = context.read<CartProvider>().getIskonto(key2);
                             if (!_discountControllers.containsKey(key2)) {
                               _discountControllers[key2] = TextEditingController(
-                                text: discountValue == 0 ? '' : discountValue.toString(),
+                                text: discountValue.toString(), // Başlangıçta '0' göster
                               );
                             }
                             final _discountController = _discountControllers[key2]!;
@@ -1399,6 +1399,12 @@ _barcodeFocusNode.requestFocus();
                                                                 TextInputType.number,
                                                             controller: _discountController,
                                                             decoration: InputDecoration(
+                                                              prefixText: '%',
+                                                              prefixStyle: TextStyle(
+                                                                fontSize: 14.sp,
+                                                                fontWeight: FontWeight.bold,
+                                                                color: Theme.of(context).colorScheme.error,
+                                                              ),
                                                               isDense: true,
                                                               contentPadding: EdgeInsets.symmetric(
                                                                 vertical: 8,
@@ -1437,6 +1443,15 @@ _barcodeFocusNode.requestFocus();
                                                                 0,
                                                                 100,
                                                               );
+
+                                                              // Controller'ı formatlı değerle güncelle
+                                                              if (clamped.toString() != val) {
+                                                                _discountController.text = clamped.toString();
+                                                                _discountController.selection = TextSelection.fromPosition(
+                                                                  TextPosition(offset: clamped.toString().length),
+                                                                );
+                                                              }
+
                                                               setState(() {
                                                                 _iskontoMap[key] = clamped;
                                                               });
@@ -1561,22 +1576,16 @@ _barcodeFocusNode.requestFocus();
                                                           isDense: true,
                                                         ),
                                                         onSubmitted: (value) {
-                                                          print("DEBUG: onSubmitted called with value='$value', key='$key'");
-                                                          print("DEBUG: controller text='${_quantityControllers[key]?.text}'");
                                                           _updateQuantityFromTextField(key, value, product);
                                                         },
                                                         onEditingComplete: () {
-                                                          print("DEBUG: onEditingComplete called for key='$key'");
                                                           final value = _quantityControllers[key]?.text ?? '0';
-                                                          print("DEBUG: onEditingComplete value='$value'");
                                                           _updateQuantityFromTextField(key, value, product);
                                                         },
                                                         onChanged: (value) {
-                                                          print("DEBUG: onChanged called with value='$value', key='$key'");
-                                                          // Bir süre sonra otomatik olarak güncelle
+                                                          // 2 saniye sonra otomatik olarak güncelle
                                                           Timer(Duration(seconds: 2), () {
                                                             if (_quantityControllers[key]?.text == value) {
-                                                              print("DEBUG: Auto-update after 2 seconds with value='$value'");
                                                               _updateQuantityFromTextField(key, value, product);
                                                             }
                                                           });
@@ -1879,10 +1888,8 @@ _barcodeFocusNode.requestFocus();
   }
 
   void _updateQuantityFromTextField(String key, String value, ProductModel product) {
-    print("DEBUG: _updateQuantityFromTextField key='$key' value='$value'");
     final provider = Provider.of<CartProvider>(context, listen: false);
     final newQuantity = int.tryParse(value) ?? 0;
-    print("DEBUG: newQuantity=$newQuantity");
     final iskonto = _iskontoMap[key] ?? 0;
     final isBox = _isBoxMap[key] ?? false;
 
@@ -1909,7 +1916,6 @@ _barcodeFocusNode.requestFocus();
         iskonto: iskonto,
         birimTipi: birimTipi,
       );
-      print("DEBUG: addOrUpdateItem called with miktar=$newQuantity");
     }
 
     setState(() {
