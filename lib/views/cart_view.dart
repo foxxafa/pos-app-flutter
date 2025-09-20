@@ -864,10 +864,10 @@ _barcodeFocusNode.requestFocus();
                                   ),
                                   child: Padding(
                                     padding: EdgeInsets.all(2.w),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.start,
+                                      children: [
                                     GestureDetector(
                                       onDoubleTap: () {
                                         showDialog(
@@ -1361,350 +1361,45 @@ _barcodeFocusNode.requestFocus();
                                               ],
                                             ),
                                           ),
-                                          Stack(
-                                            children: [
-                                              Positioned(
-                                                left: 15,
-                                                top: 15,
-                                                child: Image.asset(
-                                                  'assets/hand.png',
-                                                  width: 10.w,
-                                                  height: 10.w,
-                                                ),
-                                              ),
-                                              GestureDetector(
-                                                behavior:
-                                                    HitTestBehavior
-                                                        .translucent, // boş alanlara da tıklanabilsin
-                                                child: Container(
-                                                  width: 15.w,
-                                                  height: 20.w,
-                                                  decoration: BoxDecoration(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          4,
-                                                        ),
-                                                  ),
-                                                  child: null,
-                                                ),
-                                                onTap: () async {
-                                                  String selectedBirimTipi =
-                                                      'Box';
-                                                  final TextEditingController
-                                                  miktarController =
-                                                      TextEditingController(
-                                                        text: '1',
-                                                      );
-
-                                                  final result = await showDialog<
-                                                    Map<String, dynamic>
-                                                  >(
-                                                    context: context,
-                                                    builder: (
-                                                      BuildContext context,
-                                                    ) {
-                                                      return AlertDialog(
-                                                        title: const Text(
-                                                          'Add Free Product',
-                                                        ),
-                                                        content: Column(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            DropdownButtonFormField<
-                                                              String
-                                                            >(
-                                                              value:
-                                                                  selectedBirimTipi,
-                                                              items:
-                                                                  [
-                                                                    'Unit',
-                                                                    'Box',
-                                                                  ].map((
-                                                                    String
-                                                                    value,
-                                                                  ) {
-                                                                    return DropdownMenuItem<
-                                                                      String
-                                                                    >(
-                                                                      value:
-                                                                          value,
-                                                                      child: Text(
-                                                                        value,
-                                                                      ),
-                                                                    );
-                                                                  }).toList(),
-                                                              onChanged: (
-                                                                value,
-                                                              ) {
-                                                                if (value !=
-                                                                    null) {
-                                                                  selectedBirimTipi =
-                                                                      value;
-                                                                }
-                                                              },
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Birim Tipi',
-                                                                  ),
-                                                            ),
-                                                            const SizedBox(
-                                                              height: 10,
-                                                            ),
-                                                            TextField(
-                                                              controller:
-                                                                  miktarController,
-                                                              keyboardType:
-                                                                  TextInputType
-                                                                      .number,
-                                                              decoration:
-                                                                  const InputDecoration(
-                                                                    labelText:
-                                                                        'Miktar',
-                                                                  ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        actions: [
-                                                          TextButton(
-                                                            onPressed:
-                                                                () =>
-                                                                    Navigator.pop(
-                                                                      context,
-                                                                    ), // iptal
-                                                            child: const Text(
-                                                              'İptal',
-                                                            ),
-                                                          ),
-                                                          ElevatedButton(
-                                                            onPressed: () {
-                                                              final miktar =
-                                                                  int.tryParse(
-                                                                    miktarController
-                                                                        .text,
-                                                                  );
-                                                              if (miktar !=
-                                                                      null &&
-                                                                  miktar > 0) {
-                                                                Navigator.pop(
-                                                                  context,
-                                                                  {
-                                                                    'birimTipi':
-                                                                        selectedBirimTipi,
-                                                                    'miktar':
-                                                                        miktar,
-                                                                  },
-                                                                );
-                                                              }
-                                                            },
-                                                            child: const Text(
-                                                              'Ekle',
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      );
-                                                    },
-                                                  );
-
-                                                  if (result == null) return;
-
-                                                  final provider =
-                                                      Provider.of<CartProvider>(
-                                                        context,
-                                                        listen: false,
-                                                      );
-
-                                                  provider.customerName =
-                                                      customer!.kod!;
-
-double freeFiyat = 0.0;
-
-if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
-  freeFiyat = double.tryParse(product.adetFiyati.toString()) ?? 0.0;
-} else if (result['birimTipi'] == 'Box' && product.birimKey2 != "0") {
-  freeFiyat = double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
-}
-
-
-                                                  final freeKey =
-                                                      "${product.stokKodu} (FREE${result['birimTipi']})";
-                                                  if ((result['birimTipi'] ==
-                                                              'Unit' &&
-                                                          product.birimKey1 !=
-                                                              0) ||
-                                                      (result['birimTipi'] ==
-                                                              'Box' &&
-                                                          product.birimKey2 !=
-                                                              "0")) {
-                                                    provider.addOrUpdateItem(
-                                                      stokKodu: freeKey,
-                                                      urunAdi:
-                                                          "${product.urunAdi}_(FREE${result['birimTipi']})",
-                                                      birimFiyat: freeFiyat,
-                                                      miktar: result['miktar'],
-                                                      urunBarcode:
-                                                          product.barcode1 ??
-                                                          '',
-                                                      iskonto: 100,
-                                                      birimTipi:
-                                                          result['birimTipi'],
-                                                      imsrc: product.imsrc,
-                                                      vat: product.vat,
-                                                      adetFiyati: '0',
-                                                      kutuFiyati: '0',
-                                                    );
-                                                  } else {
-                                                    ScaffoldMessenger.of(
-                                                      context,
-                                                    ).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text(
-                                                          '⚠️ Unit type not available for this product.',
-                                                        ),
-                                                        behavior:
-                                                            SnackBarBehavior
-                                                                .floating,
-                                                        backgroundColor:
-                                                            Colors
-                                                                .orange
-                                                                .shade700,
-                                                        duration: Duration(
-                                                          seconds: 3,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-
-                                              Positioned(
-                                                right: 0,
-                                                top: 0,
-                                                child: Container(
-                                                  padding: EdgeInsets.all(1.w),
-                                                  decoration: BoxDecoration(
-                                                    color: Theme.of(context).colorScheme.secondary,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  constraints: BoxConstraints(
-                                                    minWidth: 6.w,
-                                                    minHeight: 6.w,
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      () {
-                                                        final matches = cartItems.where(
-                                                          (item) =>
-                                                              item.urunAdi ==
-                                                                  '${product.urunAdi}_(FREEBox)' &&
-                                                              item.birimTipi ==
-                                                                  'Box',
-                                                        );
-
-                                                        if (matches
-                                                            .isNotEmpty) {
-                                                          return '${matches.first.miktar}';
-                                                        } else {
-                                                          return '0';
-                                                        }
-                                                      }(),
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 12.sp,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              Positioned(
-                                                right: 15,
-                                                top: 0,
-                                                child: Container(
-                                                  padding: EdgeInsets.all(1.w),
-                                                  decoration: BoxDecoration(
-                                                    color: Theme.of(context).colorScheme.error,
-                                                    shape: BoxShape.circle,
-                                                  ),
-                                                  constraints: BoxConstraints(
-                                                    minWidth: 6.w,
-                                                    minHeight: 6.w,
-                                                  ),
-                                                  child: Center(
-                                                    child: Text(
-                                                      () {
-                                                        final matches = cartItems.where(
-                                                          (item) =>
-                                                              item.urunAdi ==
-                                                                  '${product.urunAdi}_(FREEUnit)' &&
-                                                              item.birimTipi ==
-                                                                  'Unit',
-                                                        );
-
-                                                        if (matches
-                                                            .isNotEmpty) {
-                                                          return '${matches.first.miktar}';
-                                                        } else {
-                                                          return '0';
-                                                        }
-                                                      }(),
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 12.sp,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
                                         ],
                                       ),
                                     ),
                                     Divider(),
-                                    // Tek satırda kompakt düzen
+                                    // Tek satırda kompakt düzen - Hepsi bir grup
                                     Row(
+                                      mainAxisAlignment: MainAxisAlignment.start,
                                       children: [
-                                        // Type Dropdown - Compacted
-                                        Expanded(
-                                          flex: 2,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                "Type:",
-                                                style: TextStyle(
-                                                  fontSize: 12.sp,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Theme.of(context).colorScheme.onSurface,
-                                                ),
+                                        // Type Dropdown
+                                        Text(
+                                          "Type:",
+                                          style: TextStyle(
+                                            fontSize: 14.sp,
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(context).colorScheme.onSurface,
+                                          ),
+                                        ),
+                                        SizedBox(width: 1.w),
+                                        DropdownButton<String>(
+                                          value: getBirimTipiFromProduct(product),
+                                          isDense: false,
+                                          underline: Container(),
+                                          style: TextStyle(
+                                            fontSize: 15.sp,
+                                            color: Theme.of(context).colorScheme.primary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          items: [
+                                            if (product.birimKey1 != 0)
+                                              const DropdownMenuItem(
+                                                value: 'Unit',
+                                                child: Text('Unit'),
                                               ),
-                                              SizedBox(width: 1.w),
-                                              DropdownButton<String>(
-                                                value: getBirimTipiFromProduct(product),
-                                                isDense: true,
-                                                underline: Container(),
-                                                style: TextStyle(
-                                                  fontSize: 12.sp,
-                                                  color: Theme.of(context).colorScheme.primary,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                                items: [
-                                                  if (product.birimKey1 != 0)
-                                                    const DropdownMenuItem(
-                                                      value: 'Unit',
-                                                      child: Text('Unit'),
-                                                    ),
-                                                  if (product.birimKey2 != 0)
-                                                    const DropdownMenuItem(
-                                                      value: 'Box',
-                                                      child: Text('Box'),
-                                                    ),
-                                                ],
+                                            if (product.birimKey2 != 0)
+                                              const DropdownMenuItem(
+                                                value: 'Box',
+                                                child: Text('Box'),
+                                              ),
+                                          ],
                                                 onChanged: (val) {
                                                   if ((val == 'Unit' &&
                                                           product.birimKey1 !=
@@ -1860,23 +1555,15 @@ if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
                                                   }
                                                 },
                                               ),
-                                            ],
+                                        SizedBox(width: 1.w), // Dropdown ve miktar butonları arası küçük boşluk
+
+                                        // Quantity Controls - Direkt devam ediyor
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.remove,
+                                            size: 5.w,
                                           ),
-                                        ),
-
-
-                                        // Quantity Controls - Compacted
-                                        Expanded(
-                                          flex: 3,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              IconButton(
-                                                icon: Icon(
-                                                  Icons.remove,
-                                                  size: 5.w,
-                                                ),
-                                              onPressed: () {
+                                          onPressed: () {
                                                 if (_quantityMap[key]! > 0) {
                                                   setState(() {
                                                     _quantityMap[key] =
@@ -2153,52 +1840,213 @@ if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
                                                 }
                                               },
                                             ),
+                                            // El ikonu burada miktar butonlarının sağında
+                                            SizedBox(width: 4.w), // Daha fazla boşluk ekle
+                                            Stack(
+                                              children: [
+                                                GestureDetector(
+                                                  behavior: HitTestBehavior.translucent,
+                                                  child: Container(
+                                                    padding: EdgeInsets.all(1.w),
+                                                    width: 15.w,
+                                                    height: 12.w,
+                                                    child: Image.asset(
+                                                      'assets/hand.png',
+                                                      width: 10.w,
+                                                      height: 10.w,
+                                                    ),
+                                                  ),
+                                              onTap: () async {
+                                                String selectedBirimTipi = 'Box';
+                                                final TextEditingController miktarController = TextEditingController(text: '1');
+
+                                                final result = await showDialog<Map<String, dynamic>>(
+                                                  context: context,
+                                                  builder: (BuildContext context) {
+                                                    return AlertDialog(
+                                                      title: const Text('Add Free Product'),
+                                                      content: Column(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          DropdownButtonFormField<String>(
+                                                            value: selectedBirimTipi,
+                                                            items: ['Unit', 'Box'].map((String value) {
+                                                              return DropdownMenuItem<String>(
+                                                                value: value,
+                                                                child: Text(value),
+                                                              );
+                                                            }).toList(),
+                                                            onChanged: (value) {
+                                                              if (value != null) {
+                                                                selectedBirimTipi = value;
+                                                              }
+                                                            },
+                                                            decoration: const InputDecoration(labelText: 'Birim Tipi'),
+                                                          ),
+                                                          const SizedBox(height: 10),
+                                                          TextField(
+                                                            controller: miktarController,
+                                                            keyboardType: TextInputType.number,
+                                                            decoration: const InputDecoration(labelText: 'Miktar'),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(context),
+                                                          child: const Text('İptal'),
+                                                        ),
+                                                        ElevatedButton(
+                                                          onPressed: () {
+                                                            final miktar = int.tryParse(miktarController.text);
+                                                            if (miktar != null && miktar > 0) {
+                                                              Navigator.pop(context, {
+                                                                'birimTipi': selectedBirimTipi,
+                                                                'miktar': miktar,
+                                                              });
+                                                            }
+                                                          },
+                                                          child: const Text('Ekle'),
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
+                                                );
+
+                                                if (result == null) return;
+
+                                                final provider = Provider.of<CartProvider>(context, listen: false);
+                                                provider.customerName = customer!.kod!;
+
+                                                double freeFiyat = 0.0;
+                                                if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
+                                                  freeFiyat = double.tryParse(product.adetFiyati.toString()) ?? 0.0;
+                                                } else if (result['birimTipi'] == 'Box' && product.birimKey2 != "0") {
+                                                  freeFiyat = double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
+                                                }
+
+                                                final freeKey = "${product.stokKodu} (FREE${result['birimTipi']})";
+                                                if ((result['birimTipi'] == 'Unit' && product.birimKey1 != 0) ||
+                                                    (result['birimTipi'] == 'Box' && product.birimKey2 != "0")) {
+                                                  provider.addOrUpdateItem(
+                                                    stokKodu: freeKey,
+                                                    urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
+                                                    birimFiyat: freeFiyat,
+                                                    miktar: result['miktar'],
+                                                    urunBarcode: product.barcode1 ?? '',
+                                                    iskonto: 100,
+                                                    birimTipi: result['birimTipi'],
+                                                    imsrc: product.imsrc,
+                                                    vat: product.vat,
+                                                    adetFiyati: '0',
+                                                    kutuFiyati: '0',
+                                                  );
+                                                } else {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: const Text('⚠️ Unit type not available for this product.'),
+                                                      behavior: SnackBarBehavior.floating,
+                                                      backgroundColor: Colors.orange.shade700,
+                                                      duration: const Duration(seconds: 3),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                                // Box Badge (mavi)
+                                                Positioned(
+                                                  right: 0,
+                                                  top: 0,
+                                                  child: Container(
+                                                    padding: EdgeInsets.all(1.w),
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context).colorScheme.secondary,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    constraints: BoxConstraints(
+                                                      minWidth: 6.w,
+                                                      minHeight: 6.w,
+                                                    ),
+                                                    child: Center(
+                                                      child: Text(
+                                                        () {
+                                                          final matches = cartItems.where(
+                                                            (item) =>
+                                                                item.urunAdi ==
+                                                                    '${product.urunAdi}_(FREEBox)' &&
+                                                                item.birimTipi ==
+                                                                    'Box',
+                                                          );
+
+                                                          if (matches
+                                                              .isNotEmpty) {
+                                                            return '${matches.first.miktar}';
+                                                          } else {
+                                                            return '0';
+                                                          }
+                                                        }(),
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 12.sp,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                // Unit Badge (kırmızı)
+                                                Positioned(
+                                                  right: 15,
+                                                  top: 0,
+                                                  child: Container(
+                                                    padding: EdgeInsets.all(1.w),
+                                                    decoration: BoxDecoration(
+                                                      color: Theme.of(context).colorScheme.error,
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                    constraints: BoxConstraints(
+                                                      minWidth: 6.w,
+                                                      minHeight: 6.w,
+                                                    ),
+                                                    child: Center(
+                                                      child: Text(
+                                                        () {
+                                                          final matches = cartItems.where(
+                                                            (item) =>
+                                                                item.urunAdi ==
+                                                                    '${product.urunAdi}_(FREEUnit)' &&
+                                                                item.birimTipi ==
+                                                                    'Unit',
+                                                          );
+
+                                                          if (matches
+                                                              .isNotEmpty) {
+                                                            return '${matches.first.miktar}';
+                                                          } else {
+                                                            return '0';
+                                                          }
+                                                        }(),
+                                                        style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 12.sp,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ],
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                    Text(
-                                      () {
-                                        // product.urunAdi ile eşleşen refundlar
-                                        final filtered = widget.refunds.where(
-                                          (r) =>
-                                              r.urunAdi.toLowerCase() ==
-                                              product.urunAdi.toLowerCase(),
-                                        );
-
-                                        if (filtered.isEmpty)
-                                          return ""; // eşleşme yoksa boş string
-
-                                        // tarihe göre azalan sıralama (en yeni tarih ilk)
-                                        final sorted =
-                                            filtered.toList()..sort(
-                                              (a, b) => b.fisTarihi.compareTo(
-                                                a.fisTarihi,
-                                              ),
-                                            );
-
-                                        final refund =
-                                            sorted
-                                                .first; // en son tarihli refund
-
-                                        return "[Qty:${refund.miktar}x${refund.birim}] "
-                                            "[Price:${refund.birimFiyat.toStringAsFixed(2)}] "
-                                            "[Dsc:${refund.iskonto}%] "
-                                            "[Date:${refund.fisTarihi.day.toString().padLeft(2, '0')}/"
-                                            "${refund.fisTarihi.month.toString().padLeft(2, '0')}/"
-                                            "${refund.fisTarihi.year}]";
-                                      }(),
-                                      style: TextStyle(
-                                        color: Color.fromARGB(255, 1, 71, 4),
-                                        fontSize: 15.sp,
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                                  ),
+                                    // SizedBox.shrink(),
                                 ),
                               ),
+                            ),
                             );
                           },
                         ),
@@ -2212,6 +2060,44 @@ if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
     );
   }
   
+  Widget _buildRefundInfo(ProductModel product) {
+    // product.urunAdi ile eşleşen refundlar
+    final filtered = widget.refunds.where(
+      (r) =>
+          r.urunAdi.toLowerCase() ==
+          product.urunAdi.toLowerCase(),
+    );
+
+    if (filtered.isEmpty) {
+      return SizedBox.shrink(); // eşleşme yoksa boş widget
+    }
+
+    // tarihe göre azalan sıralama (en yeni tarih ilk)
+    final sorted =
+        filtered.toList()..sort(
+          (a, b) => b.fisTarihi.compareTo(
+            a.fisTarihi,
+          ),
+        );
+
+    final refund =
+        sorted
+            .first; // en son tarihli refund
+
+    return Text(
+      "[Qty:${refund.miktar}x${refund.birim}] "
+          "[Price:${refund.birimFiyat.toStringAsFixed(2)}] "
+          "[Dsc:${refund.iskonto}%] "
+          "[Date:${refund.fisTarihi.day.toString().padLeft(2, '0')}/"
+          "${refund.fisTarihi.month.toString().padLeft(2, '0')}/"
+          "${refund.fisTarihi.year}]",
+      style: TextStyle(
+        color: Color.fromARGB(255, 1, 71, 4),
+        fontSize: 15.sp,
+      ),
+    );
+  }
+
   String? getBirimTipiFromProduct(ProductModel product) {
     final key = product.stokKodu ?? '';
     final isBox = _isBoxMap[key] ?? false;
