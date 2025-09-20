@@ -16,6 +16,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class CartView extends StatefulWidget {
   final List<String> refundProductNames;
@@ -50,6 +51,7 @@ class _CartViewState extends State<CartView> {
   List<ProductModel> _filteredProducts = [];
   Map<String, Future<String?>> _imageFutures = {};
   final TextEditingController _iskontoController = TextEditingController();
+  bool _isLoading = true;
 
   final Map<String, bool> _isBoxMap = {};
   final Map<String, int> _quantityMap = {};
@@ -116,7 +118,7 @@ class _CartViewState extends State<CartView> {
     final raw = await DatabaseHelper().getAll("Product");
     final products = raw.map((e) => ProductModel.fromMap(e)).toList();
 
-    // Tüm ürünleri al, sonra sıralayıp ilk 1000 tanesini filtrele
+    // Tüm ürünleri al, sonra sıralayıp ilk 50 tanesini göster
     final sortedFiltered =
         products.toList()..sort((a, b) {
           final nameA = a.urunAdi ?? '';
@@ -137,15 +139,18 @@ class _CartViewState extends State<CartView> {
 
     setState(() {
       _allProducts = products;
-      _filteredProducts = sortedFiltered.toList();
+      _filteredProducts = sortedFiltered.take(50).toList();
 
       for (var product in products) {
         final key = product.stokKodu ?? '';
-        _isBoxMap[key] = false;
+        // Box varsa varsayılan olarak Box seçili gelsin
+        _isBoxMap[key] = product.birimKey2 != "0" ? true : false;
         _quantityMap[key] = 0;
         _iskontoMap[key] = 0;
       }
-      _generateImageFutures(products);
+      // Gösterilen tüm ürünler için resim yükle
+      _generateImageFutures(_filteredProducts);
+      _isLoading = false;
     });
   }
 
@@ -531,7 +536,7 @@ class _CartViewState extends State<CartView> {
                 color: Colors.white,
               ),
               decoration: InputDecoration(
-                hintText: 'Search by NAME or BARCODE',
+                hintText: 'cart.search_placeholder'.tr(),
                 hintStyle: TextStyle(
                   fontSize: 14.sp,
                   color: Colors.white.withOpacity(0.7),
@@ -594,16 +599,18 @@ class _CartViewState extends State<CartView> {
                 ),
               ),
               onChanged: (value) {
-                setState(() {}); // Trigger rebuild for clear button visibility
                 final onlyDigits = RegExp(r'^\d+$');
 
                 if (value.isEmpty) {
+                  setState(() {}); // Sadece buton görünürlüğü için
                   _filterProducts2();
                 } else if (onlyDigits.hasMatch(value)) {
                   if (value.length >= 11) {
+                    setState(() {}); // Sadece buton görünürlüğü için
                     _filterProducts2();
                   }
                 } else {
+                  setState(() {}); // Sadece buton görünürlüğü için
                   _filterProducts2();
                 }
               },
@@ -751,25 +758,45 @@ _barcodeFocusNode.requestFocus();
                     ),
                   ),
                   Expanded(
-                    child: _filteredProducts.isEmpty
+                    child: _isLoading
                         ? Center(
-                          child: Text(
-                            "There is no product..",
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                              SizedBox(height: 2.h),
+                              Text(
+                                'cart.loading_products'.tr(),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
                           ),
                         )
-                        : ListView.builder(
+                        : _filteredProducts.isEmpty
+                            ? Center(
+                              child: Text(
+                                'cart.no_products'.tr(),
+                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            )
+                            : ListView.builder(
                           padding: EdgeInsets.only(
                             left: 1.w,
                             right: 1.w,
                             top: 0.w,
                             bottom: 1.h,
                           ),
-                          addAutomaticKeepAlives: false, // Performance optimization
-                          addRepaintBoundaries: false, // Performance optimization
-                          cacheExtent: 0, // Performance optimization - sadece görünür öğeleri cache'le
+                          addAutomaticKeepAlives: true, // Widget'ları canlı tut
+                          addRepaintBoundaries: true, // Repaint boundary ekle
+                          cacheExtent: 100, // Cache extent artır
                           itemCount: _filteredProducts.length,
                           itemBuilder: (context, index) {
                             final product = _filteredProducts[index];
@@ -869,7 +896,7 @@ _barcodeFocusNode.requestFocus();
   context: context,
   builder: (context) => AlertDialog(
     title: Text(
-      product.urunAdi ?? 'No name',
+      product.urunAdi ?? 'cart.no_name'.tr(),
     ),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -894,7 +921,6 @@ _barcodeFocusNode.requestFocus();
 
                     final dir = await getApplicationDocumentsDirectory();
                     final filePath = '${dir.path}/$fileName';
-                    print("✓ Yükleme kontrolü: $filePath");
 
                     final file = File(filePath);
                     if (await file.exists()) {
@@ -909,8 +935,8 @@ _barcodeFocusNode.requestFocus();
                 builder: (context, snapshot) {
                   if (snapshot.connectionState != ConnectionState.done) {
                     return SizedBox(
-                      width: 20.w,
-                      height: 20.w,
+                      width: 40.w,
+                      height: 40.w,
                       child: Center(
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
@@ -924,18 +950,20 @@ _barcodeFocusNode.requestFocus();
                       size: 40.w,
                     );
                   }
-                  return Column(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(snapshot.data!),
-                          width: 40.w,
-                          height: 40.w,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(snapshot.data!),
+                      width: 40.w,
+                      height: 40.w,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.shopping_bag,
+                          size: 40.w,
+                        );
+                      },
+                    ),
                   );
                 },
               ),
@@ -948,7 +976,7 @@ _barcodeFocusNode.requestFocus();
             }
           },
           child: Text(
-            "Barcodes: ${[
+            "${'cart.barcodes'.tr()}: ${[
               product.barcode1,
               product.barcode2,
               product.barcode3,
@@ -960,25 +988,25 @@ _barcodeFocusNode.requestFocus();
           ),
         ),
         Text(
-          "Code= ${product.stokKodu ?? '-'}",
+          "${'cart.code'.tr()}= ${product.stokKodu ?? '-'}",
         ),
         Text(
-          "Unit Price= ${product.adetFiyati ?? '-'}",
+          "${'cart.unit_price'.tr()}= ${product.adetFiyati ?? '-'}",
         ),
         Text(
-          "Box Price= ${product.kutuFiyati ?? '-'}",
+          "${'cart.box_price'.tr()}= ${product.kutuFiyati ?? '-'}",
         ),
         Text(
-          "VAT= ${product.vat ?? '-'}",
+          "${'cart.vat'.tr()}= ${product.vat ?? '-'}",
         ),
         Text(
-          "Code= ${product.imsrc ?? '-'}",
+          "${'cart.code'.tr()}= ${product.imsrc ?? '-'}",
         ),
       ],
     ),
     actions: [
       TextButton(
-        child: const Text('Close'),
+        child: Text('cart.close'.tr()),
         onPressed: () => Navigator.of(context).pop(),
       ),
     ],
@@ -995,53 +1023,59 @@ _barcodeFocusNode.requestFocus();
                                                     Icons.shopping_bag_sharp,
                                                     size: 20.w,
                                                   ),
-                                                  Text("Stk: 0/0 ${product.imsrc}"),
+                                                  Text("${tr('cart.stock')}: 0/0"),
                                                 ],
                                               )
                                               : FutureBuilder<String?>(
                                                 future: future,
                                                 builder: (context, snapshot) {
-                                                  if (snapshot
-                                                          .connectionState !=
-                                                      ConnectionState.done) {
-                                                    return SizedBox(
-                                                      width: 6.w,
-                                                      height: 6.w,
-                                                      child: Center(
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
+                                                  if (snapshot.connectionState != ConnectionState.done) {
+                                                    return Column(
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 25.w,
+                                                          height: 25.w,
+                                                          child: Center(
+                                                            child: Icon(
+                                                              Icons.image_outlined,
+                                                              size: 15.w,
+                                                              color: Colors.grey,
                                                             ),
-                                                      ),
+                                                          ),
+                                                        ),
+                                                        Text("${tr('cart.stock')}: 0/0"),
+                                                      ],
                                                     );
                                                   }
-                                                  if (!snapshot.hasData ||
-                                                      snapshot.data == null) {
+                                                  if (!snapshot.hasData || snapshot.data == null) {
                                                     return Column(
                                                       children: [
                                                         Icon(
                                                           Icons.shopping_bag,
                                                           size: 20.w,
                                                         ),
-                                                        Text("Stk: 0/0"),
+                                                        Text("${tr('cart.stock')}: 0/0"),
                                                       ],
                                                     );
                                                   }
                                                   return Column(
                                                     children: [
                                                       ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              4,
-                                                            ),
+                                                        borderRadius: BorderRadius.circular(4),
                                                         child: Image.file(
                                                           File(snapshot.data!),
                                                           width: 25.w,
                                                           height: 25.w,
-                                                          fit: BoxFit.contain,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder: (context, error, stackTrace) {
+                                                            return Icon(
+                                                              Icons.shopping_bag,
+                                                              size: 20.w,
+                                                            );
+                                                          },
                                                         ),
                                                       ),
-                                                      Text("Stk: 0/0"),
+                                                      Text("${tr('cart.stock')}: 0/0"),
                                                     ],
                                                   );
                                                 },
@@ -1114,7 +1148,7 @@ _barcodeFocusNode.requestFocus();
                                                           fillColor: quantity > 0
                                                               ? Theme.of(context).colorScheme.surface
                                                               : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.38),
-                                                          hintText: "${selectedType == 'Unit' ? 'Normal birim fiyatı: ${product.adetFiyati}' : 'Normal kutu fiyatı: ${product.kutuFiyati}'}",
+                                                          hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
                                                           hintStyle: TextStyle(
                                                             fontSize: 12.sp,
                                                             color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
@@ -1227,7 +1261,7 @@ _barcodeFocusNode.requestFocus();
                                                               ).showSnackBar(
                                                                 SnackBar(
                                                                   content: Text(
-                                                                    '⚠️ Unit type not available for this product.',
+                                                                    '⚠️ ${'cart.unit_not_available'.tr()}',
                                                                   ),
                                                                   behavior:
                                                                       SnackBarBehavior
@@ -1366,7 +1400,7 @@ _barcodeFocusNode.requestFocus();
                                       children: [
                                         // Type Dropdown
                                         Text(
-                                          "Type:",
+                                          'cart.type'.tr() + ":",
                                           style: TextStyle(
                                             fontSize: 14.sp,
                                             fontWeight: FontWeight.w600,
@@ -1385,14 +1419,14 @@ _barcodeFocusNode.requestFocus();
                                           ),
                                           items: [
                                             if (product.birimKey1 != 0)
-                                              const DropdownMenuItem(
+                                              DropdownMenuItem(
                                                 value: 'Unit',
-                                                child: Text('Unit'),
+                                                child: Text('cart.unit'.tr()),
                                               ),
                                             if (product.birimKey2 != 0)
-                                              const DropdownMenuItem(
+                                              DropdownMenuItem(
                                                 value: 'Box',
-                                                child: Text('Box'),
+                                                child: Text('cart.box'.tr()),
                                               ),
                                           ],
                                                 onChanged: (val) {
@@ -1417,13 +1451,13 @@ _barcodeFocusNode.requestFocus();
                                                         newValue
                                                             ? double.parse(
                                                                   product
-                                                                      .adetFiyati
+                                                                      .kutuFiyati
                                                                       .toString(),
                                                                 ) ??
                                                                 0
                                                             : double.parse(
                                                                   product
-                                                                      .kutuFiyati
+                                                                      .adetFiyati
                                                                       .toString(),
                                                                 ) ??
                                                                 0;
@@ -1472,7 +1506,7 @@ _barcodeFocusNode.requestFocus();
                                                         ).showSnackBar(
                                                           SnackBar(
                                                             content: Text(
-                                                              '⚠️ Unit type not available for this product.',
+                                                              '⚠️ ${'cart.unit_not_available'.tr()}',
                                                             ),
                                                             behavior:
                                                                 SnackBarBehavior
@@ -1571,19 +1605,19 @@ _barcodeFocusNode.requestFocus();
                                                       _iskontoMap[key] ?? 0;
 
                                                   final birimTipi =
-                                                      isBox ? 'Unit' : 'Box';
+                                                      isBox ? 'Box' : 'Unit';
 
                                                   final fiyat =
                                                       isBox
                                                           ? double.parse(
                                                                 product
-                                                                    .adetFiyati
+                                                                    .kutuFiyati
                                                                     .toString(),
                                                               ) ??
                                                               0
                                                           : double.parse(
                                                                 product
-                                                                    .kutuFiyati
+                                                                    .adetFiyati
                                                                     .toString(),
                                                               ) ??
                                                               0;
@@ -1791,13 +1825,13 @@ _barcodeFocusNode.requestFocus();
                                                         isBox
                                                             ? double.tryParse(
                                                                   product
-                                                                      .adetFiyati
+                                                                      .kutuFiyati
                                                                       .toString(),
                                                                 ) ??
                                                                 0
                                                             : double.tryParse(
                                                                   product
-                                                                      .kutuFiyati
+                                                                      .adetFiyati
                                                                       .toString(),
                                                                 ) ??
                                                                 0,
@@ -1859,7 +1893,7 @@ _barcodeFocusNode.requestFocus();
                                                   context: context,
                                                   builder: (BuildContext context) {
                                                     return AlertDialog(
-                                                      title: const Text('Add Free Product'),
+                                                      title: Text('cart.add_free_product'.tr()),
                                                       content: Column(
                                                         mainAxisSize: MainAxisSize.min,
                                                         children: [
@@ -1876,20 +1910,20 @@ _barcodeFocusNode.requestFocus();
                                                                 selectedBirimTipi = value;
                                                               }
                                                             },
-                                                            decoration: const InputDecoration(labelText: 'Birim Tipi'),
+                                                            decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
                                                           ),
                                                           const SizedBox(height: 10),
                                                           TextField(
                                                             controller: miktarController,
                                                             keyboardType: TextInputType.number,
-                                                            decoration: const InputDecoration(labelText: 'Miktar'),
+                                                            decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
                                                           ),
                                                         ],
                                                       ),
                                                       actions: [
                                                         TextButton(
                                                           onPressed: () => Navigator.pop(context),
-                                                          child: const Text('İptal'),
+                                                          child: Text('cart.cancel'.tr()),
                                                         ),
                                                         ElevatedButton(
                                                           onPressed: () {
@@ -1901,7 +1935,7 @@ _barcodeFocusNode.requestFocus();
                                                               });
                                                             }
                                                           },
-                                                          child: const Text('Ekle'),
+                                                          child: Text('cart.add'.tr()),
                                                         ),
                                                       ],
                                                     );
@@ -1939,7 +1973,7 @@ _barcodeFocusNode.requestFocus();
                                                 } else {
                                                   ScaffoldMessenger.of(context).showSnackBar(
                                                     SnackBar(
-                                                      content: const Text('⚠️ Unit type not available for this product.'),
+                                                      content: Text('cart.unit_not_available'.tr()),
                                                       behavior: SnackBarBehavior.floating,
                                                       backgroundColor: Colors.orange.shade700,
                                                       duration: const Duration(seconds: 3),
@@ -2104,11 +2138,11 @@ _barcodeFocusNode.requestFocus();
       return 'Unit';
     }
 
-    // Varsayılan olarak mevcut olan ilk seçeneği döndür
-    if (product.birimKey1 != 0) {
-      return 'Unit';
-    } else if (product.birimKey2 != "0") {
+    // Varsayılan olarak önce Box'ı kontrol et
+    if (product.birimKey2 != "0") {
       return 'Box';
+    } else if (product.birimKey1 != 0) {
+      return 'Unit';
     }
 
     return null;
@@ -2167,7 +2201,7 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("SCAN"),
+        title: Text('cart.scan'.tr()),
         actions: [
           IconButton(
             icon: const Icon(Icons.flash_on),
