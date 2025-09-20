@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:pos_app/controllers/sync_controller.dart';
 import 'package:pos_app/controllers/transaction_controller.dart';

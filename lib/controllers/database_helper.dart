@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:pos_app/controllers/database_helper.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();

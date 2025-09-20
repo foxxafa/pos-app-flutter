@@ -9,7 +9,6 @@ import 'package:pos_app/models/transaction_model.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:pos_app/providers/user_provider.dart';
 import 'package:pos_app/views/customer_view.dart';
-import 'package:pos_app/views/menu_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'dart:convert';

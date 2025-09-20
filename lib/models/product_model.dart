@@ -14,7 +14,7 @@ class ProductModel {
   final String birim1;
   final int birimKey1;
   final String birim2;
-  final String birimKey2;
+  final int birimKey2;
   final int aktif;
   final String? imsrc; // Yeni alan
 
@@ -51,12 +51,12 @@ class ProductModel {
       barcode2: json['Barcode2'] ?? '',
       barcode3: json['Barcode3'] ?? '',
       barcode4: json['Barcode4'] ?? '',
-vat: double.tryParse(json['Vat']?.toString() ?? '0')?.toInt() ?? 0,
+      vat: double.tryParse(json['Vat']?.toString() ?? '0')?.toInt() ?? 0,
       urunAdi: json['UrunAdi'] ?? '',
       birim1: json['Birim1'] ?? '',
       birimKey1: json['BirimKey1'] ?? 0,
       birim2: json['Birim2'] ?? '',
-      birimKey2: json['BirimKey2'] ?? "0",
+      birimKey2: json['BirimKey2'] is int ? json['BirimKey2'] : int.tryParse(json['BirimKey2']?.toString() ?? '0') ?? 0,
       aktif: json['Aktif'] ?? 0,
       imsrc: json['imsrc'], // Yeni alan
     );
@@ -126,7 +126,7 @@ vat: double.tryParse(json['Vat']?.toString() ?? '0')?.toInt() ?? 0,
       birim1: map['birim1']?.toString() ?? '',
       birimKey1: map['birimKey1'] is int ? map['birimKey1'] : int.tryParse(map['birimKey1']?.toString() ?? '0') ?? 0,
       birim2: map['birim2']?.toString() ?? '',
-birimKey2: map['birimKey2']?.toString() ?? '0',
+      birimKey2: map['birimKey2'] is int ? map['birimKey2'] : int.tryParse(map['birimKey2']?.toString() ?? '0') ?? 0,
       imsrc: map['imsrc']?.toString(), // Yeni alan
     );
   }

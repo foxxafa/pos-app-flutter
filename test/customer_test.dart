@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pos_app/controllers/customer_controller.dart';
 import 'package:pos_app/controllers/product_controller.dart';
-import 'package:pos_app/models/product_model.dart';
 
 void main() {
   test('getNewCustomer returns list and prints first two customers', () async {

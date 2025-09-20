@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/providers/cart_provider.dart';
-import 'package:pos_app/views/cart_view2.dart';
 import 'package:provider/provider.dart';
 import 'package:pos_app/controllers/database_helper.dart';
 import 'package:sizer/sizer.dart';

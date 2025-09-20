@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
-import 'package:pos_app/views/customer_view.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:sizer/sizer.dart';

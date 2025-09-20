@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:path/path.dart';
-import 'package:pos_app/models/customer_model.dart';
 import 'package:pos_app/models/product_model.dart';
 import 'package:sqflite/sqflite.dart';
 
