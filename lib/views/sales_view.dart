@@ -6,7 +6,7 @@ import 'package:pos_app/models/customer_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/providers/cart_provider_refund.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
-import 'package:pos_app/views/cart_view.dart';
+
 import 'package:pos_app/views/customer_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -234,8 +234,8 @@ class _SalesViewState extends State<SalesView> {
                                                   ),
                                                   decoration: BoxDecoration(
                                                     color: sale['Aktif'] == 1
-                                                        ? AppTheme.accentColor.withOpacity(0.1)
-                                                        : AppTheme.errorColor.withOpacity(0.1),
+                                                        ? AppTheme.accentColor.withValues(alpha: 0.1)
+                                                        : AppTheme.errorColor.withValues(alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(6),
                                                   ),
@@ -344,7 +344,7 @@ class _SalesViewState extends State<SalesView> {
         Container(
           padding: EdgeInsets.all(2.w),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(

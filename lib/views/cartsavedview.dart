@@ -112,7 +112,7 @@ class _CartListPageState extends State<CartListPage> {
           leading: Container(
             padding: EdgeInsets.all(2.w),
             decoration: BoxDecoration(
-              color: AppTheme.lightPrimaryColor.withOpacity(0.1),
+              color: AppTheme.lightPrimaryColor.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -137,7 +137,7 @@ class _CartListPageState extends State<CartListPage> {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -153,7 +153,7 @@ class _CartListPageState extends State<CartListPage> {
                   Container(
                     padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -206,7 +206,7 @@ class _CartListPageState extends State<CartListPage> {
             width: 12.w,
             height: 12.w,
             decoration: BoxDecoration(
-              color: AppTheme.lightPrimaryColor.withOpacity(0.1),
+              color: AppTheme.lightPrimaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
@@ -284,7 +284,6 @@ class _CartListPageState extends State<CartListPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: AppTheme.lightBackgroundColor,

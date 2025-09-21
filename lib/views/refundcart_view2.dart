@@ -10,7 +10,6 @@ import 'package:pos_app/models/refundsend_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/providers/cart_provider_refund.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
-import 'package:pos_app/providers/orderinfo_provider.dart';
 import 'package:pos_app/views/customer_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -24,7 +23,7 @@ class RefundCartView2 extends StatefulWidget {
 }
 
 class _RefundCartView2State extends State<RefundCartView2> {
-  final TextEditingController _priceController = TextEditingController();
+  // final TextEditingController _priceController = TextEditingController(); // Kullanılmıyor
 
   void sendRefundItems(
     RefundFisModel fisModel,
@@ -125,10 +124,6 @@ class _RefundCartView2State extends State<RefundCartView2> {
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<RCartProvider>(context);
     final cartItems = cartProvider.items.values.toList();
-    final orderInfoProvider = Provider.of<OrderInfoProvider>(
-      context,
-      listen: false,
-    );
 
     final unitCount = cartItems
         .where((item) => item.birimTipi == 'Unit')
@@ -209,7 +204,7 @@ class _RefundCartView2State extends State<RefundCartView2> {
                                 builder:
                                     ///ALERT DIALOG DİALOG
                                     (context) => AlertDialog(
-                                      title: Text(item.urunAdi ?? 'No name'),
+                                      title: Text(item.urunAdi),
                                       content: Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
@@ -338,10 +333,10 @@ class _RefundCartView2State extends State<RefundCartView2> {
                                           ),
 
                                           Text(
-                                            "Unit Price: ${item.adetFiyati ?? '-'}",
+                                            "Unit Price: ${item.adetFiyati}",
                                           ),
                                           Text(
-                                            "Box Price: ${item.kutuFiyati ?? '-'}",
+                                            "Box Price: ${item.kutuFiyati}",
                                           ),
 
                                           // Text("Active: ${product.aktif == 1 ? 'YES' : 'NO'}"),

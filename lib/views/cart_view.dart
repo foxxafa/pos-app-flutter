@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pos_app/controllers/refundlist_controller.dart';
 import 'package:pos_app/models/refundlist_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/views/cart_view2.dart';
@@ -8,7 +7,6 @@ import 'package:pos_app/views/cartsuggestion_view.dart';
 import 'package:provider/provider.dart';
 import 'package:pos_app/controllers/database_helper.dart';
 import 'package:sizer/sizer.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/product_model.dart';
 import '../providers/cartcustomer_provider.dart';
 import 'dart:io';
@@ -16,9 +14,7 @@ import 'dart:async';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
-import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:intl/intl.dart';
 
 class CartView extends StatefulWidget {
   final List<String> refundProductNames;
@@ -47,12 +43,10 @@ class _CartViewState extends State<CartView> {
     _searchController.text = scannedValue;
   }
 
-  String _scannerBuffer = '';
 
   List<ProductModel> _allProducts = [];
   List<ProductModel> _filteredProducts = [];
   Map<String, Future<String?>> _imageFutures = {};
-  final TextEditingController _iskontoController = TextEditingController();
   bool _isLoading = true;
 
   final Map<String, bool> _isBoxMap = {};
@@ -90,7 +84,7 @@ class _CartViewState extends State<CartView> {
 
   void _generateImageFutures(List<ProductModel> products) {
     for (final product in products) {
-      final stokKodu = product.stokKodu ?? '';
+      final stokKodu = product.stokKodu;
       if (!_imageFutures.containsKey(stokKodu)) {
         _imageFutures[stokKodu] = _loadImage(product.imsrc);
       }
@@ -103,9 +97,9 @@ class _CartViewState extends State<CartView> {
 
       final uri = Uri.parse(imsrc);
       final fileName =
-          uri.pathSegments.isNotEmpty ? uri.pathSegments.last : null;
+          uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
 
-      if (fileName == null) return null;
+      if (fileName.isEmpty) return null;
 
       final dir = await getApplicationDocumentsDirectory();
       final filePath = '${dir.path}/$fileName';
@@ -125,8 +119,8 @@ class _CartViewState extends State<CartView> {
     // Tüm ürünleri al, sonra sıralayıp ilk 50 tanesini göster
     final sortedFiltered =
         products.toList()..sort((a, b) {
-          final nameA = a.urunAdi ?? '';
-          final nameB = b.urunAdi ?? '';
+          final nameA = a.urunAdi;
+          final nameB = b.urunAdi;
 
           final startsWithLetterA = RegExp(
             r'^[a-zA-ZğüşöçİĞÜŞÖÇ]',
@@ -146,7 +140,7 @@ class _CartViewState extends State<CartView> {
       _filteredProducts = sortedFiltered.take(50).toList();
 
       for (var product in products) {
-        final key = product.stokKodu ?? '';
+        final key = product.stokKodu;
         // Box varsa varsayılan olarak Box seçili gelsin
         _isBoxMap[key] = product.birimKey2 != "0" ? true : false;
         _quantityMap[key] = 0;
@@ -158,7 +152,7 @@ class _CartViewState extends State<CartView> {
     });
   }
 
-  void _filterProducts2({bool isFromBarcodeScan = false}) {
+  void _filterProducts2() {
     print("FİLTER STARTEDDDDDD");
     final provider = Provider.of<CartProvider>(context, listen: false);
 
@@ -167,14 +161,14 @@ class _CartViewState extends State<CartView> {
 
     final filtered =
         _allProducts.where((product) {
-          final name = product.urunAdi?.toLowerCase() ?? '';
+          final name = product.urunAdi.toLowerCase();
           final barcodes =
               [
                 product.barcode1,
                 product.barcode2,
                 product.barcode3,
                 product.barcode4,
-              ].where((b) => b != null).map((b) => b!.toLowerCase()).toList();
+              ].map((b) => b.toLowerCase()).toList();
 
           final matchesAllWords = queryWords.every((word) {
             final inName = name.contains(word);
@@ -187,8 +181,8 @@ class _CartViewState extends State<CartView> {
 
     // 🔤 Alfabetik sırala, özel karakterle başlayanlar en sona
     filtered.sort((a, b) {
-      final aName = a.urunAdi ?? '';
-      final bName = b.urunAdi ?? '';
+      final aName = a.urunAdi;
+      final bName = b.urunAdi;
 
       final aStartsWithLetter = RegExp(
         r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
@@ -211,7 +205,7 @@ class _CartViewState extends State<CartView> {
     if (_filteredProducts.length == 1 &&
         RegExp(r'^\d+$').hasMatch(_searchController2.text)) {
       final product = _filteredProducts.first;
-      final key = product.stokKodu ?? 'unknown';
+      final key = product.stokKodu;
       final isBox = provider.getBirimTipi(key) == 'Box';
 
       if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
@@ -229,7 +223,7 @@ class _CartViewState extends State<CartView> {
                   ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                   : double.tryParse(product.adetFiyati.toString()) ?? 0,
           imsrc: product.imsrc,
-          urunBarcode: product.barcode1 ?? '',
+          urunBarcode: product.barcode1,
           miktar: 1,
           iskonto: _iskontoMap[key] ?? 0,
           birimTipi: provider.getBirimTipi(product.stokKodu),
@@ -290,14 +284,14 @@ class _CartViewState extends State<CartView> {
 
     final filtered =
         _allProducts.where((product) {
-          final name = product.urunAdi?.toLowerCase() ?? '';
+          final name = product.urunAdi.toLowerCase();
           final barcodes =
               [
                 product.barcode1,
                 product.barcode2,
                 product.barcode3,
                 product.barcode4,
-              ].where((b) => b != null).map((b) => b!.toLowerCase()).toList();
+              ].map((b) => b.toLowerCase()).toList();
 
           final matchesAllWords = queryWords.every((word) {
             final inName = name.contains(word);
@@ -310,8 +304,8 @@ class _CartViewState extends State<CartView> {
 
     // 🔤 Alfabetik sırala, özel karakterle başlayanlar en sona
     filtered.sort((a, b) {
-      final aName = a.urunAdi ?? '';
-      final bName = b.urunAdi ?? '';
+      final aName = a.urunAdi;
+      final bName = b.urunAdi;
 
       final aStartsWithLetter = RegExp(
         r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
@@ -334,7 +328,7 @@ class _CartViewState extends State<CartView> {
     if (_filteredProducts.length == 1 &&
         RegExp(r'^\d+$').hasMatch(_searchController.text)) {
       final product = _filteredProducts.first;
-      final key = product.stokKodu ?? 'unknown';
+      final key = product.stokKodu;
       final isBox = provider.getBirimTipi(key) == 'Box';
 
       if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
@@ -352,7 +346,7 @@ class _CartViewState extends State<CartView> {
                   ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                   : double.tryParse(product.adetFiyati.toString()) ?? 0,
           imsrc: product.imsrc,
-          urunBarcode: product.barcode1 ?? '',
+          urunBarcode: product.barcode1,
           miktar: 1,
           iskonto: _iskontoMap[key] ?? 0,
           birimTipi: provider.getBirimTipi(product.stokKodu),
@@ -414,7 +408,7 @@ class _CartViewState extends State<CartView> {
 
   //   final filtered =
   //       _allProducts.where((product) {
-  //         final name = product.urunAdi?.toLowerCase() ?? '';
+  //         final name = (product.urunAdi ?? "").toLowerCase();
   //         final barcodes =
   //             [
   //               product.barcode1,
@@ -452,7 +446,7 @@ class _CartViewState extends State<CartView> {
   //         ? double.tryParse(product.kutuFiyati.toString()) ?? 0
   //         : double.tryParse(product.adetFiyati.toString()) ?? 0,
   //     imsrc: product.imsrc,
-  //     urunBarcode: product.barcode1 ?? '',
+  //     urunBarcode: product.barcode1,
   //     miktar: 1,
   //     iskonto: _iskontoMap[key] ?? 0,
   //     birimTipi: provider.getBirimTipi(product.stokKodu),
@@ -463,10 +457,6 @@ class _CartViewState extends State<CartView> {
   //   });
   // }
 
-  void _clearSearch() {
-    _searchController.clear();
-    _filterProducts();
-  }
 
   void _clearSearch2() {
     _searchController2.clear();
@@ -505,10 +495,10 @@ class _CartViewState extends State<CartView> {
         .where((item) => item.birimTipi == 'Box')
         .fold<int>(0, (prev, item) => prev + item.miktar);
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) {
         //   Provider.of<CartProvider>(context, listen: false).clearCart();
-        return true; // sayfanın geri gitmesine izin ver
       },
       child: Scaffold(
         appBar: AppBar(
@@ -543,10 +533,10 @@ class _CartViewState extends State<CartView> {
                 hintText: 'cart.search_placeholder'.tr(),
                 hintStyle: TextStyle(
                   fontSize: 14.sp,
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                 ),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.15),
+                fillColor: Colors.white.withValues(alpha: 0.15),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(25),
                   borderSide: BorderSide.none,
@@ -558,7 +548,7 @@ class _CartViewState extends State<CartView> {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(25),
                   borderSide: BorderSide(
-                    color: Colors.white.withOpacity(0.3),
+                    color: Colors.white.withValues(alpha: 0.3),
                     width: 1.0,
                   ),
                 ),
@@ -566,7 +556,7 @@ class _CartViewState extends State<CartView> {
                 prefixIcon: Icon(
                   Icons.search,
                   size: 20,
-                  color: Colors.white.withOpacity(0.7),
+                  color: Colors.white.withValues(alpha: 0.7),
                 ),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -575,7 +565,7 @@ class _CartViewState extends State<CartView> {
                       IconButton(
                         icon: Icon(
                           Icons.clear,
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           size: 20,
                         ),
                         onPressed: _clearSearch2,
@@ -588,7 +578,7 @@ class _CartViewState extends State<CartView> {
                     IconButton(
                       icon: Icon(
                         Icons.qr_code_scanner,
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         size: 22,
                       ),
                       onPressed: _openBarcodeScanner,
@@ -816,7 +806,7 @@ _barcodeFocusNode.requestFocus();
 
                             // _priceController = TextEditingController(text: initialPrice ?? '');
 
-                            final key2 = product.stokKodu ?? 'unknown_$index';
+                            final key2 = product.stokKodu;
 
                             // Sepette ürün var mı kontrol et
                             final cartItem =
@@ -835,7 +825,7 @@ _barcodeFocusNode.requestFocus();
                             // Sadece ilk kez oluşturuluyorsa controller'a fiyat yaz
                             if (!_priceControllers.containsKey(key2)) {
                               // Fiyatı ondalıklı formata çevir
-                              final formattedPrice = initialPrice != null && initialPrice.isNotEmpty
+                              final formattedPrice = initialPrice.isNotEmpty
                                   ? double.tryParse(initialPrice)?.toStringAsFixed(2) ?? '0.00'
                                   : '0.00';
                               _priceControllers[key2] = TextEditingController(
@@ -854,7 +844,7 @@ _barcodeFocusNode.requestFocus();
                             }
                             final _discountController = _discountControllers[key2]!;
 
-                            final key = product.stokKodu ?? 'unknown_$index';
+                            final key = product.stokKodu;
                             final providersafdas = Provider.of<CartProvider>(
                               context,
                               listen: true,
@@ -871,9 +861,9 @@ _barcodeFocusNode.requestFocus();
                               // Controller zaten var
                             }
 
-                            final isBox = _isBoxMap[key] ?? false;
+                            // final isBox = _isBoxMap[key] ?? false;
                             final quantity = _quantityMap[key] ?? 0;
-                            final iskonto = _iskontoMap[key] ?? 0;
+                            // final iskonto = _iskontoMap[key] ?? 0;
                             final future = _imageFutures[product.stokKodu];
 
                             return Card(
@@ -885,7 +875,7 @@ _barcodeFocusNode.requestFocus();
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 side: BorderSide(
-                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.12),
+                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
                                   width: 1,
                                 ),
                               ),
@@ -898,7 +888,7 @@ _barcodeFocusNode.requestFocus();
                                       end: Alignment.bottomRight,
                                       colors: [
                                         Theme.of(context).colorScheme.surface,
-                                        Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                                        Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
                                       ],
                                     ),
                                   ),
@@ -914,7 +904,7 @@ _barcodeFocusNode.requestFocus();
   context: context,
   builder: (context) => AlertDialog(
     title: Text(
-      product.urunAdi ?? 'cart.no_name'.tr(),
+      product.urunAdi,
     ),
     content: Column(
       mainAxisSize: MainAxisSize.min,
@@ -988,8 +978,8 @@ _barcodeFocusNode.requestFocus();
         SizedBox(height: 2.h),
         GestureDetector(
           onTap: () {
-            final firstBarcode = product.barcode1?.trim();
-            if (firstBarcode != null && firstBarcode.isNotEmpty) {
+            final firstBarcode = product.barcode1.trim();
+            if (firstBarcode.isNotEmpty) {
               Clipboard.setData(ClipboardData(text: firstBarcode));
             }
           },
@@ -999,23 +989,23 @@ _barcodeFocusNode.requestFocus();
               product.barcode2,
               product.barcode3,
               product.barcode4
-            ].where((b) => b != null && b.trim().isNotEmpty).join(', ')}",
+            ].where((b) => b.trim().isNotEmpty).join(', ')}",
             style: TextStyle(
               decoration: TextDecoration.underline,
             ),
           ),
         ),
         Text(
-          "${'cart.code'.tr()}= ${product.stokKodu ?? '-'}",
+          "${'cart.code'.tr()}= ${product.stokKodu}",
         ),
         Text(
-          "${'cart.unit_price'.tr()}= ${product.adetFiyati ?? '-'}",
+          "${'cart.unit_price'.tr()}= ${product.adetFiyati}"
         ),
         Text(
-          "${'cart.box_price'.tr()}= ${product.kutuFiyati ?? '-'}",
+          "${'cart.box_price'.tr()}= ${product.kutuFiyati}",
         ),
         Text(
-          "${'cart.vat'.tr()}= ${product.vat ?? '-'}",
+          "${'cart.vat'.tr()}= ${product.vat}",
         ),
         Text(
           "${'cart.code'.tr()}= ${product.imsrc ?? '-'}",
@@ -1110,19 +1100,19 @@ _barcodeFocusNode.requestFocus();
                                                   overflow:
                                                       TextOverflow.ellipsis,
 
-                                                  product.urunAdi ?? '-',
+                                                  product.urunAdi,
                                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                                     fontWeight: FontWeight.w600,
                                                     color: () {
                                                       final urunAdi =
-                                                          product.urunAdi ?? '';
+                                                          product.urunAdi;
                                                       final isInRefundList = widget
                                                           .refundProductNames
                                                           .any(
                                                             (e) =>
                                                                 e
                                                                     .toLowerCase() ==
-                                                                (urunAdi ?? '')
+                                                                urunAdi
                                                                     .toLowerCase(),
                                                           );
 
@@ -1155,7 +1145,7 @@ _barcodeFocusNode.requestFocus();
                                                     Container(
                                                       padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
                                                       decoration: BoxDecoration(
-                                                        border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.5)),
+                                                        border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
                                                         borderRadius: BorderRadius.circular(8),
                                                       ),
                                                       child: DropdownButton<String>(
@@ -1192,8 +1182,8 @@ _barcodeFocusNode.requestFocus();
                                                             listen: false,
                                                           );
                                                           final productFiyat = newValue
-                                                              ? double.parse(product.kutuFiyati.toString()) ?? 0
-                                                              : double.parse(product.adetFiyati.toString()) ?? 0;
+                                                              ? double.parse(product.kutuFiyati.toString())
+                                                              : double.parse(product.adetFiyati.toString());
 
                                                           final miktar = _quantityMap[key] ?? 0;
 
@@ -1205,7 +1195,7 @@ _barcodeFocusNode.requestFocus();
                                                               adetFiyati: product.adetFiyati,
                                                               kutuFiyati: product.kutuFiyati,
                                                               vat: product.vat,
-                                                              urunBarcode: product.barcode1 ?? '',
+                                                              urunBarcode: product.barcode1,
                                                               miktar: 0,
                                                               iskonto: _iskontoMap[key] ?? 0,
                                                               birimTipi: val!,
@@ -1236,11 +1226,11 @@ _barcodeFocusNode.requestFocus();
                                                           filled: true,
                                                           fillColor: quantity > 0
                                                               ? Theme.of(context).colorScheme.surface
-                                                              : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.38),
+                                                              : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
                                                           hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
                                                           hintStyle: TextStyle(
                                                             fontSize: 16.sp,
-                                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                                                             fontWeight: FontWeight.w500,
                                                           ),
                                                           border: OutlineInputBorder(
@@ -1252,7 +1242,7 @@ _barcodeFocusNode.requestFocus();
                                                           enabledBorder: OutlineInputBorder(
                                                             borderRadius: BorderRadius.circular(8),
                                                             borderSide: BorderSide(
-                                                              color: Theme.of(context).colorScheme.outline.withOpacity(0.38),
+                                                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.38),
                                                             ),
                                                           ),
                                                           focusedBorder: OutlineInputBorder(
@@ -1421,7 +1411,7 @@ _barcodeFocusNode.requestFocus();
                                                               enabledBorder: OutlineInputBorder(
                                                                 borderRadius: BorderRadius.circular(8),
                                                                 borderSide: BorderSide(
-                                                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.38),
+                                                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.38),
                                                                 ),
                                                               ),
                                                               focusedBorder: OutlineInputBorder(
@@ -1493,8 +1483,8 @@ _barcodeFocusNode.requestFocus();
                                                       height: 8.w,
                                                       decoration: BoxDecoration(
                                                         color: quantity > 0
-                                                            ? Theme.of(context).colorScheme.error.withOpacity(0.1)
-                                                            : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                                                            ? Theme.of(context).colorScheme.error.withValues(alpha: 0.1)
+                                                            : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                                                         borderRadius: BorderRadius.circular(4),
                                                       ),
                                                       child: IconButton(
@@ -1502,14 +1492,14 @@ _barcodeFocusNode.requestFocus();
                                                         onPressed: quantity > 0
                                                             ? () {
                                                                 final provider = Provider.of<CartProvider>(context, listen: false);
-                                                                final key = product.stokKodu ?? '';
+                                                                final key = product.stokKodu;
                                                                 final iskonto = _iskontoMap[key] ?? 0;
                                                                 final isBox = _isBoxMap[key] ?? false;
 
                                                                 final birimTipi = isBox ? 'Box' : 'Unit';
                                                                 final fiyat = isBox
-                                                                    ? double.parse(product.kutuFiyati.toString()) ?? 0
-                                                                    : double.parse(product.adetFiyati.toString()) ?? 0;
+                                                                    ? double.parse(product.kutuFiyati.toString())
+                                                                    : double.parse(product.adetFiyati.toString());
 
                                                                 final currentQuantity = _quantityMap[key] ?? 0;
                                                                 final newQuantity = currentQuantity - 1;
@@ -1525,7 +1515,7 @@ _barcodeFocusNode.requestFocus();
                                                                     adetFiyati: product.adetFiyati,
                                                                     kutuFiyati: product.kutuFiyati,
                                                                     vat: product.vat,
-                                                                    urunBarcode: product.barcode1 ?? '',
+                                                                    urunBarcode: product.barcode1,
                                                                     miktar: newQuantity,
                                                                     iskonto: iskonto,
                                                                     birimTipi: birimTipi,
@@ -1543,7 +1533,7 @@ _barcodeFocusNode.requestFocus();
                                                           size: 4.w,
                                                           color: quantity > 0
                                                               ? Theme.of(context).colorScheme.error
-                                                              : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.38),
+                                                              : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
                                                         ),
                                                       ),
                                                     ),
@@ -1603,7 +1593,7 @@ _barcodeFocusNode.requestFocus();
                                                       width: 8.w,
                                                       height: 8.w,
                                                       decoration: BoxDecoration(
-                                                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                                         borderRadius: BorderRadius.circular(4),
                                                       ),
                                                       child: IconButton(
@@ -1615,8 +1605,8 @@ _barcodeFocusNode.requestFocus();
 
                                                           final birimTipi = isBox ? 'Box' : 'Unit';
                                                           final fiyat = isBox
-                                                              ? double.parse(product.kutuFiyati.toString()) ?? 0
-                                                              : double.parse(product.adetFiyati.toString()) ?? 0;
+                                                              ? double.parse(product.kutuFiyati.toString())
+                                                              : double.parse(product.adetFiyati.toString());
 
                                                           final newQuantity = (_quantityMap[key] ?? 0) + 1;
 
@@ -1627,7 +1617,7 @@ _barcodeFocusNode.requestFocus();
                                                             adetFiyati: product.adetFiyati,
                                                             kutuFiyati: product.kutuFiyati,
                                                             vat: product.vat,
-                                                            urunBarcode: product.barcode1 ?? '',
+                                                            urunBarcode: product.barcode1,
                                                             miktar: 1,
                                                             iskonto: iskonto,
                                                             birimTipi: birimTipi,
@@ -1743,7 +1733,7 @@ _barcodeFocusNode.requestFocus();
                                                                 urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
                                                                 birimFiyat: freeFiyat,
                                                                 miktar: result['miktar'],
-                                                                urunBarcode: product.barcode1 ?? '',
+                                                                urunBarcode: product.barcode1,
                                                                 iskonto: 100,
                                                                 birimTipi: result['birimTipi'],
                                                                 imsrc: product.imsrc,
@@ -1870,22 +1860,6 @@ _barcodeFocusNode.requestFocus();
     );
   }
 
-  Widget _buildRefundInfo(ProductModel product) {
-    final filtered = widget.refunds.where(
-      (r) => r.urunAdi.toLowerCase() == product.urunAdi!.toLowerCase(),
-    );
-    if (filtered.isEmpty) return SizedBox.shrink();
-
-    final refund = filtered.first;
-    return Text(
-      "[Qty:${refund.miktar}x${refund.birim}] ${refund.birimFiyat} £ [${DateFormat('dd/MM/yyyy').format(refund.fisTarihi)}]",
-      style: TextStyle(
-        fontSize: 8.sp,
-        color: Colors.blue,
-        fontWeight: FontWeight.bold,
-      ),
-    );
-  }
 
   void _updateQuantityFromTextField(String key, String value, ProductModel product) {
     final provider = Provider.of<CartProvider>(context, listen: false);
@@ -1899,8 +1873,8 @@ _barcodeFocusNode.requestFocus();
     if (newQuantity > 0) {
       final birimTipi = isBox ? 'Box' : 'Unit';
       final fiyat = isBox
-          ? double.parse(product.kutuFiyati.toString()) ?? 0
-          : double.parse(product.adetFiyati.toString()) ?? 0;
+          ? double.parse(product.kutuFiyati.toString())
+          : double.parse(product.adetFiyati.toString());
 
       // addOrUpdateItem mevcut miktara ekler, bu yüzden direk newQuantity'yi veriyoruz
       // çünkü removeItem ile önceden sildik
@@ -1911,7 +1885,7 @@ _barcodeFocusNode.requestFocus();
         adetFiyati: product.adetFiyati,
         kutuFiyati: product.kutuFiyati,
         vat: product.vat,
-        urunBarcode: product.barcode1 ?? '',
+        urunBarcode: product.barcode1,
         miktar: newQuantity, // Bu doğru, çünkü removeItem ile sildik
         iskonto: iskonto,
         birimTipi: birimTipi,
@@ -1938,7 +1912,7 @@ _barcodeFocusNode.requestFocus();
   }
 
   String? getBirimTipiFromProduct(ProductModel product) {
-    final key = product.stokKodu ?? '';
+    final key = product.stokKodu;
     final isBox = _isBoxMap[key] ?? false;
 
     // Eğer Box seçili ve Box mevcut ise

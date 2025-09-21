@@ -27,20 +27,20 @@ class _RefundList2ViewState extends State<RefundList2View> {
   double toplam = 0;
   String _searchQuery = '';
 List<String> urunAdlariUnique=[];
-  List<String> _iadeNedenleri = [
-    'Short Item',
-    'Misdelivery (Useful)',
-    'Refused (Useful)',
-    'Other (Useful)',
-    'Trial Returned (Useful)',
-    'Short Dated (Useless)',
-    'Price Difference',
-    'Expired (Useless)',
-    'Damaged (Useless)',
-    'Faulty Pack (Useless)',
-    'Others (Useless)',
-    'Trial Returned (Useless)',
-  ];
+  // List<String> _iadeNedenleri = [
+  //   'Short Item',
+  //   'Misdelivery (Useful)',
+  //   'Refused (Useful)',
+  //   'Other (Useful)',
+  //   'Trial Returned (Useful)',
+  //   'Short Dated (Useless)',
+  //   'Price Difference',
+  //   'Expired (Useless)',
+  //   'Damaged (Useless)',
+  //   'Faulty Pack (Useless)',
+  //   'Others (Useless)',
+  //   'Trial Returned (Useless)',
+  // ];
 
   String _selectedIadeNedeni = "";
 
@@ -96,8 +96,8 @@ void printCartContents() {
     final product = _products.firstWhere(
       (p) => p.stokKodu == stokKodu,
     );
-    final urunAdi = product?.urunAdi ?? "Bilinmeyen Ürün";
-    final fiyat = _customPrices[stokKodu] ?? double.tryParse(product?.adetFiyati ?? "0") ?? 0.0;
+    final urunAdi = product.urunAdi;
+    final fiyat = _customPrices[stokKodu] ?? double.tryParse(product.adetFiyati) ?? 0.0;
     final toplamTutar = fiyat * miktar;
     print("Ürün: $urunAdi | Stok: $stokKodu | Miktar: $miktar | Fiyat: ${fiyat.toStringAsFixed(2)} | Toplam: ${toplamTutar.toStringAsFixed(2)}");
   });
@@ -165,8 +165,8 @@ void updateTotal() {
       return miktar > 0;
     }).map((product) {
       final miktar = _quantities[product.stokKodu]!;
-      final fiyat = _customPrices[product.stokKodu] ?? double.tryParse(product.adetFiyati ?? "0") ?? 0;
-      final vat = product.vat ?? 0;
+      final fiyat = _customPrices[product.stokKodu] ?? double.tryParse(product.adetFiyati) ?? 0;
+      final vat = product.vat;
       return RefundItemModel(
         stokKodu: product.stokKodu,
         urunAdi: product.urunAdi,
@@ -174,9 +174,9 @@ void updateTotal() {
         birimFiyat: fiyat,
         toplamTutar: miktar * fiyat,
         vat: vat,
-        birimTipi: product.birim1 ?? '',
+        birimTipi: product.birim1,
         durum: "1",
-        urunBarcode: product.barcode1 ?? '',
+        urunBarcode: product.barcode1,
         iskonto: 0,
         aciklama: ""
       );
@@ -372,30 +372,30 @@ Divider(),
     );
   }
 
-  void _showIadeNedeniSecimi() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return Container(
-          padding: EdgeInsets.all(16),
-          child: ListView(
-            children: _iadeNedenleri.map((neden) {
-              return RadioListTile<String>(
-                title: Text(neden),
-                value: neden,
-                groupValue: _selectedIadeNedeni,
-                onChanged: (value) {
-                  setState(() => _selectedIadeNedeni = value ?? "");
-                  Navigator.pop(context);
-                },
-              );
-            }).toList(),
-          ),
-        );
-      },
-    );
-  }
+  // void _showIadeNedeniSecimi() {
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     builder: (context) {
+  //       return Container(
+  //         padding: EdgeInsets.all(16),
+  //         child: ListView(
+  //           children: _iadeNedenleri.map((neden) {
+  //             return RadioListTile<String>(
+  //               title: Text(neden),
+  //               value: neden,
+  //               groupValue: _selectedIadeNedeni,
+  //               onChanged: (value) {
+  //                 setState(() => _selectedIadeNedeni = value ?? "");
+  //                 Navigator.pop(context);
+  //               },
+  //             );
+  //           }).toList(),
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 }
 
 // NOT: Refund, ProductModel, RefundItemModel, RefundSendModel, RefundFisModel vs. modellerin tanımı ve diğer controller dosyaları projede mevcut olmalı.

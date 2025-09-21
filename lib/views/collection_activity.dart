@@ -64,7 +64,6 @@ class _CollectionActivityState extends State<CollectionActivity> {
 
       final lines = activity.split('\n');
 
-      String? customerCode;
       String? amount;
       String? description;
       String? paymentType;
@@ -72,7 +71,7 @@ class _CollectionActivityState extends State<CollectionActivity> {
       for (var line in lines) {
         line = line.trim();
         if (line.startsWith('Code:')) {
-          customerCode = line.split(':').last.trim();
+          // customerCode = line.split(':').last.trim();
         } else if (line.startsWith('Amount:')) {
           amount = line.split(':').last.trim();
         } else if (line.startsWith('Desc:')) {
@@ -162,7 +161,7 @@ class _CollectionActivityState extends State<CollectionActivity> {
                   Container(
                     padding: EdgeInsets.all(2.w),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(
@@ -209,7 +208,7 @@ class _CollectionActivityState extends State<CollectionActivity> {
                       Container(
                         padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                         decoration: BoxDecoration(
-                          color: _getPaymentTypeColor(collection.paymentType).withOpacity(0.1),
+                          color: _getPaymentTypeColor(collection.paymentType).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -231,7 +230,7 @@ class _CollectionActivityState extends State<CollectionActivity> {
                   width: double.infinity,
                   padding: EdgeInsets.all(2.w),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -306,7 +305,6 @@ class _CollectionActivityState extends State<CollectionActivity> {
   @override
   Widget build(BuildContext context) {
     final parsedCollections = parseCollectionActivities(_collectionActivities);
-    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: AppTheme.lightBackgroundColor,

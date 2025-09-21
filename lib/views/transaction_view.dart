@@ -28,7 +28,7 @@ class _TransactionPageState extends State<TransactionPage> {
   final TextEditingController _tutarController = TextEditingController();
   final TextEditingController _aciklamaController = TextEditingController();
   final TextEditingController _chequeNoController = TextEditingController();
-  DateTime _selectedDate = DateTime.now();
+  // DateTime _selectedDate = DateTime.now();
   DateTime _chequeExpiryDate = DateTime.now();
   String _documentNo = '';
   bool _loading = false;
@@ -88,7 +88,7 @@ print("fisnooooooooo $_documentNo");
         ''');
       }
 
-      if (_chequeNoController.text==null || _chequeNoController.text=='') {
+      if (_chequeNoController.text=='') {
   await db.insert('tahsilatlar', {
     'data': jsonEncode(tahsilat.toJson()),
     'method': method,
@@ -390,7 +390,7 @@ ScaffoldMessenger.of(context).showSnackBar(
               ),
               borderRadius: BorderRadius.circular(12),
               color: isSelected
-                  ? theme.colorScheme.primary.withOpacity(0.05)
+                  ? theme.colorScheme.primary.withValues(alpha:0.05)
                   : null,
             ),
             child: Column(
@@ -466,7 +466,7 @@ ScaffoldMessenger.of(context).showSnackBar(
                 Container(
                   padding: EdgeInsets.all(3.w),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: theme.colorScheme.primary.withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
@@ -486,7 +486,7 @@ ScaffoldMessenger.of(context).showSnackBar(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (subtitle != null) ...[
+                      if (subtitle != null && subtitle.isNotEmpty) ...[
                         SizedBox(height: 0.5.h),
                         Text(
                           subtitle,

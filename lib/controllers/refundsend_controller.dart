@@ -27,7 +27,7 @@ class RefundSendController {
     const String url = 'https://test.rowhub.net/index.php?r=apimobil/iade';
 
     final connectivity = await Connectivity().checkConnectivity();
-    if (true || connectivity == ConnectivityResult.none) {
+    if (connectivity == ConnectivityResult.none) {
       await saveRefundOffline(refund);
       print("📥 İnternet yok, refund offline kaydedildi.");
       return false;

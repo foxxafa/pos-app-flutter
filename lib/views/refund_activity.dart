@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
-import 'package:pos_app/views/expandabletext_widget.dart';
 import 'package:pos_app/views/refundlist2_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -88,7 +87,8 @@ class _RefundActivityViewState extends State<RefundActivityView> {
             Expanded(
               child: DataTable(
                 headingRowHeight: 6.h,
-                dataRowHeight: 7.h,
+                dataRowMinHeight: 7.h,
+                dataRowMaxHeight: 7.h,
                 columnSpacing: 6.w, // Daha dar aralık
                 headingTextStyle: TextStyle(
                   fontWeight: FontWeight.bold,

@@ -56,7 +56,7 @@ class _RefundCartViewState extends State<RefundCartView> {
 
   void _generateImageFutures(List<ProductModel> products) {
     for (final product in products) {
-      final stokKodu = product.stokKodu ?? '';
+      final stokKodu = product.stokKodu;
       if (!_imageFutures.containsKey(stokKodu)) {
         _imageFutures[stokKodu] = _loadImage(product.imsrc);
       }
@@ -91,7 +91,7 @@ Future<String?> _loadImage(String? imsrc) async {
       _filteredProducts = products.take(1000).toList();
 
       for (var product in products) {
-        final key = product.stokKodu ?? '';
+        final key = product.stokKodu;
         _isBoxMap[key] = false;
         _quantityMap[key] = 0;
         _iskontoMap[key] = 0;
@@ -108,14 +108,14 @@ Future<String?> _loadImage(String? imsrc) async {
 
     final filtered =
         _allProducts.where((product) {
-          final name = product.urunAdi?.toLowerCase() ?? '';
+          final name = product.urunAdi.toLowerCase();
           final barcodes =
               [
                 product.barcode1,
                 product.barcode2,
                 product.barcode3,
                 product.barcode4,
-              ].where((b) => b != null).map((b) => b!.toLowerCase()).toList();
+              ].map((b) => b.toLowerCase()).toList();
 
           final matchesAllWords = queryWords.every((word) {
             final inName = name.contains(word);
@@ -128,8 +128,8 @@ Future<String?> _loadImage(String? imsrc) async {
 
     // 🔤 Alfabetik sırala, özel karakterle başlayanlar en sona
     filtered.sort((a, b) {
-      final aName = a.urunAdi ?? '';
-      final bName = b.urunAdi ?? '';
+      final aName = a.urunAdi;
+      final bName = b.urunAdi;
 
       final aStartsWithLetter = RegExp(
         r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
@@ -152,7 +152,7 @@ Future<String?> _loadImage(String? imsrc) async {
     if (_filteredProducts.length == 1 &&
         RegExp(r'^\d+$').hasMatch(_searchController2.text)) {
       final product = _filteredProducts.first;
-      final key = product.stokKodu ?? 'unknown';
+      final key = product.stokKodu;
       final isBox = provider.getBirimTipi(key) == 'Box';
 
       if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
@@ -170,7 +170,7 @@ Future<String?> _loadImage(String? imsrc) async {
                   ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                   : double.tryParse(product.adetFiyati.toString()) ?? 0,
           imsrc: product.imsrc,
-          urunBarcode: product.barcode1 ?? '',
+          urunBarcode: product.barcode1,
           miktar: 1,
           iskonto: _iskontoMap[key] ?? 0,
           birimTipi: provider.getBirimTipi(product.stokKodu),
@@ -230,14 +230,14 @@ Future<String?> _loadImage(String? imsrc) async {
 
     final filtered =
         _allProducts.where((product) {
-          final name = product.urunAdi?.toLowerCase() ?? '';
+          final name = product.urunAdi.toLowerCase();
           final barcodes =
               [
                 product.barcode1,
                 product.barcode2,
                 product.barcode3,
                 product.barcode4,
-              ].where((b) => b != null).map((b) => b!.toLowerCase()).toList();
+              ].map((b) => b.toLowerCase()).toList();
 
           final matchesAllWords = queryWords.every((word) {
             final inName = name.contains(word);
@@ -250,8 +250,8 @@ Future<String?> _loadImage(String? imsrc) async {
 
     // 🔤 Alfabetik sırala, özel karakterle başlayanlar en sona
     filtered.sort((a, b) {
-      final aName = a.urunAdi ?? '';
-      final bName = b.urunAdi ?? '';
+      final aName = a.urunAdi;
+      final bName = b.urunAdi;
 
       final aStartsWithLetter = RegExp(
         r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
@@ -274,7 +274,7 @@ Future<String?> _loadImage(String? imsrc) async {
     if (_filteredProducts.length == 1 &&
         RegExp(r'^\d+$').hasMatch(_searchController.text)) {
       final product = _filteredProducts.first;
-      final key = product.stokKodu ?? 'unknown';
+      final key = product.stokKodu;
       final isBox = provider.getBirimTipi(key) == 'Box';
 
       if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
@@ -292,7 +292,7 @@ Future<String?> _loadImage(String? imsrc) async {
                   ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                   : double.tryParse(product.adetFiyati.toString()) ?? 0,
           imsrc: product.imsrc,
-          urunBarcode: product.barcode1 ?? '',
+          urunBarcode: product.barcode1,
           miktar: 1,
           iskonto: _iskontoMap[key] ?? 0,
           birimTipi: provider.getBirimTipi(product.stokKodu),
@@ -441,7 +441,7 @@ Future<String?> _loadImage(String? imsrc) async {
     final provider = Provider.of<RCartProvider>(context, listen: true);
     final customer =
         Provider.of<SalesCustomerProvider>(context).selectedCustomer;
-    String musteriId = customer?.kod ?? "";
+    // String musteriId = customer?.kod ?? "";
 
     final cartItems = provider.items.values.toList();
 
@@ -453,10 +453,8 @@ Future<String?> _loadImage(String? imsrc) async {
         .where((item) => item.birimTipi == 'Box')
         .fold<int>(0, (prev, item) => prev + item.miktar);
 
-    return WillPopScope(
-      onWillPop: () async {
-        return true; // sayfanın geri gitmesine izin ver
-      },
+    return PopScope(
+      canPop: true, // sayfanın geri gitmesine izin ver
       child: Scaffold(
         appBar: AppBar(
           title:
@@ -652,7 +650,7 @@ Future<String?> _loadImage(String? imsrc) async {
                           itemCount: _filteredProducts.length,
                           itemBuilder: (context, index) {
                             final product = _filteredProducts[index];
-                            final key = product.stokKodu ?? 'unknown_$index';
+                            final key = product.stokKodu;
                             final providersafdas = Provider.of<RCartProvider>(
                               context,
                               listen: true,
@@ -660,8 +658,8 @@ Future<String?> _loadImage(String? imsrc) async {
           
                             _quantityMap[key] = providersafdas.getmiktar(key);
                             final isBox = _isBoxMap[key] ?? false;
-                            final quantity = _quantityMap[key] ?? 0;
-                            final iskonto = _iskontoMap[key] ?? 0;
+                            // final quantity = _quantityMap[key] ?? 0;
+                            // final iskonto = _iskontoMap[key] ?? 0;
                             final future = _imageFutures[product.stokKodu];
           
                             return Card(
@@ -682,7 +680,7 @@ Future<String?> _loadImage(String? imsrc) async {
                                               ///ALERT DIALOG DİALOG
                                               (context) => AlertDialog(
                                                 title: Text(
-                                                  product.urunAdi ?? 'No name',
+                                                  product.urunAdi,
                                                 ),
                                                 content: Column(
                                                   mainAxisSize: MainAxisSize.min,
@@ -833,10 +831,10 @@ Future<String?> _loadImage(String? imsrc) async {
                                                     ),
           
                                                     Text(
-                                                      "Unit Price: ${product.adetFiyati ?? '-'}",
+                                                      "Unit Price: ${product.adetFiyati}",
                                                     ),
                                                     Text(
-                                                      "Box Price: ${product.kutuFiyati ?? '-'}",
+                                                      "Box Price: ${product.kutuFiyati}",
                                                     ),
           
                                                     // Text("Active: ${product.aktif == 1 ? 'YES' : 'NO'}"),
@@ -922,19 +920,19 @@ Future<String?> _loadImage(String? imsrc) async {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  product.urunAdi ?? '-',
+                                                  product.urunAdi,
                                                   style: TextStyle(
                                                     fontSize: 18.sp,
                                                     fontWeight: FontWeight.bold,
                                                     color: () {
                                                       final urunAdi =
-                                                          product.urunAdi ?? '';
+                                                          product.urunAdi;
                                                       final isInRefundList = widget
                                                           .refundProductNames
                                                           .any(
                                                             (e) =>
                                                                 e.toLowerCase() ==
-                                                                (urunAdi ?? '')
+                                                                urunAdi
                                                                     .toLowerCase(),
                                                           );
           
@@ -961,13 +959,13 @@ Future<String?> _loadImage(String? imsrc) async {
                                                 //   style: TextStyle(fontSize: 11.sp),
                                                 // ),
                                                 Text(
-                                                  "Unit Price: ${product.adetFiyati ?? '-'}",
+                                                  "Unit Price: ${product.adetFiyati}",
                                                   style: TextStyle(
                                                     fontSize: 17.sp,
                                                   ),
                                                 ),
                                                 Text(
-                                                  "Box Price: ${product.kutuFiyati ?? '-'}",
+                                                  "Box Price: ${product.kutuFiyati}",
                                                   style: TextStyle(
                                                     fontSize: 17.sp,
                                                   ),
@@ -1077,7 +1075,7 @@ Future<String?> _loadImage(String? imsrc) async {
           product.kutuFiyati,
       vat: product.vat,
       urunBarcode:
-          product.barcode1 ?? '',
+          product.barcode1,
       miktar: 0,
       iskonto:
           _iskontoMap[key] ?? 0,
@@ -1107,7 +1105,7 @@ Future<String?> _loadImage(String? imsrc) async {
       kutuFiyati:
           product.kutuFiyati,
       urunBarcode:
-          product.barcode1 ?? '',
+          product.barcode1,
       miktar: 1,
       iskonto:
           _iskontoMap[key] ?? 0,
@@ -1258,8 +1256,8 @@ Future<String?> _loadImage(String? imsrc) async {
                                                   final iskonto =
                                                       _iskontoMap[key] ?? 0;
           
-                                                  final birimTipi =
-                                                      isBox ? 'Unit' : 'Box';
+                                                  // final birimTipi =
+                                                  //     isBox ? 'Unit' : 'Box';
           
                                                   final fiyat =
                                                       isBox
@@ -1380,7 +1378,7 @@ Future<String?> _loadImage(String? imsrc) async {
                                                                   0,
                                                       imsrc: product.imsrc,
                                                       urunBarcode:
-                                                          product.barcode1 ?? '',
+                                                          product.barcode1,
                                                       miktar: newMiktar,
                                                       iskonto:
                                                           _iskontoMap[key] ?? 0,
@@ -1439,7 +1437,7 @@ Future<String?> _loadImage(String? imsrc) async {
                                                               0,
                                                   imsrc: product.imsrc,
                                                   urunBarcode:
-                                                      product.barcode1 ?? '',
+                                                      product.barcode1,
                                                   miktar: 1,
                                                   iskonto: _iskontoMap[key] ?? 0,
                                                   birimTipi: provider

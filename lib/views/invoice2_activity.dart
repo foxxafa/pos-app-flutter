@@ -9,7 +9,6 @@ import 'package:pos_app/providers/orderinfo_provider.dart';
 import 'package:pos_app/views/cart_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
-import 'package:intl/intl.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 
 class Invoice2Activity extends StatefulWidget {
@@ -147,7 +146,7 @@ print("bunlarrr $_refundProductNames");
                           ),
                           borderRadius: BorderRadius.circular(12),
                           color: isSelected
-                              ? theme.colorScheme.primary.withOpacity(0.05)
+                              ? theme.colorScheme.primary.withValues(alpha: 0.05)
                               : null,
                         ),
                         child: Row(
@@ -377,7 +376,7 @@ print("bunlarrr $_refundProductNames");
                 Container(
                   padding: EdgeInsets.all(3.w),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(

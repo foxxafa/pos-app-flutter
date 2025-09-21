@@ -6,7 +6,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
-import 'package:pos_app/controllers/order_controller.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:pos_app/models/order_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
@@ -26,7 +25,7 @@ class CartView2 extends StatefulWidget {
 }
 
 class _CartView2State extends State<CartView2> {
-  final TextEditingController _priceController = TextEditingController();
+  // final TextEditingController _priceController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -778,7 +777,7 @@ class _CartView2State extends State<CartView2> {
                             // fisNo ve fistarihi OrderController içinde atanacak
                           );
 
-                          final orderController = OrderController();
+                          // final orderController = OrderController();
 
                           try {
                             // İnternet var mı kontrol et
@@ -792,7 +791,7 @@ class _CartView2State extends State<CartView2> {
                                     .map((item) => item.toJson())
                                     .toList();
 
-                            if (true || connectivityResult[0] ==
+                            if (connectivityResult[0] ==
                                 ConnectivityResult.none) {
                               // 🌐 İnternet yoksa veritabanına kaydet
 

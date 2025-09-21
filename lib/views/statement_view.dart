@@ -68,7 +68,7 @@ class StatementScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     spreadRadius: 1,
                     blurRadius: 10,
                     offset: Offset(0, 1),
@@ -150,7 +150,7 @@ class StatementScreen extends StatelessWidget {
           color: totalBalance >= 0 ? Colors.green : Colors.red,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 4,
               offset: Offset(0, -2),
             ),
@@ -190,7 +190,7 @@ class StatementScreen extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(3.w),
               decoration: BoxDecoration(
-                color: isPositive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                color: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

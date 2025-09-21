@@ -115,7 +115,7 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
             Container(
               padding: EdgeInsets.all(3.w),
               decoration: BoxDecoration(
-                color: AppTheme.lightPrimaryColor.withOpacity(0.1),
+                color: AppTheme.lightPrimaryColor.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -301,7 +301,7 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
                       Container(
                         padding: EdgeInsets.all(2.w),
                         decoration: BoxDecoration(
-                          color: AppTheme.lightPrimaryColor.withOpacity(0.1),
+                          color: AppTheme.lightPrimaryColor.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -347,8 +347,8 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
                         padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 1.h),
                         decoration: BoxDecoration(
                           color: order.type == 'Nakit'
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.blue.withOpacity(0.1),
+                              ? Colors.green.withValues(alpha: 0.1)
+                              : Colors.blue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
@@ -374,7 +374,6 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
   @override
   Widget build(BuildContext context) {
     final parsedOrders = parseRefundActivities(_refundActivities);
-    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: AppTheme.lightBackgroundColor,

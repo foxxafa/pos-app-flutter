@@ -6,7 +6,7 @@ void main() {
     final controller = ProductController();
 
     // Gerçek token ve tarih koy
-    final bearerToken = 'e5264ab8f341b7771f44345700a4914c9af90527bc4a922965638ad08f9de0ae';
+    // final bearerToken = 'e5264ab8f341b7771f44345700a4914c9af90527bc4a922965638ad08f9de0ae';
     final date = DateTime(2025, 1, 1, 1, 55, 30);
 
     final customers = await controller.getNewProduct(date);

@@ -132,7 +132,7 @@ Future<Map<String, dynamic>?> getLastLogin() async {
     ),
   );
     }
-} on Exception catch (e) {
+} on Exception {
   ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Error#133: Check your Internet connection.')),
     );

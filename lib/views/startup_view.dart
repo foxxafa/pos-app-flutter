@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:pos_app/controllers/database_helper.dart';
 import 'package:pos_app/providers/user_provider.dart';
@@ -23,8 +22,8 @@ class _StartupViewState extends State<StartupView> {
 
   Future<void> checkLoginStatus() async {
     // 1. İnternet bağlantısı kontrolü
-    var connectivityResult = await Connectivity().checkConnectivity();
-    bool hasInternet = connectivityResult != ConnectivityResult.none;
+    // var connectivityResult = await Connectivity().checkConnectivity();
+    // bool hasInternet = connectivityResult != ConnectivityResult.none; // Kullanılmıyor
 
     // 2. Veritabanı kontrolü
     var databasesPath = await getDatabasesPath();

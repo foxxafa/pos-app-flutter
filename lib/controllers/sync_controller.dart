@@ -218,7 +218,7 @@ class SyncController {
     // 3. Sadece API'den gelen carikod'lara sahip olanları filtrele
     final filteredCustomers =
         customers.where((customer) {
-          final cariKod = customer['Kod']?.toString()?.trim();
+          final cariKod = customer['Kod']?.toString().trim();
           return allowedCariKodlar.contains(cariKod);
         }).toList();
 
@@ -267,10 +267,6 @@ class SyncController {
   }
 
   Future<void> syncPendingRefunds() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path);
-
     await RefundSendController().sendPendingRefunds();
   }
 
@@ -334,7 +330,7 @@ class SyncController {
         }
       });
 
-      List<Map> list = await db.query('Product');
+      //List<Map> list = await db.query('Product');
       //print('=== Products in database: ${list.length} $list===');
     }
   }

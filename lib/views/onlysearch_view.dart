@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pos_app/providers/cart_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:pos_app/controllers/database_helper.dart';
 import 'package:sizer/sizer.dart';
@@ -41,7 +40,7 @@ class _ProductControlViewState extends State<ProductControlView> {
       _filteredProducts = products.take(1000).toList();
 
       for (var product in products) {
-        final key = product.stokKodu ?? '';
+        final key = product.stokKodu;
         _isBoxMap[key] = false;
         _quantityMap[key] = 0;
         _iskontoMap[key] = 0;
@@ -53,13 +52,13 @@ class _ProductControlViewState extends State<ProductControlView> {
     final query = _searchController.text.toLowerCase();
     final filtered =
         _allProducts.where((product) {
-          final name = product.urunAdi?.toLowerCase() ?? '';
+          final name = product.urunAdi.toLowerCase();
           final barcodes = [
             product.barcode1,
             product.barcode2,
             product.barcode3,
             product.barcode4,
-          ].where((b) => b != null).map((b) => b!.toLowerCase());
+          ].map((b) => b.toLowerCase());
 
           final matchesName = name.contains(query);
           final matchesBarcode = barcodes.any((b) => b.contains(query));
@@ -97,12 +96,6 @@ class _ProductControlViewState extends State<ProductControlView> {
 
   @override
   Widget build(BuildContext context) {
-
-final provider =
-                                                Provider.of<CartProvider>(
-                                                  context,
-                                                  listen: false,
-                                                );
     final customer =
         Provider.of<SalesCustomerProvider>(context).selectedCustomer;
 
@@ -154,10 +147,6 @@ final provider =
                     itemCount: _filteredProducts.length,
                     itemBuilder: (context, index) {
                       final product = _filteredProducts[index];
-                      final key = product.stokKodu ?? 'unknown_$index';
-                      final isBox = _isBoxMap[key] ?? false;
-                      final quantity = _quantityMap[key] ?? 0;
-                      final iskonto = _iskontoMap[key] ?? 0;
 
                       // sadece ListView.builder içindeki Card widget'ını aşağıdaki gibi değiştir:
 
@@ -166,7 +155,7 @@ return InkWell(
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(product.urunAdi ?? 'No name'),
+        title: Text(product.urunAdi),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -219,8 +208,8 @@ return InkWell(
                   ),
             SizedBox(height: 2.h),
             // Text("Barcodes: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}"),
-            Text("Unit Price: ${product.adetFiyati ?? '-'}"),
-            Text("Box Price: ${product.kutuFiyati ?? '-'}"),
+            Text("Unit Price: ${product.adetFiyati}"),
+            Text("Box Price: ${product.kutuFiyati}"),
             // Text("Active: ${product.aktif == 1 ? 'YES' : 'NO'}"),
           ],
         ),
@@ -308,7 +297,7 @@ return InkWell(
                       CrossAxisAlignment.start,
                   children: [
                     Text(
-                      product.urunAdi ?? '-',
+                      product.urunAdi,
                       style: TextStyle(
                         fontSize: 20.sp, // büyüttüm
                         fontWeight: FontWeight.bold,
@@ -320,11 +309,11 @@ return InkWell(
                     //   style: TextStyle(fontSize: 13.sp), // büyüttüm
                     // ),
                     Text(
-                      "Unit Price: ${product.adetFiyati ?? '-'}",
+                      "Unit Price: ${product.adetFiyati}",
                       style: TextStyle(fontSize: 20.sp), // büyüttüm
                     ),
                     Text(
-                      "Box Price: ${product.kutuFiyati ?? '-'}",
+                      "Box Price: ${product.kutuFiyati}",
                       style: TextStyle(fontSize: 20.sp), // büyüttüm
                     ),
                     // Text(

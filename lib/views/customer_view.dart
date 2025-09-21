@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:path/path.dart';
@@ -31,7 +30,6 @@ class CustomerView extends StatefulWidget {
 class _CustomerViewState extends State<CustomerView> {
 
   final controller = CustomerBalanceController();
-  String? _bakiye;
 
   @override
   void initState() {
@@ -99,7 +97,7 @@ print("DB CLOSE TIME 6");
           color: theme.colorScheme.primary,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 4,
               offset: Offset(0, -2),
             ),
@@ -129,7 +127,7 @@ print("DB CLOSE TIME 6");
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   spreadRadius: 1,
                   blurRadius: 10,
                   offset: Offset(0, 1),
@@ -260,7 +258,7 @@ print("DB CLOSE TIME 6");
                 Container(
                   padding: EdgeInsets.all(3.w),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.1),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(

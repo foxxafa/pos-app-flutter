@@ -106,7 +106,7 @@ class CustomerDetailView extends StatelessWidget {
                   Container(
                     padding: EdgeInsets.all(3.w),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -225,7 +225,7 @@ class CustomerDetailView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: Colors.grey.withValues(alpha: 0.1),
                       spreadRadius: 1,
                       blurRadius: 10,
                       offset: Offset(0, 1),
@@ -365,7 +365,7 @@ class CustomerDetailView extends StatelessWidget {
                 color: theme.colorScheme.primary,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Colors.black.withValues(alpha: 0.1),
                     blurRadius: 4,
                     offset: Offset(0, -2),
                   ),

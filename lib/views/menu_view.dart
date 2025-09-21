@@ -30,7 +30,7 @@ class _MenuViewState extends State<MenuView> {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     if (mounted) {
       setState(() {
-        _userName = userProvider.username ?? 'User';
+        _userName = userProvider.username;
       });
     }
   }

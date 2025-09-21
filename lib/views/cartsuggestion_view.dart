@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pos_app/controllers/refundlist_controller.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/views/cart_view2.dart';
 import 'package:provider/provider.dart';
-import 'package:pos_app/controllers/database_helper.dart';
+// import 'package:pos_app/controllers/database_helper.dart';
 import 'package:sizer/sizer.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:sqflite/sqflite.dart';
@@ -27,7 +26,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   List<ProductModel> _allProducts = [];
   List<ProductModel> _filteredProducts = [];
   Map<String, Future<String?>> _imageFutures = {};
-  List<String> _refundProductNames = []; // sadece urunAdi'lar
+  // List<String> _refundProductNames = []; // sadece urunAdi'lar
 
   final Map<String, bool> _isBoxMap = {};
   final Map<String, int> _quantityMap = {};
@@ -43,7 +42,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
   void _generateImageFutures(List<ProductModel> products) {
     for (final product in products) {
-      final stokKodu = product.stokKodu ?? '';
+      final stokKodu = product.stokKodu;
       if (!_imageFutures.containsKey(stokKodu)) {
         _imageFutures[stokKodu] = _loadImage(product.imsrc);
       }
@@ -70,19 +69,19 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 }
 
 
-  void _loadRefunds(String cariKod) async {
-    RefundListController refundListController = RefundListController();
-    final refunds = await refundListController.fetchRefunds(cariKod);
+  // void _loadRefunds(String cariKod) async {
+  //   RefundListController refundListController = RefundListController();
+  //   final refunds = await refundListController.fetchRefunds(cariKod);
 
-    // refund urunAdi'larını sayfa içinde al
-    setState(() {
-      _refundProductNames =
-          refunds
-              .map((r) => r.urunAdi.toLowerCase())
-              .toSet()
-              .toList(); // Tekilleştir
-    });
-  }
+  //   // refund urunAdi'larını sayfa içinde al
+  //   setState(() {
+  //     _refundProductNames =
+  //         refunds
+  //             .map((r) => r.urunAdi.toLowerCase())
+  //             .toSet()
+  //             .toList(); // Tekilleştir
+  //   });
+  // }
 
   Future<void> _loadProducts(String musteriId) async {
     print('⏳ Loading products for musteriId = $musteriId');
@@ -111,7 +110,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
     final filteredProducts =
         allProducts.where((product) {
-          final stokKodu = product.stokKodu ?? '';
+          final stokKodu = product.stokKodu;
           return refundStokKodlari.contains(stokKodu);
         }).toList();
 
@@ -120,7 +119,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
       _filteredProducts = filteredProducts.take(1000).toList();
 
       for (var product in filteredProducts) {
-        final key = product.stokKodu ?? '';
+        final key = product.stokKodu;
         _isBoxMap[key] = false;
         _quantityMap[key] = 0;
         _iskontoMap[key] = 0;
@@ -138,14 +137,14 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
     final filtered =
         _allProducts.where((product) {
-          final name = product.urunAdi?.toLowerCase() ?? '';
+          final name = product.urunAdi.toLowerCase();
           final barcodes =
               [
                 product.barcode1,
                 product.barcode2,
                 product.barcode3,
                 product.barcode4,
-              ].where((b) => b != null).map((b) => b!.toLowerCase()).toList();
+              ].map((b) => b.toLowerCase()).toList();
 
           // Her kelimenin, ürün adı veya barkodlardan en az birinde geçip geçmediğini kontrol et
           final matchesAllWords = queryWords.every((word) {
@@ -203,11 +202,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         .where((item) => item.birimTipi == 'Box')
         .fold<int>(0, (prev, item) => prev + item.miktar);
 
-    return WillPopScope(
-      onWillPop: () async {
-      //  Provider.of<CartProvider>(context, listen: false).clearCart();
-        return true; // sayfanın geri gitmesine izin ver
-      },
+    return PopScope(
+      canPop: true, // sayfanın geri gitmesine izin ver
       child: Scaffold(
         appBar: AppBar(
           centerTitle: true,
@@ -366,10 +362,10 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                         itemCount: _filteredProducts.length,
                         itemBuilder: (context, index) {
                           final product = _filteredProducts[index];
-                          final key = product.stokKodu ?? 'unknown_$index';
+                          final key = product.stokKodu;
                           final isBox = _isBoxMap[key] ?? false;
-                          final quantity = _quantityMap[key] ?? 0;
-                          final iskonto = _iskontoMap[key] ?? 0;
+                          // final quantity = _quantityMap[key] ?? 0;
+                          // final iskonto = _iskontoMap[key] ?? 0;
                           final future = _imageFutures[product.stokKodu];
 
                           return Card(
@@ -389,7 +385,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                         builder:
                                             (context) => AlertDialog(
                                               title: Text(
-                                                product.urunAdi ?? 'No name',
+                                                product.urunAdi,
                                               ),
                                               content: Column(
                                                 mainAxisSize: MainAxisSize.min,
@@ -475,10 +471,10 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                   SizedBox(height: 2.h),
                                                   // Text("Barcodes: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}"),
                                                   Text(
-                                                    "Unit Price: ${product.adetFiyati ?? '-'}",
+                                                    "Unit Price: ${product.adetFiyati}",
                                                   ),
                                                   Text(
-                                                    "Box Price: ${product.kutuFiyati ?? '-'}",
+                                                    "Box Price: ${product.kutuFiyati}",
                                                   ),
 
                                                   // Text("Active: ${product.aktif == 1 ? 'YES' : 'NO'}"),
@@ -564,7 +560,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                product.urunAdi ?? '-',
+                                                product.urunAdi,
                                                 style: TextStyle(
                                                   fontSize: 18.sp,
                                                   fontWeight: FontWeight.bold,
@@ -577,13 +573,13 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                               //   style: TextStyle(fontSize: 11.sp),
                                               // ),
                                               Text(
-                                                "Unit Price: ${product.adetFiyati ?? '-'}",
+                                                "Unit Price: ${product.adetFiyati}",
                                                 style: TextStyle(
                                                   fontSize: 17.sp,
                                                 ),
                                               ),
                                               Text(
-                                                "Box Price: ${product.kutuFiyati ?? '-'}",
+                                                "Box Price: ${product.kutuFiyati}",
                                                 style: TextStyle(
                                                   fontSize: 17.sp,
                                                 ),
@@ -644,13 +640,11 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                       ? double.parse(
                                                             product.adetFiyati
                                                                 .toString(),
-                                                          ) ??
-                                                          0
+                                                          )
                                                       : double.parse(
                                                             product.kutuFiyati
                                                                 .toString(),
-                                                          ) ??
-                                                          0;
+                                                          );
                                               print("zzzzzzzzz $productFiyat");
                                               final miktar =
                                                   _quantityMap[key] ?? 0;
@@ -676,7 +670,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                       product.kutuFiyati,
                                                   vat: product.vat,
                                                   urunBarcode:
-                                                      product.barcode1 ?? '',
+                                                      product.barcode1,
                                                   miktar: 0,
                                                   iskonto:
                                                       _iskontoMap[key] ?? 0,
@@ -703,7 +697,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                   kutuFiyati:
                                                       product.kutuFiyati,
                                                   urunBarcode:
-                                                      product.barcode1 ?? '',
+                                                      product.barcode1,
                                                   miktar: 1,
                                                   iskonto:
                                                       _iskontoMap[key] ?? 0,
@@ -770,8 +764,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                             0;
 
                                                 final barcode =
-                                                    product.barcode1 ??
-                                                    '0000000000000';
+                                                    product.barcode1;
 
                                                 final miktar =
                                                     _quantityMap[key] ?? 0;
@@ -828,25 +821,22 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                 final iskonto =
                                                     _iskontoMap[key] ?? 0;
 
-                                                final birimTipi =
-                                                    isBox ? 'Unit' : 'Box';
+                                                // final birimTipi =
+                                                //     isBox ? 'Unit' : 'Box';
 
                                                 final fiyat =
                                                     isBox
                                                         ? double.parse(
                                                               product.adetFiyati
                                                                   .toString(),
-                                                            ) ??
-                                                            0
+                                                            )
                                                         : double.parse(
                                                               product.kutuFiyati
                                                                   .toString(),
-                                                            ) ??
-                                                            0;
+                                                            );
 
                                                 final barcode =
-                                                    product.barcode1 ??
-                                                    '0000000000000';
+                                                    product.barcode1;
                                                 final provider =
                                                     Provider.of<CartProvider>(
                                                       context,
@@ -947,7 +937,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                                 0,
                                                     imsrc: product.imsrc,
                                                     urunBarcode:
-                                                        product.barcode1 ?? '',
+                                                        product.barcode1,
                                                     miktar: newMiktar,
                                                     iskonto:
                                                         _iskontoMap[key] ?? 0,
@@ -1004,7 +994,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                             0,
                                                 imsrc: product.imsrc,
                                                 urunBarcode:
-                                                    product.barcode1 ?? '',
+                                                    product.barcode1,
                                                 miktar: 1,
                                                 iskonto: _iskontoMap[key] ?? 0,
                                                 birimTipi: provider

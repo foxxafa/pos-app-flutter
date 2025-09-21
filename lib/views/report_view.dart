@@ -37,8 +37,8 @@ class _ReportViewState extends State<ReportView> {
     String query = _searchController.text.toLowerCase();
     setState(() {
       _filteredCustomers = _allCustomers.where((customer) {
-        final kod = customer.kod?.toLowerCase() ?? '';
-        final unvan = customer.unvan?.toLowerCase() ?? '';
+        final kod = (customer.kod ?? "").toLowerCase();
+        final unvan = (customer.unvan ?? "").toLowerCase();
         return kod.contains(query) || unvan.contains(query);
       }).toList();
     });
@@ -89,7 +89,7 @@ class _ReportViewState extends State<ReportView> {
             Container(
               padding: EdgeInsets.all(2.w),
               decoration: BoxDecoration(
-                color: isPositive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                color: isPositive ? Colors.green.withValues(alpha: 0.1) : Colors.red.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
