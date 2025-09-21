@@ -1145,7 +1145,7 @@ _barcodeFocusNode.requestFocus();
                                                     Container(
                                                       padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
                                                       decoration: BoxDecoration(
-                                                        border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.5)),
+                                                        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
                                                         borderRadius: BorderRadius.circular(8),
                                                       ),
                                                       child: DropdownButton<String>(
@@ -1224,9 +1224,7 @@ _barcodeFocusNode.requestFocus();
                                                         decoration: InputDecoration(
                                                           enabled: quantity > 0,
                                                           filled: true,
-                                                          fillColor: quantity > 0
-                                                              ? Theme.of(context).colorScheme.surface
-                                                              : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.38),
+                                                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
                                                           hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
                                                           hintStyle: TextStyle(
                                                             fontSize: 16.sp,
@@ -1235,22 +1233,15 @@ _barcodeFocusNode.requestFocus();
                                                           ),
                                                           border: OutlineInputBorder(
                                                             borderRadius: BorderRadius.circular(8),
-                                                            borderSide: BorderSide(
-                                                              color: Theme.of(context).colorScheme.outline,
-                                                            ),
+                                                            borderSide: BorderSide.none,
                                                           ),
                                                           enabledBorder: OutlineInputBorder(
                                                             borderRadius: BorderRadius.circular(8),
-                                                            borderSide: BorderSide(
-                                                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.38),
-                                                            ),
+                                                            borderSide: BorderSide.none,
                                                           ),
                                                           focusedBorder: OutlineInputBorder(
                                                             borderRadius: BorderRadius.circular(8),
-                                                            borderSide: BorderSide(
-                                                              color: Theme.of(context).colorScheme.primary,
-                                                              width: 2.0,
-                                                            ),
+                                                            borderSide: BorderSide.none,
                                                           ),
                                                           isDense: true,
                                                           contentPadding:
@@ -1401,25 +1392,18 @@ _barcodeFocusNode.requestFocus();
                                                                 horizontal: 8,
                                                               ),
                                                               filled: true,
-                                                              fillColor: Theme.of(context).colorScheme.surface,
+                                                              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
                                                               border: OutlineInputBorder(
                                                                 borderRadius: BorderRadius.circular(8),
-                                                                borderSide: BorderSide(
-                                                                  color: Theme.of(context).colorScheme.outline,
-                                                                ),
+                                                                borderSide: BorderSide.none,
                                                               ),
                                                               enabledBorder: OutlineInputBorder(
                                                                 borderRadius: BorderRadius.circular(8),
-                                                                borderSide: BorderSide(
-                                                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.38),
-                                                                ),
+                                                                borderSide: BorderSide.none,
                                                               ),
                                                               focusedBorder: OutlineInputBorder(
                                                                 borderRadius: BorderRadius.circular(8),
-                                                                borderSide: BorderSide(
-                                                                  color: Theme.of(context).colorScheme.primary,
-                                                                  width: 2.0,
-                                                                ),
+                                                                borderSide: BorderSide.none,
                                                               ),
                                                             ),
                                                             style: TextStyle(

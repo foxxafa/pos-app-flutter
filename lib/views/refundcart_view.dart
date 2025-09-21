@@ -995,20 +995,28 @@ Future<String?> _loadImage(String? imsrc) async {
                                                 color: Colors.black,
                                               ),
                                             ),
-                                            DropdownButton<String>(
-  value: getBirimTipiFromProduct(product),
-  items: [
-    if (product.birimKey1 != 0)
-      const DropdownMenuItem(
-        value: 'Unit',
-        child: Text('Unit'),
-      ),
-    if (product.birimKey2 != 0)
-      const DropdownMenuItem(
-        value: 'Box',
-        child: Text('Box'),
-      ),
-  ],
+                                            Container(
+                                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFFF0F4F8),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: DropdownButton<String>(
+                                                value: getBirimTipiFromProduct(product),
+                                                underline: SizedBox(),
+                                                isDense: true,
+                                                items: [
+                                                  if (product.birimKey1 != 0)
+                                                    const DropdownMenuItem(
+                                                      value: 'Unit',
+                                                      child: Text('Unit'),
+                                                    ),
+                                                  if (product.birimKey2 != 0)
+                                                    const DropdownMenuItem(
+                                                      value: 'Box',
+                                                      child: Text('Box'),
+                                                    ),
+                                                ],
                                               onChanged: (val) {
 
                                                 if ((provider.getBirimTipi(
@@ -1133,8 +1141,9 @@ Future<String?> _loadImage(String? imsrc) async {
                                                                 ),
                                                               );
                                                             }
-                                                
+
                                               },
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -1304,29 +1313,23 @@ Future<String?> _loadImage(String? imsrc) async {
                                               },
                                             ),
           
-                                            SizedBox(
-                                              width:
-                                                  10.w, // genişlik %30 ekran genişliği
-                                              height:
-                                                  5.h, // yükseklik %5 ekran yüksekliği
+                                            Container(
+                                              width: 10.w,
+                                              height: 5.h,
+                                              decoration: BoxDecoration(
+                                                color: Color(0xFFF0F4F8),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
                                               child: TextField(
                                                 controller: TextEditingController(
                                                   text:
                                                       "${Provider.of<RCartProvider>(context, listen: true).items[key]?.miktar ?? 0}",
                                                 ),
+                                                textAlign: TextAlign.center,
                                                 style: TextStyle(fontSize: 18.sp),
                                                 decoration: InputDecoration(
-                                                  contentPadding:
-                                                      EdgeInsets.symmetric(
-                                                        horizontal: 2.w,
-                                                        vertical: 1.h,
-                                                      ),
-                                                  border: OutlineInputBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          2.w,
-                                                        ),
-                                                  ),
+                                                  contentPadding: EdgeInsets.zero,
+                                                  border: InputBorder.none,
                                                 ),
                                                 keyboardType:
                                                     TextInputType.number,
