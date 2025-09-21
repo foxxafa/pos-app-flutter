@@ -99,7 +99,7 @@ Future<String?> _loadImage(String? imsrc) async {
       _generateImageFutures(products);
     });
   }
-  void _filterProducts2({bool isFromBarcodeScan = false}) {
+  void _filterProducts2() {
     print("FİLTER STARTEDDDDDD");
     final provider = Provider.of<RCartProvider>(context, listen: false);
 
@@ -1042,13 +1042,11 @@ Future<String?> _loadImage(String? imsrc) async {
           ? double.parse(
                 product.adetFiyati
                     .toString(),
-              ) ??
-              0
+              )
           : double.parse(
                 product.kutuFiyati
                     .toString(),
-              ) ??
-              0;
+              );
   print("zzzzzzzzz $productFiyat");
   final miktar =
       _quantityMap[key] ?? 0;
@@ -1264,17 +1262,13 @@ Future<String?> _loadImage(String? imsrc) async {
                                                           ? double.parse(
                                                                 product.adetFiyati
                                                                     .toString(),
-                                                              ) ??
-                                                              0
+                                                              )
                                                           : double.parse(
                                                                 product.kutuFiyati
                                                                     .toString(),
-                                                              ) ??
-                                                              0;
+                                                              );
           
-                                                  final barcode =
-                                                      product.barcode1 ??
-                                                      '0000000000000';
+                                                  final barcode = product.barcode1;
                                                   final provider =
                                                       Provider.of<RCartProvider>(
                                                         context,
