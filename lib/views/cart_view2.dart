@@ -25,7 +25,17 @@ class CartView2 extends StatefulWidget {
 }
 
 class _CartView2State extends State<CartView2> {
-  // final TextEditingController _priceController = TextEditingController();
+  // Controller'ları her item için saklayacağız
+  final Map<String, TextEditingController> _priceControllers = {};
+  final Map<String, TextEditingController> _discountControllers = {};
+
+  @override
+  void dispose() {
+    // Controller'ları temizle
+    _priceControllers.forEach((_, controller) => controller.dispose());
+    _discountControllers.forEach((_, controller) => controller.dispose());
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,8 +80,15 @@ class _CartView2State extends State<CartView2> {
                           ),
                           ElevatedButton(
                             onPressed: () {
-                              cartProvider.items.clear();
+                              // Provider'ı temizle
                               cartProvider.clearCart();
+
+                              // Controller'ları temizle
+                              _priceControllers.forEach((_, controller) => controller.clear());
+                              _discountControllers.forEach((_, controller) => controller.clear());
+                              _priceControllers.clear();
+                              _discountControllers.clear();
+
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Cart cleared.')),
@@ -108,21 +125,64 @@ class _CartView2State extends State<CartView2> {
                           final item = cartItems[index];
                           final stokKodu = item.stokKodu;
 
+                          // Controller'ları başlat veya al
+                          if (!_priceControllers.containsKey(stokKodu)) {
+                            _priceControllers[stokKodu] = TextEditingController();
+                          }
+                          if (!_discountControllers.containsKey(stokKodu)) {
+                            _discountControllers[stokKodu] = TextEditingController();
+                          }
+
+                          final priceController = _priceControllers[stokKodu]!;
+                          final discountController = _discountControllers[stokKodu]!;
+
+                          // İndirimli fiyatı hesapla
+                          // birimFiyat zaten provider'da tutuluyor ve cart_view'dan geliyor
+                          final discountAmount = (item.birimFiyat * item.iskonto) / 100;
+                          final discountedPrice = item.birimFiyat - discountAmount;
+
+                          // Güncel değerleri controller'lara yaz
+                          priceController.text = discountedPrice.toStringAsFixed(2);
+                          discountController.text = item.iskonto > 0 ? item.iskonto.toString() : '0';
+
                           return Card(
-                            margin: EdgeInsets.symmetric(vertical: 0.5.h),
-                            child: Padding(
-                              padding: EdgeInsets.all(2.w),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                            elevation: 2,
+                            margin: EdgeInsets.symmetric(
+                              horizontal: 0.5.w,
+                              vertical: 0.5.h,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
+                                width: 1,
+                              ),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Theme.of(context).colorScheme.surface,
+                                      Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
+                                    ],
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.all(2.w),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      // Ürün görseli
-                                      item.imsrc == null
-                                          ? Icon(Icons.shopping_bag, size: 16.w)
-                                          : FutureBuilder<String?>(
-                                            future: () async {
+                                      Row(
+                                        children: [
+                                          // Sol: Ürün görseli
+                                          item.imsrc == null
+                                              ? Icon(Icons.shopping_bag_sharp, size: 25.w)
+                                              : FutureBuilder<String?>(
+                                                future: () async {
                                               try {
   final uri = Uri.parse(item.imsrc!);
   final fileName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : null;
@@ -171,10 +231,10 @@ class _CartView2State extends State<CartView2> {
                                               );
                                             },
                                           ),
-                                      SizedBox(width: 3.w),
+                                          SizedBox(width: 3.w),
 
-                                      // Sağ taraf
-                                      Expanded(
+                                          // Sağ taraf
+                                          Expanded(
                                         child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -213,372 +273,390 @@ class _CartView2State extends State<CartView2> {
 
                                             SizedBox(height: 0.5.h),
 
-                                            // Fiyat, iskonto, final fiyat
+                                            // İlk satır: Dropdown | Fiyat
                                             Row(
                                               children: [
-                                                Expanded(
-                                                  flex: 2,
-                                                  child: Consumer<CartProvider>(
-  builder: (context, cartProvider, child) {
-    final item = cartProvider.items[stokKodu]!; // stokKodu dışarıdan alınıyor olmalı
-
-    // final controller = TextEditingController(
-    //   text:  (item.indirimliTutar-item.vatTutari-1).toStringAsFixed(0),
-    // );
-
-    return SizedBox(
-      width: 80,
-      child: TextField(
-       // controller: controller,
-        keyboardType: TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(
-          labelText: 'Original Price ${item.birimFiyat}',
-          border: OutlineInputBorder(),
-        ),
-        onSubmitted: (value) {
-
-    final yeniFiyat = double.tryParse(value.replaceAll(',', '.'));
-
-    if (yeniFiyat != null && yeniFiyat >= 0) {
-      final orjinalFiyat = item.birimFiyat;
-
-      if (yeniFiyat < orjinalFiyat) {
-        final indirimOrani =
-            100 * (orjinalFiyat - yeniFiyat) / orjinalFiyat;
-
-        cartProvider.addOrUpdateItem(
-          stokKodu: item.stokKodu,
-          urunAdi: item.urunAdi,
-          birimFiyat: orjinalFiyat, // orijinal fiyatı koru
-          urunBarcode: item.urunBarcode,
-          miktar: 0,
-          iskonto: indirimOrani.toInt(),
-          birimTipi: item.birimTipi,
-          durum: item.durum,
-          vat: item.vat,
-          imsrc: item.imsrc,
-          adetFiyati: item.adetFiyati,
-          kutuFiyati: item.kutuFiyati,
-        );
-      }
-
-      // TextField içinde yine kullanıcının girdiği fiyat görünsün
-      value = yeniFiyat.toStringAsFixed(2);
-    }
-
-          // final yeniFiyat = double.tryParse(value.replaceAll(',', '.'));
-          // if (yeniFiyat != null && yeniFiyat >= 0) {
-          //   cartProvider.addOrUpdateItem(
-          //     stokKodu: item.stokKodu,
-          //     urunAdi: item.urunAdi,
-          //     birimFiyat: yeniFiyat,
-          //     urunBarcode: item.urunBarcode,
-          //     miktar: 0, // miktarı artırmak istemiyorsan 0 gönder
-          //     iskonto: item.iskonto,
-          //     birimTipi: item.birimTipi,
-          //     durum: item.durum,
-          //     vat: item.vat,
-          //     imsrc: item.imsrc,
-          //     adetFiyati: item.adetFiyati,
-          //     kutuFiyati: item.kutuFiyati,
-          //   );
-          // }
-        },
-      ),
-    );
-  },
-)
-
+                                                // Dropdown (Unit/Box)
+                                                Container(
+                                                  padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: DropdownButton<String>(
+                                                    value: item.birimTipi,
+                                                    isDense: true,
+                                                    underline: Container(),
+                                                    style: TextStyle(
+                                                      fontSize: 14.sp,
+                                                      color: Theme.of(context).colorScheme.primary,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                    items: ['Unit', 'Box'].map((value) {
+                                                      return DropdownMenuItem(
+                                                        value: value,
+                                                        child: Text(value),
+                                                      );
+                                                    }).toList(),
+                                                    onChanged: (newValue) {
+                                                      if ((newValue == 'Unit' && item.adetFiyati != 0) ||
+                                                          (newValue == 'Box' && item.kutuFiyati != "0")) {
+                                                        final fiyatStr = (newValue == 'Unit') ? item.adetFiyati : item.kutuFiyati;
+                                                        final fiyat = double.tryParse(fiyatStr.replaceAll(',', '.')) ?? 0.0;
+                                                        final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                        cartProvider.addOrUpdateItem(
+                                                          urunAdi: item.urunAdi,
+                                                          stokKodu: item.stokKodu,
+                                                          birimFiyat: fiyat,
+                                                          urunBarcode: item.urunBarcode,
+                                                          adetFiyati: item.adetFiyati,
+                                                          kutuFiyati: item.kutuFiyati,
+                                                          miktar: 0,
+                                                          iskonto: item.iskonto,
+                                                          birimTipi: newValue ?? "Box",
+                                                          durum: item.durum,
+                                                          vat: item.vat,
+                                                          imsrc: item.imsrc,
+                                                        );
+                                                      } else {
+                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                          SnackBar(
+                                                            content: Text('⚠️ Unit type not available for this product.'),
+                                                            behavior: SnackBarBehavior.floating,
+                                                            backgroundColor: Colors.orange.shade700,
+                                                            duration: Duration(seconds: 3),
+                                                          ),
+                                                        );
+                                                      }
+                                                    },
+                                                  ),
                                                 ),
-                                                SizedBox(width: 1.w),
-                                                                                            Text("Vat: %${item.vat}"),
 
-                                                //                   Icon(Icons.change_circle),
-                                                //                   Expanded(
-                                                //                     flex: 3,
-                                                //                     child: TextField(
-                                                //                       keyboardType:
-                                                //                           TextInputType.numberWithOptions(
-                                                //                             decimal: true,
-                                                //                           ),
-                                                //                       decoration: const InputDecoration(
-                                                //                         labelText: 'Change Price',
-                                                //                         border:
-                                                //                             OutlineInputBorder(),
-                                                //                         isDense: true,
+                                                SizedBox(width: 2.w),
 
-                                                //                         contentPadding:
-                                                //                             EdgeInsets.symmetric(
-                                                //                               vertical: 8,
-                                                //                               horizontal: 8,
-                                                //                             ),
-                                                //                       ),
-                                                //                       onChanged: (value) {
-                                                //                         final parsed =
-                                                //                             double.tryParse(
-                                                //                               value,
-                                                //                             );
-                                                //                         if (parsed != null) {
-                                                //                            final customerProvider =
-                                                // Provider.of<SalesCustomerProvider>(
-                                                //   context,
-                                                //   listen: false,
-                                                // );
-                                                //                           cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+                                                // Fiyat alanı
+                                                Expanded(
+                                                  child: TextField(
+                                                        controller: priceController,
+                                                        keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                                        decoration: InputDecoration(
+                                                          filled: true,
+                                                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                          border: OutlineInputBorder(
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            borderSide: BorderSide.none,
+                                                          ),
+                                                          enabledBorder: OutlineInputBorder(
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            borderSide: BorderSide.none,
+                                                          ),
+                                                          focusedBorder: OutlineInputBorder(
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            borderSide: BorderSide.none,
+                                                          ),
+                                                          isDense: true,
+                                                          contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                                        ),
+                                                        style: TextStyle(
+                                                          fontSize: 16.sp,
+                                                          fontWeight: FontWeight.w500,
+                                                        ),
+                                                        onChanged: (value) {
+                                                          final yeniFiyat = double.tryParse(value.replaceAll(',', '.'));
+                                                          if (yeniFiyat != null && yeniFiyat >= 0) {
+                                                            // Orjinal fiyatı al (birim tipine göre)
+                                                            final orjinalFiyat = item.birimTipi == 'Unit'
+                                                                ? double.tryParse(item.adetFiyati.toString()) ?? 0.0
+                                                                : double.tryParse(item.kutuFiyati.toString()) ?? 0.0;
 
-                                                //                           cartProvider.addOrUpdateItem(
-                                                //                             urunAdi: item.urunAdi,
-                                                //                             stokKodu:
-                                                //                                 item.stokKodu,
-                                                //                             birimFiyat: parsed,
+                                                            if (orjinalFiyat > 0) {
+                                                              // İndirim yüzdesini hesapla
+                                                              final indirimOrani = yeniFiyat < orjinalFiyat
+                                                                  ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+                                                                  : 0;
 
-                                                //                             urunBarcode:
-                                                //                                 item.urunBarcode,
-                                                //                             adetFiyati:
-                                                //                                 item.adetFiyati,
-                                                //                             kutuFiyati:
-                                                //                                 item.kutuFiyati,
-                                                //                             miktar: 0,
-                                                //                             iskonto: item.iskonto,
-                                                //                             birimTipi:
-                                                //                                 item.birimTipi,
-                                                //                             durum: item.durum,
-                                                //                             vat: item.vat,imsrc: item.imsrc
-                                                //                           );
-                                                //                         }
-                                                //                       },
-                                                //                     ),
-                                                //                   ),
+                                                              // İndirim controller'ını güncelle
+                                                              discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+
+                                                              // Provider'ı güncelle
+                                                              final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                              cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                              cartProvider.addOrUpdateItem(
+                                                                stokKodu: item.stokKodu,
+                                                                urunAdi: item.urunAdi,
+                                                                birimFiyat: orjinalFiyat,
+                                                                urunBarcode: item.urunBarcode,
+                                                                miktar: 0,
+                                                                iskonto: indirimOrani,
+                                                                birimTipi: item.birimTipi,
+                                                                durum: item.durum,
+                                                                vat: item.vat,
+                                                                imsrc: item.imsrc,
+                                                                adetFiyati: item.adetFiyati,
+                                                                kutuFiyati: item.kutuFiyati,
+                                                              );
+                                                            }
+                                                          }
+                                                        },
+                                                      ),
+                                                ),
                                               ],
                                             ),
 
-                                            // Alt Satır: Miktar, Birim Tipi Dropdown, İskonto Alanı
+                                            SizedBox(height: 1.h),
+
+                                            // İkinci satır: İndirim | Miktar kontrolleri
+                                            Row(
+                                              children: [
+                                                // İndirim alanı
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        Icons.local_offer,
+                                                        size: 18.sp,
+                                                        color: Theme.of(context).colorScheme.error,
+                                                      ),
+                                                      SizedBox(width: 1.w),
+                                                      Expanded(
+                                                        child: TextField(
+                                                          keyboardType: TextInputType.number,
+                                                          controller: discountController,
+                                                          decoration: InputDecoration(
+                                                            prefixText: '%',
+                                                            prefixStyle: TextStyle(
+                                                              fontSize: 14.sp,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: Theme.of(context).colorScheme.error,
+                                                            ),
+                                                            isDense: true,
+                                                            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                                            filled: true,
+                                                            fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                            border: OutlineInputBorder(
+                                                              borderRadius: BorderRadius.circular(8),
+                                                              borderSide: BorderSide.none,
+                                                            ),
+                                                            enabledBorder: OutlineInputBorder(
+                                                              borderRadius: BorderRadius.circular(8),
+                                                              borderSide: BorderSide.none,
+                                                            ),
+                                                            focusedBorder: OutlineInputBorder(
+                                                              borderRadius: BorderRadius.circular(8),
+                                                              borderSide: BorderSide.none,
+                                                            ),
+                                                          ),
+                                                          onChanged: (value) {
+                                                            // İndirim yüzdesini al ve sınırla
+                                                            int discountPercent = int.tryParse(value) ?? 0;
+                                                            discountPercent = discountPercent.clamp(0, 100);
+
+                                                            // İmleç konumunu kaydet
+                                                            final cursorPos = discountController.selection.baseOffset;
+
+                                                            // Orjinal fiyatı al (birim tipine göre)
+                                                            final originalPrice = item.birimTipi == 'Unit'
+                                                                ? double.tryParse(item.adetFiyati.toString()) ?? 0.0
+                                                                : double.tryParse(item.kutuFiyati.toString()) ?? 0.0;
+
+                                                            // İndirim miktarını hesapla
+                                                            final discountAmount = (originalPrice * discountPercent) / 100;
+
+                                                            // İndirimli fiyatı hesapla
+                                                            final discountedPrice = originalPrice - discountAmount;
+
+                                                            // Fiyat controller'ını güncelle
+                                                            priceController.text = discountedPrice.toStringAsFixed(2);
+
+                                                            // Provider'ı güncelle
+                                                            final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                            cartProvider.addOrUpdateItem(
+                                                              urunAdi: item.urunAdi,
+                                                              stokKodu: item.stokKodu,
+                                                              birimFiyat: originalPrice,
+                                                              urunBarcode: item.urunBarcode,
+                                                              miktar: 0,
+                                                              iskonto: discountPercent,
+                                                              birimTipi: item.birimTipi,
+                                                              durum: item.durum,
+                                                              vat: item.vat,
+                                                              imsrc: item.imsrc,
+                                                              adetFiyati: item.adetFiyati,
+                                                              kutuFiyati: item.kutuFiyati,
+                                                            );
+
+                                                            // İmleç pozisyonunu geri yükle
+                                                            if (cursorPos >= 0 && cursorPos <= discountController.text.length) {
+                                                              discountController.selection = TextSelection.fromPosition(
+                                                                TextPosition(offset: cursorPos),
+                                                              );
+                                                            }
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                SizedBox(width: 2.w),
+
+                                                // Miktar kontrolleri (cart_view benzeri)
+                                                Flexible(
+                                                  flex: 3,
+                                                  child: Row(
+                                                    mainAxisAlignment: MainAxisAlignment.center,
+                                                    children: [
+                                                      // Miktar azaltma butonu (-)
+                                                      Container(
+                                                        width: 8.w,
+                                                        height: 8.w,
+                                                        decoration: BoxDecoration(
+                                                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                                          borderRadius: BorderRadius.circular(4),
+                                                        ),
+                                                        child: IconButton(
+                                                          padding: EdgeInsets.zero,
+                                                          onPressed: () {
+                                                            int newMiktar = item.miktar - 1;
+                                                            if (newMiktar <= 0) {
+                                                              cartProvider.removeItem(stokKodu);
+                                                            } else {
+                                                              final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                              cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                              cartProvider.addOrUpdateItem(
+                                                                urunAdi: item.urunAdi,
+                                                                stokKodu: stokKodu,
+                                                                birimFiyat: item.birimFiyat,
+                                                                urunBarcode: item.urunBarcode,
+                                                                miktar: -1,
+                                                                iskonto: item.iskonto,
+                                                                birimTipi: item.birimTipi,
+                                                                durum: item.durum,
+                                                                vat: item.vat,
+                                                                imsrc: item.imsrc,
+                                                              );
+                                                            }
+                                                          },
+                                                          icon: Icon(
+                                                            Icons.remove,
+                                                            size: 4.w,
+                                                            color: Theme.of(context).colorScheme.error,
+                                                          ),
+                                                        ),
+                                                      ),
+
+                                                      SizedBox(width: 1.w),
+
+                                                      // Miktar TextField
+                                                      Container(
+                                                        width: 12.w,
+                                                        height: 8.w,
+                                                        decoration: BoxDecoration(
+                                                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                          borderRadius: BorderRadius.circular(4),
+                                                        ),
+                                                        child: TextField(
+                                                          controller: TextEditingController(
+                                                            text: "${Provider.of<CartProvider>(context, listen: true).items[stokKodu]?.miktar ?? 0}",
+                                                          ),
+                                                          textAlign: TextAlign.center,
+                                                          style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+                                                          decoration: InputDecoration(
+                                                            contentPadding: EdgeInsets.zero,
+                                                            border: InputBorder.none,
+                                                          ),
+                                                          keyboardType: TextInputType.number,
+                                                          onSubmitted: (value) {
+                                                            final newMiktar = int.tryParse(value) ?? 0;
+                                                            if (newMiktar <= 0) {
+                                                              cartProvider.removeItem(stokKodu);
+                                                            } else {
+                                                              final difference = newMiktar - item.miktar;
+                                                              if (difference != 0) {
+                                                                final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                                cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                                cartProvider.addOrUpdateItem(
+                                                                  urunAdi: item.urunAdi,
+                                                                  stokKodu: stokKodu,
+                                                                  birimFiyat: item.birimFiyat,
+                                                                  urunBarcode: item.urunBarcode,
+                                                                  miktar: difference,
+                                                                  iskonto: item.iskonto,
+                                                                  birimTipi: item.birimTipi,
+                                                                  durum: item.durum,
+                                                                  vat: item.vat,
+                                                                  imsrc: item.imsrc,
+                                                                );
+                                                              }
+                                                            }
+                                                          },
+                                                        ),
+                                                      ),
+
+                                                      SizedBox(width: 1.w),
+
+                                                      // Miktar artırma butonu (+)
+                                                      Container(
+                                                        width: 8.w,
+                                                        height: 8.w,
+                                                        decoration: BoxDecoration(
+                                                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                                          borderRadius: BorderRadius.circular(4),
+                                                        ),
+                                                        child: IconButton(
+                                                          padding: EdgeInsets.zero,
+                                                          onPressed: () {
+                                                            final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                            cartProvider.addOrUpdateItem(
+                                                              urunAdi: item.urunAdi,
+                                                              stokKodu: stokKodu,
+                                                              birimFiyat: item.birimFiyat,
+                                                              urunBarcode: item.urunBarcode,
+                                                              miktar: 1,
+                                                              iskonto: item.iskonto,
+                                                              birimTipi: item.birimTipi,
+                                                              durum: item.durum,
+                                                              vat: item.vat,
+                                                              imsrc: item.imsrc,
+                                                            );
+                                                          },
+                                                          icon: Icon(
+                                                            Icons.add,
+                                                            size: 4.w,
+                                                            color: Theme.of(context).colorScheme.primary,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+
                                           ],
                                         ),
                                       ),
                                     ],
                                   ),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      // Miktar azalt/arttır
-
-                                      // Dropdown (Unit/Box)
-                                      Row(
-                                        children: [
-                                          Text(
-                                            "Type: ",
-                                            style: TextStyle(
-                                              fontSize: 15.sp,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black,
-                                            ),
+                                      Divider(),
+                                      Center(
+                                        child: Text(
+                                          'Final Price: ${item.indirimliTutar.toStringAsFixed(2)} - VAT:${item.vatTutari.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 15.sp,
+                                            fontStyle: FontStyle.italic,
                                           ),
-                                          DropdownButton<String>(
-                                            value: item.birimTipi,
-                                            items:
-                                                ['Unit', 'Box'].map((value) {
-                                                  return DropdownMenuItem(
-                                                    value: value,
-                                                    child: Text(value),
-                                                  );
-                                                }).toList(),
-                                            onChanged: (newValue) {
-  if ((newValue == 'Unit' &&
-                                                        item.adetFiyati !=
-                                                            0) ||
-                                                    (newValue == 'Box' &&
-                                                        item.kutuFiyati !=
-                                                            "0")) {
-    final fiyatStr =
-        (newValue == 'Unit') ? item.adetFiyati : item.kutuFiyati;
-
-    // Virgül varsa noktaya çevir, sonra double'a çevirmeyi dene
-    final fiyat = double.tryParse(fiyatStr.replaceAll(',', '.')) ?? 0.0;
-
-    final customerProvider =
-        Provider.of<SalesCustomerProvider>(context, listen: false);
-
-    print("DEBUG Customer: kod=${customerProvider.selectedCustomer!.kod}, unvan=${customerProvider.selectedCustomer!.unvan}");
-
-    cartProvider.customerName =
-        customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-
-    cartProvider.addOrUpdateItem(
-      urunAdi: item.urunAdi,
-      stokKodu: item.stokKodu,
-      birimFiyat: fiyat,
-      urunBarcode: item.urunBarcode,
-      adetFiyati: item.adetFiyati,
-      kutuFiyati: item.kutuFiyati,
-      miktar: 0,
-      iskonto: item.iskonto,
-      birimTipi: newValue??"Box",
-      durum: item.durum,
-      vat: item.vat,
-      imsrc: item.imsrc,
-    );
-  }else {
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                    '⚠️ Unit type not available for this product.',
-                                                                  ),
-                                                                  behavior:
-                                                                      SnackBarBehavior
-                                                                          .floating,
-                                                                  backgroundColor:
-                                                                      Colors
-                                                                          .orange
-                                                                          .shade700,
-                                                                  duration:
-                                                                      Duration(
-                                                                        seconds:
-                                                                            3,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            }
-},
-
-                                          ),
-                                        ],
-                                      ),
-
-                                      // İskonto TextField
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.local_offer,
-                                            size: 20.sp,
-                                            color: Colors.red,
-                                          ),
-                                          SizedBox(
-                                            width: 70,
-                                            child: TextField(
-                                              keyboardType:
-                                                  TextInputType.number,
-                                              decoration: InputDecoration(
-                                                isDense: true,
-                                                border: OutlineInputBorder(),
-                                              ),
-                                              controller: TextEditingController(
-                                                text: item.iskonto.toString(),
-                                              ),
-                                              onSubmitted: (value) {
-                                                int parsed = 0;
-                                                if (value.isNotEmpty) {
-                                                  parsed =
-                                                      int.tryParse(value) ?? 0;
-                                                }
-                                                final customerProvider =
-                                                    Provider.of<
-                                                      SalesCustomerProvider
-                                                    >(context, listen: false);
-                                                cartProvider.customerName =
-                                                    customerProvider.selectedCustomer!.unvan ?? customerProvider
-                                                        .selectedCustomer!
-                                                        .kod!;
-                                                cartProvider.addOrUpdateItem(
-                                                  urunAdi: item.urunAdi,
-                                                  stokKodu: item.stokKodu,
-                                                  birimFiyat: item.birimFiyat,
-                                                  urunBarcode: item.urunBarcode,
-                                                  miktar: 0,
-                                                  iskonto: parsed,
-                                                  birimTipi: item.birimTipi,
-                                                  durum: item.durum,
-                                                  vat: item.vat,
-                                                  imsrc: item.imsrc,
-                                                );
-                                              },
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Row(
-                                        children: [
-                                          IconButton(
-                                            icon: Icon(
-                                              Icons.remove,
-                                              size: 10.w,
-                                            ),
-                                            onPressed: () {
-                                              int newMiktar = item.miktar - 1;
-                                              if (newMiktar <= 0) {
-                                                cartProvider.removeItem(
-                                                  stokKodu,
-                                                );
-                                              } else {
-                                                final customerProvider =
-                                                    Provider.of<
-                                                      SalesCustomerProvider
-                                                    >(context, listen: false);
-                                                cartProvider.customerName =
-                                                    customerProvider.selectedCustomer!.unvan ?? customerProvider
-                                                        .selectedCustomer!
-                                                        .kod!;
-                                                cartProvider.addOrUpdateItem(
-                                                  urunAdi: item.urunAdi,
-                                                  stokKodu: stokKodu,
-                                                  birimFiyat: item.birimFiyat,
-                                                  urunBarcode: item.urunBarcode,
-                                                  miktar: -1,
-                                                  iskonto: item.iskonto,
-                                                  birimTipi: item.birimTipi,
-                                                  durum: item.durum,
-                                                  vat: item.vat,
-                                                  imsrc: item.imsrc,
-                                                );
-                                              }
-                                            },
-                                          ),
-                                          Text(
-                                            item.miktar.toString(),
-                                            style: TextStyle(fontSize: 18.sp),
-                                          ),
-                                          IconButton(
-                                            icon: Icon(Icons.add, size: 10.w),
-                                            onPressed: () {
-                                              final customerProvider =
-                                                  Provider.of<
-                                                    SalesCustomerProvider
-                                                  >(context, listen: false);
-                                              cartProvider.customerName =
-                                                  customerProvider.selectedCustomer!.unvan ?? customerProvider
-                                                      .selectedCustomer!
-                                                      .kod!;
-                                              cartProvider.addOrUpdateItem(
-                                                urunAdi: item.urunAdi,
-                                                stokKodu: stokKodu,
-                                                birimFiyat: item.birimFiyat,
-                                                urunBarcode: item.urunBarcode,
-                                                miktar: 1,
-                                                iskonto: item.iskonto,
-                                                birimTipi: item.birimTipi,
-                                                durum: item.durum,
-                                                vat: item.vat,
-                                                imsrc: item.imsrc,
-                                              );
-                                            },
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  Divider(),
-                                  Text(
-                                    'Final Price: ${item.indirimliTutar.toStringAsFixed(2)} - VAT:${item.vatTutari.toStringAsFixed(2)}',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15.sp,
-                                      fontStyle: FontStyle.italic,
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           );

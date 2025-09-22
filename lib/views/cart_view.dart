@@ -54,6 +54,44 @@ class _CartViewState extends State<CartView> {
   final Map<String, int> _iskontoMap = {};
   final Map<String, TextEditingController> _quantityControllers = {};
 
+  void _syncWithProvider() {
+    final provider = Provider.of<CartProvider>(context, listen: false);
+
+    // Provider boşsa (clearCart çağrıldıysa) tüm map'leri temizle
+    if (provider.items.isEmpty) {
+      setState(() {
+        for (var product in _allProducts) {
+          final key = product.stokKodu;
+          _quantityMap[key] = 0;
+          _iskontoMap[key] = 0;
+          _quantityControllers[key]?.text = '0';
+          _discountControllers[key]?.text = '';
+          _priceControllers[key]?.clear();
+        }
+      });
+    } else {
+      // Provider'daki güncel verileri al
+      setState(() {
+        for (var product in _allProducts) {
+          final key = product.stokKodu;
+          final miktar = provider.getmiktar(key);
+          final iskonto = provider.getIskonto(key);
+
+          _quantityMap[key] = miktar;
+          _iskontoMap[key] = iskonto;
+
+          if (_quantityControllers.containsKey(key)) {
+            _quantityControllers[key]!.text = miktar.toString();
+          }
+
+          if (_discountControllers.containsKey(key) && iskonto > 0) {
+            _discountControllers[key]!.text = iskonto.toString();
+          }
+        }
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -65,7 +103,15 @@ class _CartViewState extends State<CartView> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _barcodeFocusNode.requestFocus();
+      _syncWithProvider(); // Provider'dan veriyi çek
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Provider değiştiğinde map'leri güncelle
+    _syncWithProvider();
   }
 
   @override
@@ -839,7 +885,7 @@ _barcodeFocusNode.requestFocus();
                             final discountValue = context.read<CartProvider>().getIskonto(key2);
                             if (!_discountControllers.containsKey(key2)) {
                               _discountControllers[key2] = TextEditingController(
-                                text: discountValue.toString(), // Başlangıçta '0' göster
+                                text: discountValue > 0 ? discountValue.toString() : '0', // İndirim yoksa '0' göster
                               );
                             }
                             final _discountController = _discountControllers[key2]!;
