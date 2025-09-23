@@ -3,14 +3,12 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import 'package:pos_app/controllers/sync_controller.dart';
 import 'package:pos_app/controllers/transaction_controller.dart';
 import 'package:pos_app/models/cheque_model.dart';
 import 'package:pos_app/models/transaction_model.dart';
 import 'package:pos_app/views/menu_view.dart';
 import 'package:sizer/sizer.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart'; // Sizer import
 
 class SyncView extends StatefulWidget {
@@ -279,10 +277,6 @@ class _SyncViewState extends State<SyncView> {
                         ),
                       );
                     } else {
-                      final path = p.join(
-                        await getDatabasesPath(),
-                        'pos_database.db',
-                      );
                       DatabaseHelper dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
 

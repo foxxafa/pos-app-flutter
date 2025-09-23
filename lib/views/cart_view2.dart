@@ -2,17 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
-import 'package:pos_app/controllers/order_controller.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:pos_app/models/order_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:pos_app/providers/orderinfo_provider.dart';
-import 'package:pos_app/providers/user_provider.dart';
 import 'package:pos_app/views/customer_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
@@ -827,13 +824,9 @@ class _CartView2State extends State<CartView2> {
                             comment: orderInfoProvider.comment,
                           );
 
-                          final orderController = OrderController();
+                          // final orderController = OrderController(); // İleride kullanılacak
 
                           try {
-                            // İnternet var mı kontrol et
-                            final connectivityResult =
-                                await Connectivity().checkConnectivity();
-
                             // Gerekli veriler
                             final fisJson = fisModel.toJson();
                             final satirlarJson =
@@ -841,125 +834,81 @@ class _CartView2State extends State<CartView2> {
                                     .map((item) => item.toJson())
                                     .toList();
 
-                            if (connectivityResult[0] ==
-                                ConnectivityResult.none) {
-                              // 🌐 İnternet yoksa veritabanına kaydet
+                            // HER ZAMAN PendingSales'e kaydet (internet olsa bile)
+                            // İleride sync butonuna basıldığında gönderilecek
 
-                              print("FİŞ JSON: ${jsonEncode(fisJson)}");
-                              print(
-                                "SATIRLAR JSON: ${jsonEncode(satirlarJson)}",
-                              );
+                            print("FİŞ JSON: ${jsonEncode(fisJson)}");
+                            print(
+                              "SATIRLAR JSON: ${jsonEncode(satirlarJson)}",
+                            );
 
-                              await db.insert('PendingSales', {
-                                'fis': jsonEncode(fisJson),
-                                'satirlar': jsonEncode(satirlarJson),
-                              });
+                            await db.insert('PendingSales', {
+                              'fis': jsonEncode(fisJson),
+                              'satirlar': jsonEncode(satirlarJson),
+                            });
 
-                              final cartString = cartProvider.items.values
-                                  .map((item) => item.toFormattedString())
-                                  .join('\n----------------------\n');
+                            final cartString = cartProvider.items.values
+                                .map((item) => item.toFormattedString())
+                                .join('\n----------------------\n');
 
-                              await RecentActivityController.addActivity(
-                                "Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString",
-                              );
-  print("Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString");
-                              cartProvider.items.clear();
-                              cartProvider.clearCart();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: SizedBox(
-                                    height: 10.h,
-                                    child: Center(
-                                      child: Text(
-                                        'Order saved to Pending.',
-                                        style: TextStyle(
-                                          fontSize: 20.sp,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                            await RecentActivityController.addActivity(
+                              "Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString",
+                            );
+                            print("Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString");
+
+                            cartProvider.items.clear();
+                            cartProvider.clearCart();
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: SizedBox(
+                                  height: 10.h,
+                                  child: Center(
+                                    child: Text(
+                                      'Order saved to Pending.',
+                                      style: TextStyle(
+                                        fontSize: 20.sp,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
                                 ),
-                              );
-                              final selectedCustomer =
-                                  Provider.of<SalesCustomerProvider>(
-                                    context,
-                                    listen: false,
-                                  ).selectedCustomer;
-                              final controller = CustomerBalanceController();
-                              final customer = await controller
-                                  .getCustomerByUnvan(
-                                    selectedCustomer!.kod ?? "TURAN",
-                                  );
-                              String bakiye = customer?.bakiye ?? "0.0";
-                              print("bakişyeee: $bakiye");
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (_) => CustomerView(bakiye: bakiye),
-                                ),
-                                (route) => false,
-                              );
-                            } else {
-                              // 🌐 İnternet varsa doğrudan gönder
-                              final apikey =
-                                  Provider.of<UserProvider>(
-                                    context,
-                                    listen: false,
-                                  ).apikey;
+                              ),
+                            );
 
-                              await orderController.satisGonder(
-                                fisModel: fisModel,
-                                satirlar: cartProvider.items.values.toList(),
-                                bearerToken: apikey,
-                              );
+                            final selectedCustomer =
+                                Provider.of<SalesCustomerProvider>(
+                                  context,
+                                  listen: false,
+                                ).selectedCustomer;
+                            final controller = CustomerBalanceController();
+                            final customer = await controller
+                                .getCustomerByUnvan(
+                                  selectedCustomer!.kod ?? "TURAN",
+                                );
+                            String bakiye = customer?.bakiye ?? "0.0";
+                            print("bakişyeee: $bakiye");
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (_) => CustomerView(bakiye: bakiye),
+                              ),
+                              (route) => false,
+                            );
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: SizedBox(
-                                    height:
-                                        10.h, // istediğin yüksekliği buraya ver
-                                    child: Center(
-                                      child: Text(
-                                        'Order placed successfully!',
-                                        style: TextStyle(
-                                          fontSize:
-                                              20.sp, // Burada metin büyüklüğünü ayarlayabilirsin
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                              final cartString = cartProvider.items.values
-                                  .map((item) => item.toFormattedString())
-                                  .join('\n----------------------\n');
-
-                              await RecentActivityController.addActivity(
-                                "Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString",
-                              );
-
-                              cartProvider.items.clear();
-                              cartProvider.clearCart();
-                              final selectedCustomer =
-                                  Provider.of<SalesCustomerProvider>(
-                                    context,
-                                    listen: false,
-                                  ).selectedCustomer;
-                              final controller = CustomerBalanceController();
-                              final customer = await controller
-                                  .getCustomerByUnvan(
-                                    selectedCustomer!.kod ?? "TURAN",
-                                  );
-                              String bakiye = customer?.bakiye ?? "0.0";
-                              print("bakişyeee: $bakiye");
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (_) => CustomerView(bakiye: bakiye),
-                                ),
-                                (route) => false,
-                              );
-                            }
+                            // İLERİDE YAPILACAK: Otomatik gönderim
+                            // if (connectivityResult[0] != ConnectivityResult.none) {
+                            //   // İnternet varsa doğrudan gönder
+                            //   final apikey = Provider.of<UserProvider>(
+                            //     context,
+                            //     listen: false,
+                            //   ).apikey;
+                            //
+                            //   await orderController.satisGonder(
+                            //     fisModel: fisModel,
+                            //     satirlar: cartProvider.items.values.toList(),
+                            //     bearerToken: apikey,
+                            //   );
+                            // }
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Order failed: $e')),

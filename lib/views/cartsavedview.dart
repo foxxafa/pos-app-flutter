@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:sizer/sizer.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
-import 'package:path/path.dart' as p;
 
 class CartListPage extends StatefulWidget {
   const CartListPage({super.key});
@@ -27,8 +25,6 @@ class _CartListPageState extends State<CartListPage> {
     setState(() => _isLoading = true);
 
     // Get customer data from database first
-    final databasesPath = await getDatabasesPath();
-    final path = p.join(databasesPath, 'pos_database.db');
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
     final customerRows = await db.query('Customer');

@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:pos_app/models/refundlist_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
-import 'package:path/path.dart' as p;
 
 class RefundListController {
   final String baseUrl = 'https://test.rowhub.net/index.php?r=apimobil/musteriurunleri';
@@ -72,7 +71,6 @@ class RefundListController {
   }
 
 Future<void> insertPendingRefund(Map<String, dynamic> pendingData) async {
-  final path = p.join(await getDatabasesPath(), 'pos_database.db');
   DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database; // await unutma!
   await db.insert('PendingRefunds', pendingData);

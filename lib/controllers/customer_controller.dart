@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:path/path.dart';
 import 'package:pos_app/models/customer_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -13,8 +12,6 @@ Future<List<CustomerModel>?> getNewCustomer(DateTime date) async {
   final formatter = DateFormat('dd.MM.yyyy HH:mm:ss');
   String formattedDate = formatter.format(date);
     String savedApiKey="";
-    String databasesPath = await getDatabasesPath();
-  String path = join(databasesPath, 'pos_database.db');
 
 
   // 2. Veritabanını aç veya oluştur

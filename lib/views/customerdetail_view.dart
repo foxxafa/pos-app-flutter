@@ -4,9 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/models/customer_balance.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
-import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
@@ -15,8 +13,6 @@ class CustomerDetailView extends StatelessWidget {
   const CustomerDetailView({Key? key}) : super(key: key);
 
   Future<CustomerBalanceModel?> loadCustomerDetail(String customerCode) async {
-    String databasesPath = await getDatabasesPath();
-    String path = p.join(databasesPath, 'pos_database.db');
 
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;

@@ -1,4 +1,3 @@
-import 'package:path/path.dart';
 import 'package:pos_app/models/customer_balance.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -15,39 +14,16 @@ class CustomerBalanceController {
   }
 
   Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'pos_database.db');
 
     DatabaseHelper dbHelper = DatabaseHelper();
     return await dbHelper.database;
   }
 
-  Future<void> _onCreate(Database db, int version) async {
-    await db.execute('''
-     CREATE TABLE CustomerBalance(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  unvan TEXT,
-  vergiNo TEXT,
-  vergiDairesi TEXT,
-  adres TEXT,
-  telefon TEXT,
-  email TEXT,
-  kod TEXT,
-  postcode TEXT,
-  city TEXT,
-  contact TEXT,
-  mobile TEXT,
-  bakiye TEXT
-)
-    ''');
-  }
 
 
 Future<String> getCustomerBalanceByName(String customerName) async {
-  String databasesPath = await getDatabasesPath();
-  String path = join(databasesPath, 'pos_database.db');
-
-  final db = await openReadOnlyDatabase(path);
+  DatabaseHelper dbHelper = DatabaseHelper();
+  final db = await dbHelper.database;
 
   final result = await db.query(
     'CustomerBalance',
@@ -75,10 +51,8 @@ Future<String> getCustomerBalanceByName(String customerName) async {
     );
   }
 Future<void> printAllCustomerBalances() async {
-  String databasesPath = await getDatabasesPath();
-  String path = join(databasesPath, 'pos_database.db');
-
-  final db = await openReadOnlyDatabase(path);
+  DatabaseHelper dbHelper = DatabaseHelper();
+  final db = await dbHelper.database;
   final result = await db.query('CustomerBalance');
   // Database açık kalacak - App Inspector için
 
@@ -92,9 +66,7 @@ Future<void> printAllCustomerBalances() async {
 }
 
   Future<void> insertCustomers(List<CustomerBalanceModel> customers) async {
-      String databasesPath = await getDatabasesPath();
-  String path = join(databasesPath, 'pos_database.db');
-  DatabaseHelper dbHelper = DatabaseHelper();
+      DatabaseHelper dbHelper = DatabaseHelper();
   final dbClient = await dbHelper.database;
     final batch = dbClient.batch();
 
@@ -121,8 +93,6 @@ Future<void> printAllCustomerBalances() async {
 
 
   Future<void> clearAll() async {
-  final databasesPath = await getDatabasesPath();
-  final path = join(databasesPath, 'pos_database.db');
   DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
 
@@ -133,8 +103,6 @@ Future<void> printAllCustomerBalances() async {
 Future<void> fetchAndStoreCustomers() async {
   String savedApiKey = "";
 
-  String databasesPath = await getDatabasesPath();
-  String path = join(databasesPath, 'pos_database.db');
 
   // Veritabanını aç
   DatabaseHelper dbHelper = DatabaseHelper();
@@ -174,8 +142,6 @@ Future<void> fetchAndStoreCustomers() async {
 
 
 Future<CustomerBalanceModel?> getCustomerByUnvan(String unvan) async {
-  final dbPath = await getDatabasesPath();
-  final path = join(dbPath, 'pos_database.db');
 
   DatabaseHelper dbHelper = DatabaseHelper();
   final dbClient = await dbHelper.database;

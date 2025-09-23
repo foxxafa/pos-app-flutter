@@ -8,9 +8,7 @@ import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:pos_app/views/invoice2_activity.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
-import 'package:path/path.dart' as p;
 import 'package:pos_app/providers/cart_provider.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 
 class InvoiceActivityView extends StatefulWidget {
@@ -160,8 +158,6 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
 
     if (shouldProceed != true) return;
 
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'pos_database.db');
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
 

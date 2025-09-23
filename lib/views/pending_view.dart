@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart';
 import 'package:pos_app/models/order_model.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 
@@ -24,8 +22,6 @@ class _PendingPageState extends State<PendingPage> {
   }
 
   Future<void> _loadPendingData() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'pos_database.db');
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
 
@@ -166,8 +162,6 @@ class _PendingPageState extends State<PendingPage> {
             SizedBox(height: 1.h),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: () async {
-                final dbPath = await getDatabasesPath();
-                final path = join(dbPath, 'pos_database.db');
                 DatabaseHelper dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
                 await db.execute('''

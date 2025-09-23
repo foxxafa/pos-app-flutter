@@ -13,9 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
-import 'package:path/path.dart' as p;
 import 'package:pos_app/core/theme/app_theme.dart';
 
 class TransactionPage extends StatefulWidget {
@@ -76,7 +74,6 @@ print("fisnooooooooo $_documentNo");
     final connectivity = await Connectivity().checkConnectivity();
 
     if (connectivity[0] == ConnectivityResult.none) {
-      final path = p.join(await getDatabasesPath(), 'pos_database.db');
       DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
       var result = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tahsilatlar';");

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:path/path.dart' as p;
 import 'package:pos_app/providers/user_provider.dart';
 import 'package:pos_app/views/cartsavedview.dart';
 import 'package:pos_app/views/login_view.dart';
@@ -43,8 +42,6 @@ class _MenuViewState extends State<MenuView> {
   Future<void> _performLogout() async {
     try {
       // Get database path
-      var databasesPath = await getDatabasesPath();
-      String path = p.join(databasesPath, 'pos_database.db');
 
       // Open database and delete table
       DatabaseHelper dbHelper = DatabaseHelper();

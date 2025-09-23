@@ -4,15 +4,12 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:pos_app/models/refundsend_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
-import 'package:path/path.dart';
 
 class RefundSendController {
   Database? _db;
 
   Future<Database> get db async {
     if (_db != null) return _db!;
-    final databasesPath = await getDatabasesPath();
-    final path = join(databasesPath, 'pos_database.db');
     DatabaseHelper dbHelper = DatabaseHelper();
     _db = await dbHelper.database;
     await _db!.execute('''

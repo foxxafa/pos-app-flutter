@@ -2,9 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
-import 'package:path/path.dart';
 import 'package:sizer/sizer.dart';
 
 class SaleEditPage extends StatefulWidget {
@@ -39,8 +37,6 @@ class _SaleEditPageState extends State<SaleEditPage> {
   }
 
   Future<void> _loadData() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'pos_database.db');
     DatabaseHelper dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
 
@@ -100,8 +96,6 @@ class _SaleEditPageState extends State<SaleEditPage> {
   }
 
   Future<void> _saveToDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'pos_database.db');
     DatabaseHelper dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
 
