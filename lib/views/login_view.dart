@@ -134,9 +134,11 @@ Future<Map<String, dynamic>?> getLastLogin() async {
     ),
   );
     }
-} on Exception {
+} on Exception catch (e) {
+  print('🔑 ❌ Login View Exception: $e');
+  print('🔑 ❌ Exception type: ${e.runtimeType}');
   ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error#133: Check your Internet connection.')),
+      SnackBar(content: Text('Error#133: Login failed - $e')),
     );
 }
   }

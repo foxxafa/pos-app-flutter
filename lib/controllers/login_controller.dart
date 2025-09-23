@@ -9,6 +9,9 @@ class LoginController {
 
 //POST
   Future<LoginModel?> postLogin(String username, String password) async {
+    try {
+      print('🔑 Login attempt - URL: $_baseUrl');
+      print('🔑 Username: $username, Password: $password');
 
       final response = await http.post(
         Uri.parse(_baseUrl),
@@ -17,6 +20,9 @@ class LoginController {
           'password': password,
         },
       );
+
+      print('🔑 Response Status: ${response.statusCode}');
+      print('🔑 Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> json = jsonDecode(response.body);
@@ -38,10 +44,15 @@ class LoginController {
           return LoginModel.fromJson(json);
         }
       } else {
-        print('Server error: ${response.statusCode}');
+        print('🔑 Server error: ${response.statusCode}');
+        print('🔑 Error response body: ${response.body}');
         return null;
       }
-    
+    } catch (e) {
+      print('🔑 ❌ Login Exception: $e');
+      print('🔑 ❌ Exception type: ${e.runtimeType}');
+      return null;
+    }
   }
 
   loginDatabase(String username, String password,String apikey,int day)async{

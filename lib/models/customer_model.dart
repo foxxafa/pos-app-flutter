@@ -65,11 +65,16 @@ class CustomerModel {
 
   factory CustomerModel.fromMap(Map<String, dynamic> map) {
     return CustomerModel(
-      kod: map['Kod'] ?? '',
-      unvan: map['Unvan'] ?? '',
-      telefon: map['Telefon'] ?? '',
-      adres: map['Adres'] ?? '',
-      aktif: (map['Aktif'] ?? 0), // SQLite için 1 = true
+      // CustomerBalance table columns (küçük harfler)
+      kod: map['kod'] ?? map['Kod'] ?? '', // Hem eski hem yeni format desteği
+      unvan: map['unvan'] ?? map['Unvan'] ?? '',
+      telefon: map['telefon'] ?? map['Telefon'] ?? '',
+      adres: map['adres'] ?? map['Adres'] ?? '',
+      vergiNo: map['vergiNo'] ?? map['VergiNo'] ?? '',
+      vergiDairesi: map['vergiDairesi'] ?? map['VergiDairesi'] ?? '',
+      email: map['email'] ?? map['Email'] ?? '',
+      postCode: map['postcode'] ?? map['PostCode'] ?? '',
+      aktif: 1, // CustomerBalance'da aktif field yok, default 1
     );
   }
 }

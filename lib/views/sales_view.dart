@@ -210,7 +210,7 @@ class _SalesViewState extends State<SalesView> {
                                               CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              sale['Unvan'] ?? 'customers.unknown_customer'.tr(),
+                                              sale['unvan'] ?? sale['Unvan'] ?? 'customers.unknown_customer'.tr(),
                                               style: theme.textTheme.titleMedium?.copyWith(
                                                 fontWeight: FontWeight.w600,
                                               ),
@@ -221,7 +221,7 @@ class _SalesViewState extends State<SalesView> {
                                             Row(
                                               children: [
                                                 Text(
-                                                  sale['Kod'] ?? 'customers.no_code'.tr(),
+                                                  sale['kod'] ?? sale['Kod'] ?? 'customers.no_code'.tr(),
                                                   style: theme.textTheme.bodyMedium?.copyWith(
                                                     color: Colors.grey[600],
                                                   ),
@@ -233,19 +233,19 @@ class _SalesViewState extends State<SalesView> {
                                                     vertical: 0.2.h,
                                                   ),
                                                   decoration: BoxDecoration(
-                                                    color: sale['Aktif'] == 1
+                                                    color: (sale['aktif'] ?? sale['Aktif'] ?? 1) == 1
                                                         ? AppTheme.accentColor.withValues(alpha: 0.1)
                                                         : AppTheme.errorColor.withValues(alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(6),
                                                   ),
                                                   child: Text(
-                                                    sale['Aktif'] == 1
+                                                    (sale['aktif'] ?? sale['Aktif'] ?? 1) == 1
                                                         ? 'customers.active'.tr()
                                                         : 'customers.inactive'.tr(),
                                                     style: theme.textTheme.bodyMedium?.copyWith(
                                                       fontWeight: FontWeight.w600,
-                                                      color: sale['Aktif'] == 1
+                                                      color: (sale['aktif'] ?? sale['Aktif'] ?? 1) == 1
                                                           ? AppTheme.accentColor
                                                           : AppTheme.errorColor,
                                                     ),
