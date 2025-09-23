@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart';
 import 'package:pos_app/models/order_model.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 
 class PendingPage extends StatefulWidget {
@@ -25,7 +26,8 @@ class _PendingPageState extends State<PendingPage> {
   Future<void> _loadPendingData() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
     // PendingSales tablosunu oluştur
     await db.execute('''
@@ -166,7 +168,8 @@ class _PendingPageState extends State<PendingPage> {
               future: () async {
                 final dbPath = await getDatabasesPath();
                 final path = join(dbPath, 'pos_database.db');
-                final db = await openDatabase(path);
+                DatabaseHelper dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
                 await db.execute('''
   CREATE TABLE IF NOT EXISTS PendingRefunds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

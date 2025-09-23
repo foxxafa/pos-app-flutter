@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart';
 import 'package:pos_app/models/customer_model.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 
 class CustomerController {
   final String _baseUrl = 'https://test.rowhub.net/index.php';
@@ -17,10 +18,8 @@ Future<List<CustomerModel>?> getNewCustomer(DateTime date) async {
 
 
   // 2. Veritabanını aç veya oluştur
-  Database db = await openDatabase(
-    path,
-    version: 1,
-  );
+  DatabaseHelper dbHelper = DatabaseHelper();
+  Database db = await dbHelper.database;
 
   // 4. Apikey değerini veritabanından çek
   List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');

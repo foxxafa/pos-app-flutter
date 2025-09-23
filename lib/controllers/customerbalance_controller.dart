@@ -1,6 +1,7 @@
 import 'package:path/path.dart';
 import 'package:pos_app/models/customer_balance.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -17,11 +18,8 @@ class CustomerBalanceController {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'pos_database.db');
 
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: _onCreate,
-    );
+    DatabaseHelper dbHelper = DatabaseHelper();
+    return await dbHelper.database;
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -46,7 +44,6 @@ class CustomerBalanceController {
 
 
 Future<String> getCustomerBalanceByName(String customerName) async {
-  print("DB CLOSE TIME 1");
   String databasesPath = await getDatabasesPath();
   String path = join(databasesPath, 'pos_database.db');
 
@@ -60,7 +57,7 @@ Future<String> getCustomerBalanceByName(String customerName) async {
     limit: 1,
   );
 
-  await db.close();
+  // Database açık kalacak - App Inspector için
 
   if (result.isNotEmpty) {
     return result[0]['bakiye']?.toString() ?? '0.00';
@@ -77,13 +74,13 @@ Future<String> getCustomerBalanceByName(String customerName) async {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
-Future<void> printAllCustomerBalances() async {print("DB CLOSE TIME 2");
+Future<void> printAllCustomerBalances() async {
   String databasesPath = await getDatabasesPath();
   String path = join(databasesPath, 'pos_database.db');
 
   final db = await openReadOnlyDatabase(path);
   final result = await db.query('CustomerBalance');
-  await db.close();
+  // Database açık kalacak - App Inspector için
 
   for (var row in result) {
     print('--- Müşteri ---');
@@ -97,7 +94,8 @@ Future<void> printAllCustomerBalances() async {print("DB CLOSE TIME 2");
   Future<void> insertCustomers(List<CustomerBalanceModel> customers) async {
       String databasesPath = await getDatabasesPath();
   String path = join(databasesPath, 'pos_database.db');
-  final dbClient = await openDatabase(path);
+  DatabaseHelper dbHelper = DatabaseHelper();
+  final dbClient = await dbHelper.database;
     final batch = dbClient.batch();
 
     for (var customer in customers) {
@@ -125,7 +123,8 @@ Future<void> printAllCustomerBalances() async {print("DB CLOSE TIME 2");
   Future<void> clearAll() async {
   final databasesPath = await getDatabasesPath();
   final path = join(databasesPath, 'pos_database.db');
-  final db = await openDatabase(path);
+  DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
   await db.delete('CustomerBalance');
   print('CustomerBalance tablosu temizlendi.');
@@ -138,10 +137,8 @@ Future<void> fetchAndStoreCustomers() async {
   String path = join(databasesPath, 'pos_database.db');
 
   // Veritabanını aç
-  Database db = await openDatabase(
-    path,
-    version: 1,
-  );
+  DatabaseHelper dbHelper = DatabaseHelper();
+  Database db = await dbHelper.database;
 
   // Apikey'i çek
   List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
@@ -180,7 +177,8 @@ Future<CustomerBalanceModel?> getCustomerByUnvan(String unvan) async {
   final dbPath = await getDatabasesPath();
   final path = join(dbPath, 'pos_database.db');
 
-  final dbClient = await openDatabase(path);
+  DatabaseHelper dbHelper = DatabaseHelper();
+  final dbClient = await dbHelper.database;
 
   final List<Map<String, dynamic>> maps = await dbClient.query(
     'CustomerBalance',

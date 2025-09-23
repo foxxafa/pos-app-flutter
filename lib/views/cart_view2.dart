@@ -6,16 +6,17 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
+import 'package:pos_app/controllers/order_controller.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:pos_app/models/order_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
 import 'package:pos_app/providers/orderinfo_provider.dart';
+import 'package:pos_app/providers/user_provider.dart';
 import 'package:pos_app/views/customer_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
+import 'package:pos_app/core/local/database_helper.dart';
 
 class CartView2 extends StatefulWidget {
   const CartView2({super.key});
@@ -41,10 +42,6 @@ class _CartView2State extends State<CartView2> {
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context);
     final cartItems = cartProvider.items.values.toList();
-    final orderInfoProvider = Provider.of<OrderInfoProvider>(
-      context,
-      listen: false,
-    );
 
     final unitCount = cartItems
         .where((item) => item.birimTipi == 'Unit')
@@ -778,34 +775,8 @@ class _CartView2State extends State<CartView2> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () async {
-                          var databasesPath = await getDatabasesPath();
-                          String path = p.join(
-                            databasesPath,
-                            'pos_database.db',
-                          );
-
-                          final db = await openDatabase(
-                            path,
-                            version: 1,
-                            onCreate: (db, version) async {
-                              await db.execute('''
-      CREATE TABLE IF NOT EXISTS PendingSales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        fis TEXT,
-        satirlar TEXT
-      )
-    ''');
-                            },
-                            onOpen: (db) async {
-                              await db.execute('''
-      CREATE TABLE IF NOT EXISTS PendingSales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        fis TEXT,
-        satirlar TEXT
-      )
-    ''');
-                            },
-                          );
+                          DatabaseHelper dbHelper = DatabaseHelper();
+                          final db = await dbHelper.database;
 
                           final customerProvider =
                               Provider.of<SalesCustomerProvider>(
@@ -841,6 +812,8 @@ class _CartView2State extends State<CartView2> {
                             return;
                           }
 
+                          final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+
                           final fisModel = FisModel(
                             fisNo: orderInfoProvider.orderNo,
                             fistarihi: orderInfoProvider.paymentDate,
@@ -852,10 +825,9 @@ class _CartView2State extends State<CartView2> {
                             status: "1",
                             deliveryDate: orderInfoProvider.deliveryDate,
                             comment: orderInfoProvider.comment,
-                            // fisNo ve fistarihi OrderController içinde atanacak
                           );
 
-                          // final orderController = OrderController();
+                          final orderController = OrderController();
 
                           try {
                             // İnternet var mı kontrol et
@@ -927,68 +899,67 @@ class _CartView2State extends State<CartView2> {
                                 ),
                                 (route) => false,
                               );
-                            } 
-                            // else {
-                            //   // 🌐 İnternet varsa doğrudan gönder
-                            //   final apikey =
-                            //       Provider.of<UserProvider>(
-                            //         context,
-                            //         listen: false,
-                            //       ).apikey;
+                            } else {
+                              // 🌐 İnternet varsa doğrudan gönder
+                              final apikey =
+                                  Provider.of<UserProvider>(
+                                    context,
+                                    listen: false,
+                                  ).apikey;
 
-                            //   await orderController.satisGonder(
-                            //     fisModel: fisModel,
-                            //     satirlar: cartProvider.items.values.toList(),
-                            //     bearerToken: apikey,
-                            //   );
+                              await orderController.satisGonder(
+                                fisModel: fisModel,
+                                satirlar: cartProvider.items.values.toList(),
+                                bearerToken: apikey,
+                              );
 
-                            //   ScaffoldMessenger.of(context).showSnackBar(
-                            //     SnackBar(
-                            //       content: SizedBox(
-                            //         height:
-                            //             10.h, // istediğin yüksekliği buraya ver
-                            //         child: Center(
-                            //           child: Text(
-                            //             'Order placed successfully!',
-                            //             style: TextStyle(
-                            //               fontSize:
-                            //                   20.sp, // Burada metin büyüklüğünü ayarlayabilirsin
-                            //               fontWeight: FontWeight.bold,
-                            //             ),
-                            //           ),
-                            //         ),
-                            //       ),
-                            //     ),
-                            //   );
-                            //   final cartString = cartProvider.items.values
-                            //       .map((item) => item.toFormattedString())
-                            //       .join('\n----------------------\n');
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: SizedBox(
+                                    height:
+                                        10.h, // istediğin yüksekliği buraya ver
+                                    child: Center(
+                                      child: Text(
+                                        'Order placed successfully!',
+                                        style: TextStyle(
+                                          fontSize:
+                                              20.sp, // Burada metin büyüklüğünü ayarlayabilirsin
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                              final cartString = cartProvider.items.values
+                                  .map((item) => item.toFormattedString())
+                                  .join('\n----------------------\n');
 
-                            //   await RecentActivityController.addActivity(
-                            //     "Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString",
-                            //   );
+                              await RecentActivityController.addActivity(
+                                "Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString",
+                              );
 
-                            //   cartProvider.items.clear();
-                            //   cartProvider.clearCart();
-                            //   final selectedCustomer =
-                            //       Provider.of<SalesCustomerProvider>(
-                            //         context,
-                            //         listen: false,
-                            //       ).selectedCustomer;
-                            //   final controller = CustomerBalanceController();
-                            //   final customer = await controller
-                            //       .getCustomerByUnvan(
-                            //         selectedCustomer!.kod ?? "TURAN",
-                            //       );
-                            //   String bakiye = customer?.bakiye ?? "0.0";
-                            //   print("bakişyeee: $bakiye");
-                            //   Navigator.of(context).pushAndRemoveUntil(
-                            //     MaterialPageRoute(
-                            //       builder: (_) => CustomerView(bakiye: bakiye),
-                            //     ),
-                            //     (route) => false,
-                            //   );
-                            // }
+                              cartProvider.items.clear();
+                              cartProvider.clearCart();
+                              final selectedCustomer =
+                                  Provider.of<SalesCustomerProvider>(
+                                    context,
+                                    listen: false,
+                                  ).selectedCustomer;
+                              final controller = CustomerBalanceController();
+                              final customer = await controller
+                                  .getCustomerByUnvan(
+                                    selectedCustomer!.kod ?? "TURAN",
+                                  );
+                              String bakiye = customer?.bakiye ?? "0.0";
+                              print("bakişyeee: $bakiye");
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => CustomerView(bakiye: bakiye),
+                                ),
+                                (route) => false,
+                              );
+                            }
                           } catch (e) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Order failed: $e')),

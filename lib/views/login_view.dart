@@ -8,6 +8,7 @@ import 'package:pos_app/models/login_model.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:path/path.dart' as p;
 
 class LoginView extends StatefulWidget {
@@ -47,7 +48,8 @@ Future<Map<String, dynamic>?> getLastLogin() async {
       return null;
     }
 
-    Database db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+  Database db = await dbHelper.database;
 
     // Önce tablo var mı kontrol et
     final checkTable = await db.rawQuery(
@@ -55,7 +57,7 @@ Future<Map<String, dynamic>?> getLastLogin() async {
     );
 
     if (checkTable.isEmpty) {
-      await db.close();
+      // Database açık kalacak - App Inspector için
       return null; // tablo yoksa
     }
 
@@ -64,7 +66,7 @@ Future<Map<String, dynamic>?> getLastLogin() async {
       'SELECT * FROM Login ORDER BY id DESC LIMIT 1'
     );
 
-    await db.close();
+    // Database açık kalacak - App Inspector için
 
     if (result.isNotEmpty) {
       return result.first;

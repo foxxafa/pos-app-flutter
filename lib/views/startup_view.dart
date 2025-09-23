@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:pos_app/controllers/database_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/providers/user_provider.dart';
 import 'package:pos_app/views/menu_view.dart';
 import 'package:provider/provider.dart';
@@ -26,22 +25,14 @@ class _StartupViewState extends State<StartupView> {
     // bool hasInternet = connectivityResult != ConnectivityResult.none; // Kullanılmıyor
 
     // 2. Veritabanı kontrolü
-    var databasesPath = await getDatabasesPath();
-    String path = p.join(databasesPath, 'pos_database.db');
-    
-    DatabaseHelper dbhelper=DatabaseHelper();
-    Database db = await openDatabase(path, version: 1,
-          onCreate: (Database db, int version) async {
-    await dbhelper.createTablesIfNotExists(db);
-  },
-  onOpen: (Database db) async {
-    await dbhelper.createTablesIfNotExists(db); // onOpen'da da çağırabilirsin
-  },
+    DatabaseHelper dbhelper = DatabaseHelper();
 
-);
+    // Database'i singleton olarak al (Tables already created automatically in _onCreate)
+    Database db = await dbhelper.database;
 
-    List<Map> list = await db.rawQuery('SELECT * FROM Login');print("DB CLOSE TIME 10");
-    await db.close();
+    List<Map> list = await db.rawQuery('SELECT * FROM Login');
+    // DB'yi kapatmıyoruz - App Inspector için açık kalması gerekiyor
+    // await db.close();
 
     // 3. Bugünün day değeri
     int today = DateTime.now().day;

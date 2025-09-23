@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:sizer/sizer.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:path/path.dart' as p;
 
 class CartListPage extends StatefulWidget {
@@ -28,7 +29,8 @@ class _CartListPageState extends State<CartListPage> {
     // Get customer data from database first
     final databasesPath = await getDatabasesPath();
     final path = p.join(databasesPath, 'pos_database.db');
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
     final customerRows = await db.query('Customer');
     final allItems = await db.query('cart_items'); // Get cart items directly
 
@@ -71,7 +73,7 @@ class _CartListPageState extends State<CartListPage> {
       grouped[displayName]!.add(item);
     }
 
-    await db.close();
+    // Database açık kalacak - App Inspector için
 
     setState(() {
       groupedCarts = grouped;

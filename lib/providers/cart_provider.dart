@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pos_app/controllers/cartdatabase_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 
 class CartItem {
   final String stokKodu;
@@ -197,7 +197,7 @@ class CartProvider extends ChangeNotifier {
     // Debug: Print what we're saving
     print("DEBUG CartProvider saving: customerName = '$actualCustomerName'");
 
-    final dbHelper = CartDatabaseHelper();
+    final dbHelper = DatabaseHelper();
     await dbHelper.clearCartItemsByCustomer(actualCustomerName);
     for (final item in _items.values) {
       await dbHelper.insertCartItem(item, actualCustomerName);
@@ -205,7 +205,7 @@ class CartProvider extends ChangeNotifier {
   }
 
   Future<void> loadCartFromDatabase(String customerName) async {
-    final dbHelper = CartDatabaseHelper();
+    final dbHelper = DatabaseHelper();
     final cartData = await dbHelper.getCartItemsByCustomer(customerName);
 
     _items.clear();

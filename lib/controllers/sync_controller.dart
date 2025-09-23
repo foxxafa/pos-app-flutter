@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pos_app/controllers/customer_controller.dart';
@@ -14,7 +15,6 @@ import 'package:pos_app/models/order_model.dart';
 import 'package:pos_app/models/product_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class SyncController {
@@ -28,11 +28,9 @@ class SyncController {
     syncPendingRefunds();
     print("1");
     //open database
-    var databasesPath = await getDatabasesPath();
-    String path = p.join(databasesPath, 'pos_database.db');
-
     print("2");
-    Database db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    Database db = await dbHelper.database;
       await db.delete('Customer');
 
     print("3");
@@ -92,8 +90,7 @@ class SyncController {
     //update sonu son update saati güncelleme
     String nowString = DateFormat('dd.MM.yyyy HH:mm:ss').format(DateTime.now());
     await db.insert('updateDates', {'update_time': nowString});
-    print("DB CLOSE TIME 4");
-    await db.close();
+    // Database açık kalacak - App Inspector için
   }
 
   //UPDATE SYNC
@@ -102,9 +99,8 @@ class SyncController {
     balancecontroller.fetchAndStoreCustomers();
     syncPendingRefunds();
     //update sonu son update saati güncelleme
-    var databasesPath = await getDatabasesPath();
-    String path = p.join(databasesPath, 'pos_database.db');
-    Database db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    Database db = await dbHelper.database;
 
     var result = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='updateDates';",
@@ -134,8 +130,7 @@ class SyncController {
       print('Son güncelleme zamanı yok, updateSync() çalıştırılmadı.');
     }
 
-    print("DB CLOSE TIME 5");
-    await db.close();
+    // Database açık kalacak - App Inspector için
   }
 
   //SYNC CUSTOMERS
@@ -147,10 +142,8 @@ class SyncController {
 
     final customers = await controller.getNewCustomer(lastupdatedate);
     //print("all customers/()(() $customers");
-    var databasesPath = await getDatabasesPath();
-    String path = p.join(databasesPath, 'pos_database.db');
-
-    Database db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    Database db = await dbHelper.database;
 
     var result = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='Customer';",
@@ -192,9 +185,8 @@ class SyncController {
   }
 
   Future<void> SyncAllRefunds() async {
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
     // 1. API'den sadece refund yapılabilecek carikod'ları al
     final apiResponse = await http.get(
@@ -279,10 +271,8 @@ class SyncController {
     print("prod finished: $products");
     downloadImages(products); // products zaten null olabilir, sorun değil
 
-    var databasesPath = await getDatabasesPath();
-    String path = p.join(databasesPath, 'pos_database.db');
-
-    Database db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    Database db = await dbHelper.database;
 
     var result = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='Product';",
@@ -338,10 +328,8 @@ class SyncController {
   Future<void> syncPendingSales() async {
     String savedApiKey = "";
 
-    final dbPath = await getDatabasesPath();
-    final path = p.join(dbPath, 'pos_database.db');
-
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
     List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
 

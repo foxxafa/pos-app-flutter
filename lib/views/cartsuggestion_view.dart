@@ -3,14 +3,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/views/cart_view2.dart';
 import 'package:provider/provider.dart';
-// import 'package:pos_app/controllers/database_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:sqflite/sqflite.dart';
 import '../models/product_model.dart';
 import '../providers/cartcustomer_provider.dart';
 import 'dart:io';
-import 'package:path/path.dart' as p;
 
 class CartsuggestionView extends StatefulWidget {
   final String musteriId;
@@ -86,9 +84,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   Future<void> _loadProducts(String musteriId) async {
     print('⏳ Loading products for musteriId = $musteriId');
 
-    final databasesPath = await getDatabasesPath();
-    final path = p.join(databasesPath, 'pos_database.db');
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
     final refundRows = await db.query('Refunds');
     print('📦 Refunds found: ${refundRows.length}');

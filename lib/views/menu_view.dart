@@ -9,6 +9,7 @@ import 'package:pos_app/views/sales_view.dart';
 import 'package:pos_app/views/sync_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 
 class MenuView extends StatefulWidget {
   const MenuView({Key? key}) : super(key: key);
@@ -46,9 +47,10 @@ class _MenuViewState extends State<MenuView> {
       String path = p.join(databasesPath, 'pos_database.db');
 
       // Open database and delete table
-      Database db = await openDatabase(path);
+      DatabaseHelper dbHelper = DatabaseHelper();
+  Database db = await dbHelper.database;
       await db.delete('Login');
-      await db.close();
+      // Database açık kalacak - App Inspector için
 
       // Navigate to login screen
       if (mounted) {

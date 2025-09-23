@@ -3,45 +3,15 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:pos_app/models/refundlist_model.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:path/path.dart' as p;
 
 class RefundListController {
   final String baseUrl = 'https://test.rowhub.net/index.php?r=apimobil/musteriurunleri';
 
   Future<Database> _getDatabase() async {
-    final path = p.join(await getDatabasesPath(), 'pos_database.db');
-    return openDatabase(
-      path,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS PendingRefunds (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            fisNo TEXT,
-            musteriId TEXT,
-            fisTarihi TEXT,
-            toplamtutar REAL,
-            satirlar TEXT
-          );
-        ''');
-        await db.execute('''
-          CREATE TABLE IF NOT EXISTS Refunds (
-            fisNo TEXT,
-            musteriId TEXT,
-            fisTarihi TEXT,
-            unvan TEXT,
-            stokKodu TEXT,
-            urunAdi TEXT,
-            urunBarcode TEXT,
-            miktar REAL,
-            vat int,
-            iskonto int,
-            birim TEXT,
-            birimFiyat REAL
-          );
-        ''');
-      },
-      version: 1,
-    );
+    DatabaseHelper dbHelper = DatabaseHelper();
+    return await dbHelper.database;
   }
 
   Future<List<Refund>> fetchRefunds(String cariKod) async {
@@ -103,7 +73,8 @@ class RefundListController {
 
 Future<void> insertPendingRefund(Map<String, dynamic> pendingData) async {
   final path = p.join(await getDatabasesPath(), 'pos_database.db');
-  final db = await openDatabase(path, version: 1); // await unutma!
+  DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database; // await unutma!
   await db.insert('PendingRefunds', pendingData);
 }
 

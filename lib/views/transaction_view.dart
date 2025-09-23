@@ -14,6 +14,7 @@ import 'package:sizer/sizer.dart';
 import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:path/path.dart' as p;
 import 'package:pos_app/core/theme/app_theme.dart';
 
@@ -76,7 +77,8 @@ print("fisnooooooooo $_documentNo");
 
     if (connectivity[0] == ConnectivityResult.none) {
       final path = p.join(await getDatabasesPath(), 'pos_database.db');
-      final db = await openDatabase(path, version: 1);
+      DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
       var result = await db.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='tahsilatlar';");
       if (result.isEmpty) {
         await db.execute('''
@@ -100,8 +102,7 @@ print("fisnooooooooo $_documentNo");
   });
 }
 
-print("DB CLOSE TIME 12");
-      await db.close();
+      // Database açık kalacak - App Inspector için
 
       await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
 

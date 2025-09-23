@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sizer/sizer.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 
 class RefundList2View extends StatefulWidget {
   @override
@@ -82,7 +83,8 @@ Map<String, List<Refund>> _groupRefundsByFisNo(List<Refund> items) {
   Future<void> loadProducts() async {
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
 
     final result = await db.query('Product', where: 'aktif = ?', whereArgs: [1]);
     setState(() {

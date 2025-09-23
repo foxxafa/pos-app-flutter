@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
-import 'package:pos_app/controllers/database_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/models/customer_model.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/providers/cart_provider_refund.dart';

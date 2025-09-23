@@ -10,7 +10,8 @@ import 'package:pos_app/models/cheque_model.dart';
 import 'package:pos_app/models/transaction_model.dart';
 import 'package:pos_app/views/menu_view.dart';
 import 'package:sizer/sizer.dart';
-import 'package:sqflite/sqflite.dart'; // Sizer import
+import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart'; // Sizer import
 
 class SyncView extends StatefulWidget {
   @override
@@ -282,7 +283,8 @@ class _SyncViewState extends State<SyncView> {
                         await getDatabasesPath(),
                         'pos_database.db',
                       );
-                      final db = await openDatabase(path);
+                      DatabaseHelper dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
 
                       final List<Map<String, dynamic>> records = await db.query(
                         'tahsilatlar',
@@ -346,8 +348,7 @@ tahsilat,
                       } else {
                         _isLoading ? null : _handleUpdateSync();
                       }
-print("DB CLOSE TIME 11");
-                      await db.close();
+                      // Database açık kalacak - App Inspector için
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

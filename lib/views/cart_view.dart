@@ -5,7 +5,7 @@ import 'package:pos_app/providers/cart_provider.dart';
 import 'package:pos_app/views/cart_view2.dart';
 import 'package:pos_app/views/cartsuggestion_view.dart';
 import 'package:provider/provider.dart';
-import 'package:pos_app/controllers/database_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 import '../models/product_model.dart';
 import '../providers/cartcustomer_provider.dart';

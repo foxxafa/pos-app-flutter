@@ -11,6 +11,7 @@ import 'package:sizer/sizer.dart';
 import 'package:path/path.dart' as p;
 import 'package:pos_app/providers/cart_provider.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 
 class InvoiceActivityView extends StatefulWidget {
   const InvoiceActivityView({Key? key}) : super(key: key);
@@ -161,7 +162,8 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
 
     final dbPath = await getDatabasesPath();
     final path = p.join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
     final rows = await db.query('PendingSales');
     Map<String, dynamic> fis = {};

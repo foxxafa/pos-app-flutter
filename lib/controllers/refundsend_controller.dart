@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:pos_app/models/refundsend_model.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:path/path.dart';
 
 class RefundSendController {
@@ -12,7 +13,8 @@ class RefundSendController {
     if (_db != null) return _db!;
     final databasesPath = await getDatabasesPath();
     final path = join(databasesPath, 'pos_database.db');
-    _db = await openDatabase(path, version: 1);
+    DatabaseHelper dbHelper = DatabaseHelper();
+    _db = await dbHelper.database;
     await _db!.execute('''
       CREATE TABLE IF NOT EXISTS refund_queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

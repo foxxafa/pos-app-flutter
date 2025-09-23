@@ -49,7 +49,6 @@ Future<CustomerBalanceModel?> loadCustomerBalanceByName(String customerName) asy
     whereArgs: [customerName],
     limit: 1,
   );
-print("DB CLOSE TIME 6");
   await db.close();
 
   if (result.isNotEmpty) {

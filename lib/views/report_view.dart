@@ -52,7 +52,6 @@ class _ReportViewState extends State<ReportView> {
 
     final db = await openReadOnlyDatabase(path);
     final result = await db.query('CustomerBalance');
-    print("DB CLOSE TIME 9");
     await db.close();
 
     final customers = await compute(parseCustomerBalanceList, result);

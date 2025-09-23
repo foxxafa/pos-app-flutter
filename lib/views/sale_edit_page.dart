@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pos_app/controllers/recentactivity_controller.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:path/path.dart';
 import 'package:sizer/sizer.dart';
 
@@ -40,7 +41,8 @@ class _SaleEditPageState extends State<SaleEditPage> {
   Future<void> _loadData() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
 
     final rows = await db.query('PendingSales');
     for (var row in rows) {
@@ -100,7 +102,8 @@ class _SaleEditPageState extends State<SaleEditPage> {
   Future<void> _saveToDb() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'pos_database.db');
-    final db = await openDatabase(path);
+    DatabaseHelper dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
 
     fis['Toplamtutar'] = calculateTotal();
 

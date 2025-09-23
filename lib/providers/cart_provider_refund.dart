@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pos_app/controllers/cartdatabaserefund_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/providers/cart_provider.dart';
 
 
@@ -114,18 +114,18 @@ void notifyListeners() {
 }
 
 void _saveCartToDatabase() async {
-  final dbHelper = CartDatabaseRefundHelper();
-  await dbHelper.clearCartItemsByCustomer(_customerName); // önce temizle
+  final dbHelper = DatabaseHelper();
+  await dbHelper.clearRefundCartItemsByCustomer(_customerName); // önce temizle
   for (final item in _items.values) {
-    await dbHelper.insertCartItem(item, _customerName);
+    await dbHelper.insertRefundCartItem(item, _customerName);
     print("a1a2a3");
     dbHelper.printAllCartItems(); print("a1a2a3");
   }
 }
 
 Future<void> loadCartRefundFromDatabase(String customerName) async {
-  final dbHelper = CartDatabaseRefundHelper();
-  final cartData = await dbHelper.getCartItemsByCustomer(customerName);
+  final dbHelper = DatabaseHelper();
+  final cartData = await dbHelper.getRefundCartItemsByCustomer(customerName);
 
   _items.clear(); // önce temizle
   _customerName = customerName;

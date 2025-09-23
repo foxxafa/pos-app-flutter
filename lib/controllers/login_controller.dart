@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pos_app/models/login_model.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
+import 'package:pos_app/core/local/database_helper.dart';
 
 class LoginController {
   final String _baseUrl = 'https://test.rowhub.net/index.php?r=apimobil/login';
@@ -45,15 +45,9 @@ class LoginController {
   }
 
   loginDatabase(String username, String password,String apikey,int day)async{
-    // Get a location using getDatabasesPath
-      var databasesPath = await getDatabasesPath();
-      String path = p.join(databasesPath, 'pos_database.db');
-      
-      // open the database
-Database db = await openDatabase(path, version: 1,
-          onCreate: (db, version) async {
-  await db.execute('CREATE TABLE Login (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL, password TEXT NOT NULL, apikey TEXT NOT NULL, day INTEGER NOT NULL)');
-});
+    // Use DatabaseHelper instead of openDatabase
+    DatabaseHelper dbHelper = DatabaseHelper();
+    Database db = await dbHelper.database;
 
  // Silme ve ekleme işlemi
   await db.transaction((txn) async {
@@ -70,8 +64,7 @@ Database db = await openDatabase(path, version: 1,
 
 List<Map> list = await db.rawQuery('SELECT * FROM Login');
 print("selected $list");
-print("DB CLOSE TIME 3");
 
-      await db.close();
+      // Database açık kalacak - App Inspector için
    }
 }

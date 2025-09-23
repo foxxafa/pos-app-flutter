@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:pos_app/controllers/database_helper.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/product_model.dart';
