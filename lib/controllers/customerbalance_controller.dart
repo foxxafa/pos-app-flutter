@@ -127,13 +127,15 @@ Future<void> fetchAndStoreCustomers() async {
   );
 
   if (response.statusCode == 200) {
-    print("respsdfo ${response.body}");
     final List<dynamic> data = json.decode(response.body);
     final customers = data
         .map((json) => CustomerBalanceModel.fromJson(json))
         .toList();
+
+    print('👥 ${customers.length} müşteri alındı');
     await clearAll();
     await insertCustomers(customers);
+    print('✅ Müşteri veritabanı güncellendi');
   } else {
     throw Exception('Veri alınamadı: ${response.statusCode}');
   }

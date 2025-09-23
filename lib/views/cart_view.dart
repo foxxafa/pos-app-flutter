@@ -912,35 +912,11 @@ _barcodeFocusNode.requestFocus();
                             // final iskonto = _iskontoMap[key] ?? 0;
                             final future = _imageFutures[product.stokKodu];
 
-                            return Card(
-                              elevation: 2,
-                              margin: EdgeInsets.symmetric(
-                                horizontal: 0.5.w,
-                                vertical: 0.5.h,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.12),
-                                  width: 1,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Theme.of(context).colorScheme.surface,
-                                        Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
-                                      ],
-                                    ),
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.all(2.w),
-                                    child: Column(
+                            return Column(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(2.w),
+                                  child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisAlignment: MainAxisAlignment.start,
                                       children: [
@@ -1185,686 +1161,693 @@ _barcodeFocusNode.requestFocus();
                                                 //   "Barcodes: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}",
                                                 //   style: TextStyle(fontSize: 11.sp),
                                                 // ),
+                                                // İki satır + Miktar kontrolleri sütunu (cart_view2 benzeri)
                                                 Row(
                                                   children: [
-                                                    // Dropdown - buraya taşındı
-                                                    Container(
-                                                      padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
-                                                      decoration: BoxDecoration(
-                                                        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                        borderRadius: BorderRadius.circular(8),
-                                                      ),
-                                                      child: DropdownButton<String>(
-                                                        value: getBirimTipiFromProduct(product),
-                                                        isDense: true,
-                                                        underline: Container(),
-                                                        style: TextStyle(
-                                                          fontSize: 14.sp,
-                                                          color: Theme.of(context).colorScheme.primary,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
-                                                      items: [
-                                                        if (product.birimKey1 != 0)
-                                                          DropdownMenuItem(
-                                                            value: 'Unit',
-                                                            child: Text('cart.unit'.tr()),
-                                                          ),
-                                                        if (product.birimKey2 != "0")
-                                                          DropdownMenuItem(
-                                                            value: 'Box',
-                                                            child: Text('cart.box'.tr()),
-                                                          ),
-                                                      ],
-                                                      onChanged: (val) {
-                                                        if ((val == 'Unit' && product.birimKey1 != 0) ||
-                                                            (val == 'Box' && product.birimKey2 != "0")) {
-                                                          final bool newValue = (val == 'Box');
-                                                          setState(() {
-                                                            _isBoxMap[key] = newValue;
-                                                          });
-
-                                                          final provider = Provider.of<CartProvider>(
-                                                            context,
-                                                            listen: false,
-                                                          );
-                                                          final productFiyat = newValue
-                                                              ? double.parse(product.kutuFiyati.toString())
-                                                              : double.parse(product.adetFiyati.toString());
-
-                                                          final miktar = _quantityMap[key] ?? 0;
-
-                                                          if (miktar > 0) {
-                                                            provider.addOrUpdateItem(
-                                                              urunAdi: product.urunAdi,
-                                                              stokKodu: key,
-                                                              birimFiyat: productFiyat,
-                                                              adetFiyati: product.adetFiyati,
-                                                              kutuFiyati: product.kutuFiyati,
-                                                              vat: product.vat,
-                                                              urunBarcode: product.barcode1,
-                                                              miktar: 0,
-                                                              iskonto: _iskontoMap[key] ?? 0,
-                                                              birimTipi: val!,
-                                                            );
-                                                          }
-                                                        }
-                                                      },
-                                                    ),
-                                                    ),
-
-                                                    SizedBox(width: 2.w),
-
+                                                    // Sol taraf: İki satırlık alan
                                                     Expanded(
-                                                      flex: 2,
-                                                      child: TextField(
-                                                        controller:
-                                                            _priceController,
-                                                        keyboardType:
-                                                            TextInputType.numberWithOptions(
-                                                              decimal: true,
-                                                            ),
-                                                        style: TextStyle(
-                                                          fontSize: 16.sp,
-                                                          fontWeight: FontWeight.w500,
-                                                        ),
-                                                        decoration: InputDecoration(
-                                                          enabled: quantity > 0,
-                                                          filled: true,
-                                                          fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                          hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
-                                                          hintStyle: TextStyle(
-                                                            fontSize: 16.sp,
-                                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                                                            fontWeight: FontWeight.w500,
-                                                          ),
-                                                          border: OutlineInputBorder(
-                                                            borderRadius: BorderRadius.circular(8),
-                                                            borderSide: BorderSide.none,
-                                                          ),
-                                                          enabledBorder: OutlineInputBorder(
-                                                            borderRadius: BorderRadius.circular(8),
-                                                            borderSide: BorderSide.none,
-                                                          ),
-                                                          focusedBorder: OutlineInputBorder(
-                                                            borderRadius: BorderRadius.circular(8),
-                                                            borderSide: BorderSide.none,
-                                                          ),
-                                                          isDense: true,
-                                                          contentPadding:
-                                                              const EdgeInsets.symmetric(
-                                                                vertical: 8,
-                                                                horizontal: 8,
-                                                              ),
-                                                        ),
-                                                        onChanged: (value) {
-                                                          final parsed =
-                                                              double.tryParse(
-                                                                value,
-                                                              );
-                                                          if (parsed != null) {
-                                                            final customerProvider =
-                                                                Provider.of<
-                                                                  SalesCustomerProvider
-                                                                >(
-                                                                  context,
-                                                                  listen: false,
-                                                                );
-                                                            provider.customerName =
-                                                                customerProvider
-                                                                    .selectedCustomer!
-                                                                    .kod!;
-
-                                                            // Normal birim fiyatını al
-                                                            final normalPrice = selectedType == 'Unit'
-                                                                ? double.tryParse(product.adetFiyati.toString()) ?? 0
-                                                                : double.tryParse(product.kutuFiyati.toString()) ?? 0;
-
-                                                            // İndirim miktarını hesapla (normal fiyat - girilen fiyat)
-                                                            final calculatedDiscount = normalPrice - parsed;
-                                                            final discountPercentage = normalPrice > 0
-                                                                ? ((calculatedDiscount / normalPrice) * 100).round()
-                                                                : 0;
-
-                                                            // İndirim controller'ını güncelle
-                                                            if (discountPercentage >= 0) {
-                                                              _iskontoMap[key] = discountPercentage;
-                                                              _discountController.text = discountPercentage == 0 ? '' : discountPercentage.toString();
-                                                            }
-
-                                                            if ((provider.getBirimTipi(
-                                                                          product
-                                                                              .stokKodu,
-                                                                        ) ==
-                                                                        'Unit' &&
-                                                                    product.birimKey1 !=
-                                                                        0) ||
-                                                                (provider.getBirimTipi(
-                                                                          product
-                                                                              .stokKodu,
-                                                                        ) ==
-                                                                        'Box' &&
-                                                                    product.birimKey2 !=
-                                                                        "0")) {
-                                                              provider.addOrUpdateItem(
-                                                                urunAdi:
-                                                                    product
-                                                                        .urunAdi,
-                                                                adetFiyati:
-                                                                    product
-                                                                        .adetFiyati,
-                                                                kutuFiyati:
-                                                                    product
-                                                                        .kutuFiyati,
-                                                                stokKodu: key,
-                                                                vat:
-                                                                    product.vat,
-                                                                birimFiyat:
-                                                                    parsed,
-                                                                urunBarcode:
-                                                                    product
-                                                                        .barcode1,
-                                                                miktar: 0,
-                                                                iskonto:
-                                                                    discountPercentage,
-                                                                birimTipi: provider
-                                                                    .getBirimTipi(
-                                                                      product
-                                                                          .stokKodu,
-                                                                    ),
-                                                              );
-                                                            } else {
-                                                              ScaffoldMessenger.of(
-                                                                context,
-                                                              ).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text(
-                                                                    '⚠️ ${'cart.unit_not_available'.tr()}',
-                                                                  ),
-                                                                  behavior:
-                                                                      SnackBarBehavior
-                                                                          .floating,
-                                                                  backgroundColor:
-                                                                      Colors
-                                                                          .orange
-                                                                          .shade700,
-                                                                  duration:
-                                                                      Duration(
-                                                                        seconds:
-                                                                            3,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            }
-                                                          }
-
-                                                          setState(() {}); // Result alanını güncelle
-                                                        },
-                                                        onEditingComplete: () {
-                                                          _formatPriceField(_priceController);
-                                                        },
-                                                        onSubmitted: (value) {
-                                                          _formatPriceField(_priceController);
-                                                        },
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 2.w),
-                                                    // İndirim alanı buraya taşındı
-                                                    Expanded(
-                                                      flex: 2,
-                                                      child: Row(
-                                                        mainAxisSize: MainAxisSize.min,
+                                                      child: Column(
                                                         children: [
-                                                          Icon(
-                                                            Icons.local_offer,
-                                                            size: 18.sp,
-                                                            color: Theme.of(context).colorScheme.error,
+                                                          // İlk satır: Dropdown | Fiyat
+                                                          Row(
+                                                            children: [
+                                                              // Dropdown - buraya taşındı
+                                                              Container(
+                                                                padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
+                                                                decoration: BoxDecoration(
+                                                                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                                  borderRadius: BorderRadius.circular(8),
+                                                                ),
+                                                                child: DropdownButton<String>(
+                                                                  value: getBirimTipiFromProduct(product),
+                                                                  isDense: true,
+                                                                  underline: Container(),
+                                                                  style: TextStyle(
+                                                                    fontSize: 14.sp,
+                                                                    color: Theme.of(context).colorScheme.primary,
+                                                                    fontWeight: FontWeight.w600,
+                                                                  ),
+                                                                items: [
+                                                                  if (product.birimKey1 != 0)
+                                                                    DropdownMenuItem(
+                                                                      value: 'Unit',
+                                                                      child: Text('cart.unit'.tr()),
+                                                                    ),
+                                                                  if (product.birimKey2 != "0")
+                                                                    DropdownMenuItem(
+                                                                      value: 'Box',
+                                                                      child: Text('cart.box'.tr()),
+                                                                    ),
+                                                                ],
+                                                                onChanged: (val) {
+                                                                  if ((val == 'Unit' && product.birimKey1 != 0) ||
+                                                                      (val == 'Box' && product.birimKey2 != "0")) {
+                                                                    final bool newValue = (val == 'Box');
+                                                                    setState(() {
+                                                                      _isBoxMap[key] = newValue;
+                                                                    });
+
+                                                                    final provider = Provider.of<CartProvider>(
+                                                                      context,
+                                                                      listen: false,
+                                                                    );
+                                                                    final productFiyat = newValue
+                                                                        ? double.parse(product.kutuFiyati.toString())
+                                                                        : double.parse(product.adetFiyati.toString());
+
+                                                                    final miktar = _quantityMap[key] ?? 0;
+
+                                                                    if (miktar > 0) {
+                                                                      provider.addOrUpdateItem(
+                                                                        urunAdi: product.urunAdi,
+                                                                        stokKodu: key,
+                                                                        birimFiyat: productFiyat,
+                                                                        adetFiyati: product.adetFiyati,
+                                                                        kutuFiyati: product.kutuFiyati,
+                                                                        vat: product.vat,
+                                                                        urunBarcode: product.barcode1,
+                                                                        miktar: 0,
+                                                                        iskonto: _iskontoMap[key] ?? 0,
+                                                                        birimTipi: val!,
+                                                                      );
+                                                                    }
+                                                                  }
+                                                                },
+                                                              ),
+                                                              ),
+
+                                                              SizedBox(width: 2.w),
+
+                                                              Expanded(
+                                                                child: TextField(
+                                                                  controller:
+                                                                      _priceController,
+                                                                  keyboardType:
+                                                                      TextInputType.numberWithOptions(
+                                                                        decimal: true,
+                                                                      ),
+                                                                  style: TextStyle(
+                                                                    fontSize: 16.sp,
+                                                                    fontWeight: FontWeight.w500,
+                                                                  ),
+                                                                  decoration: InputDecoration(
+                                                                    enabled: quantity > 0,
+                                                                    filled: true,
+                                                                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                                    hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
+                                                                    hintStyle: TextStyle(
+                                                                      fontSize: 16.sp,
+                                                                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                                                                      fontWeight: FontWeight.w500,
+                                                                    ),
+                                                                    border: OutlineInputBorder(
+                                                                      borderRadius: BorderRadius.circular(8),
+                                                                      borderSide: BorderSide.none,
+                                                                    ),
+                                                                    enabledBorder: OutlineInputBorder(
+                                                                      borderRadius: BorderRadius.circular(8),
+                                                                      borderSide: BorderSide.none,
+                                                                    ),
+                                                                    focusedBorder: OutlineInputBorder(
+                                                                      borderRadius: BorderRadius.circular(8),
+                                                                      borderSide: BorderSide.none,
+                                                                    ),
+                                                                    isDense: true,
+                                                                    contentPadding:
+                                                                        const EdgeInsets.symmetric(
+                                                                          vertical: 8,
+                                                                          horizontal: 8,
+                                                                        ),
+                                                                  ),
+                                                                  onChanged: (value) {
+                                                                    final parsed =
+                                                                        double.tryParse(
+                                                                          value,
+                                                                        );
+                                                                    if (parsed != null) {
+                                                                      final customerProvider =
+                                                                          Provider.of<
+                                                                            SalesCustomerProvider
+                                                                          >(
+                                                                            context,
+                                                                            listen: false,
+                                                                          );
+                                                                      provider.customerName =
+                                                                          customerProvider
+                                                                              .selectedCustomer!
+                                                                              .kod!;
+
+                                                                      // Normal birim fiyatını al
+                                                                      final normalPrice = selectedType == 'Unit'
+                                                                          ? double.tryParse(product.adetFiyati.toString()) ?? 0
+                                                                          : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+
+                                                                      // İndirim miktarını hesapla (normal fiyat - girilen fiyat)
+                                                                      final calculatedDiscount = normalPrice - parsed;
+                                                                      final discountPercentage = normalPrice > 0
+                                                                          ? ((calculatedDiscount / normalPrice) * 100).round()
+                                                                          : 0;
+
+                                                                      // İndirim controller'ını güncelle
+                                                                      if (discountPercentage >= 0) {
+                                                                        _iskontoMap[key] = discountPercentage;
+                                                                        _discountController.text = discountPercentage == 0 ? '' : discountPercentage.toString();
+                                                                      }
+
+                                                                      if ((provider.getBirimTipi(
+                                                                                    product
+                                                                                        .stokKodu,
+                                                                                  ) ==
+                                                                                  'Unit' &&
+                                                                              product.birimKey1 !=
+                                                                                  0) ||
+                                                                          (provider.getBirimTipi(
+                                                                                    product
+                                                                                        .stokKodu,
+                                                                                  ) ==
+                                                                                  'Box' &&
+                                                                              product.birimKey2 !=
+                                                                                  "0")) {
+                                                                        provider.addOrUpdateItem(
+                                                                          urunAdi:
+                                                                              product
+                                                                                  .urunAdi,
+                                                                          adetFiyati:
+                                                                              product
+                                                                                  .adetFiyati,
+                                                                          kutuFiyati:
+                                                                              product
+                                                                                  .kutuFiyati,
+                                                                          stokKodu: key,
+                                                                          vat:
+                                                                              product.vat,
+                                                                          birimFiyat:
+                                                                              parsed,
+                                                                          urunBarcode:
+                                                                              product
+                                                                                  .barcode1,
+                                                                          miktar: 0,
+                                                                          iskonto:
+                                                                              discountPercentage,
+                                                                          birimTipi: provider
+                                                                              .getBirimTipi(
+                                                                                product
+                                                                                    .stokKodu,
+                                                                              ),
+                                                                        );
+                                                                      } else {
+                                                                        ScaffoldMessenger.of(
+                                                                          context,
+                                                                        ).showSnackBar(
+                                                                          SnackBar(
+                                                                            content: Text(
+                                                                              '⚠️ ${'cart.unit_not_available'.tr()}',
+                                                                            ),
+                                                                            behavior:
+                                                                                SnackBarBehavior
+                                                                                    .floating,
+                                                                            backgroundColor:
+                                                                                Colors
+                                                                                    .orange
+                                                                                    .shade700,
+                                                                            duration:
+                                                                                Duration(
+                                                                                  seconds:
+                                                                                      3,
+                                                                                ),
+                                                                          ),
+                                                                        );
+                                                                      }
+                                                                    }
+
+                                                                    setState(() {}); // Result alanını güncelle
+                                                                  },
+                                                                  onEditingComplete: () {
+                                                                    _formatPriceField(_priceController);
+                                                                  },
+                                                                  onSubmitted: (value) {
+                                                                    _formatPriceField(_priceController);
+                                                                  },
+                                                                ),
+                                                              ),
+                                                            ],
                                                           ),
-                                                          SizedBox(width: 1.w),
-                                                          Expanded(
-                                                            child: TextField(
-                                                            keyboardType:
-                                                                TextInputType.number,
-                                                            controller: _discountController,
-                                                            decoration: InputDecoration(
-                                                              prefixText: '%',
-                                                              prefixStyle: TextStyle(
-                                                                fontSize: 14.sp,
-                                                                fontWeight: FontWeight.bold,
-                                                                color: Theme.of(context).colorScheme.error,
-                                                              ),
-                                                              isDense: true,
-                                                              contentPadding: EdgeInsets.symmetric(
-                                                                vertical: 8,
-                                                                horizontal: 8,
-                                                              ),
-                                                              filled: true,
-                                                              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                              border: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.circular(8),
-                                                                borderSide: BorderSide.none,
-                                                              ),
-                                                              enabledBorder: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.circular(8),
-                                                                borderSide: BorderSide.none,
-                                                              ),
-                                                              focusedBorder: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.circular(8),
-                                                                borderSide: BorderSide.none,
-                                                              ),
-                                                            ),
-                                                            style: TextStyle(
-                                                              fontSize: 16.sp,
-                                                              fontWeight: FontWeight.w500,
-                                                            ),
-                                                            onChanged: (val) {
-                                                              final parsed =
-                                                                  int.tryParse(val) ?? 0;
-                                                              final clamped = parsed.clamp(
-                                                                0,
-                                                                100,
-                                                              );
 
-                                                              // Controller'ı formatlı değerle güncelle
-                                                              if (clamped.toString() != val) {
-                                                                _discountController.text = clamped.toString();
-                                                                _discountController.selection = TextSelection.fromPosition(
-                                                                  TextPosition(offset: clamped.toString().length),
-                                                                );
-                                                              }
+                                                          SizedBox(height: 1.h),
 
-                                                              setState(() {
-                                                                _iskontoMap[key] = clamped;
-                                                              });
+                                                          // İkinci satır: İndirim ve Hand kısmı
+                                                          Row(
+                                                            children: [
+                                                              // İndirim kısmı - sol tarafa
+                                                              Expanded(
+                                                                child: Row(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons.local_offer,
+                                                                      size: 18.sp,
+                                                                      color: Theme.of(context).colorScheme.error,
+                                                                    ),
+                                                                    SizedBox(width: 1.w),
+                                                                    Expanded(
+                                                                      child: TextField(
+                                                                      keyboardType:
+                                                                          TextInputType.number,
+                                                                      controller: _discountController,
+                                                                      decoration: InputDecoration(
+                                                                        prefixText: '%',
+                                                                        prefixStyle: TextStyle(
+                                                                          fontSize: 14.sp,
+                                                                          fontWeight: FontWeight.bold,
+                                                                          color: Theme.of(context).colorScheme.error,
+                                                                        ),
+                                                                        isDense: true,
+                                                                        contentPadding: EdgeInsets.symmetric(
+                                                                          vertical: 8,
+                                                                          horizontal: 8,
+                                                                        ),
+                                                                        filled: true,
+                                                                        fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                                        border: OutlineInputBorder(
+                                                                          borderRadius: BorderRadius.circular(8),
+                                                                          borderSide: BorderSide.none,
+                                                                        ),
+                                                                        enabledBorder: OutlineInputBorder(
+                                                                          borderRadius: BorderRadius.circular(8),
+                                                                          borderSide: BorderSide.none,
+                                                                        ),
+                                                                        focusedBorder: OutlineInputBorder(
+                                                                          borderRadius: BorderRadius.circular(8),
+                                                                          borderSide: BorderSide.none,
+                                                                        ),
+                                                                      ),
+                                                                      style: TextStyle(
+                                                                        fontSize: 16.sp,
+                                                                        fontWeight: FontWeight.w500,
+                                                                      ),
+                                                                      onChanged: (val) {
+                                                                        final parsed =
+                                                                            int.tryParse(val) ?? 0;
+                                                                        final clamped = parsed.clamp(
+                                                                          0,
+                                                                          100,
+                                                                        );
 
-                                                              // Normal birim fiyatını al
-                                                              final normalPrice = selectedType == 'Unit'
-                                                                  ? double.tryParse(product.adetFiyati.toString()) ?? 0
-                                                                  : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+                                                                        // Controller'ı formatlı değerle güncelle
+                                                                        if (clamped.toString() != val) {
+                                                                          _discountController.text = clamped.toString();
+                                                                          _discountController.selection = TextSelection.fromPosition(
+                                                                            TextPosition(offset: clamped.toString().length),
+                                                                          );
+                                                                        }
 
-                                                              // İndirim yüzdesine göre yeni fiyatı hesapla
-                                                              final discountAmount = (normalPrice * clamped) / 100;
-                                                              final discountedPrice = normalPrice - discountAmount;
+                                                                        setState(() {
+                                                                          _iskontoMap[key] = clamped;
+                                                                        });
 
-                                                              // Fiyat controller'ını güncelle
-                                                              if (discountedPrice >= 0) {
-                                                                _priceController.text = discountedPrice.toStringAsFixed(2);
-                                                              }
-                                                            },
-                                                            ),
+                                                                        // Normal birim fiyatını al
+                                                                        final normalPrice = selectedType == 'Unit'
+                                                                            ? double.tryParse(product.adetFiyati.toString()) ?? 0
+                                                                            : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+
+                                                                        // İndirim yüzdesine göre yeni fiyatı hesapla
+                                                                        final discountAmount = (normalPrice * clamped) / 100;
+                                                                        final discountedPrice = normalPrice - discountAmount;
+
+                                                                        // Fiyat controller'ını güncelle
+                                                                        if (discountedPrice >= 0) {
+                                                                          _priceController.text = discountedPrice.toStringAsFixed(2);
+                                                                        }
+                                                                      },
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+
+                                                              SizedBox(width: 2.w),
+
+                                                              // Hand kısmı - sağ tarafa
+                                                              Flexible(
+                                                                child: Stack(
+                                                                children: [
+                                                                  GestureDetector(
+                                                                    behavior: HitTestBehavior.translucent,
+                                                                    child: Container(
+                                                                      padding: EdgeInsets.all(1.w),
+                                                                      width: 15.w,
+                                                                      height: 12.w,
+                                                                      child: Image.asset(
+                                                                        'assets/hand.png',
+                                                                        width: 10.w,
+                                                                        height: 10.w,
+                                                                      ),
+                                                                    ),
+                                                                    onTap: () async {
+                                                                      String selectedBirimTipi = 'Box';
+                                                                      final TextEditingController miktarController = TextEditingController(text: '1');
+
+                                                                      final result = await showDialog<Map<String, dynamic>>(
+                                                                        context: context,
+                                                                        builder: (BuildContext context) {
+                                                                          return AlertDialog(
+                                                                            title: Text('cart.add_free_product'.tr()),
+                                                                            content: Column(
+                                                                              mainAxisSize: MainAxisSize.min,
+                                                                              children: [
+                                                                                DropdownButtonFormField<String>(
+                                                                                  value: selectedBirimTipi,
+                                                                                  items: ['Unit', 'Box'].map((String value) {
+                                                                                    return DropdownMenuItem<String>(
+                                                                                      value: value,
+                                                                                      child: Text(value),
+                                                                                    );
+                                                                                  }).toList(),
+                                                                                  onChanged: (value) {
+                                                                                    if (value != null) {
+                                                                                      selectedBirimTipi = value;
+                                                                                    }
+                                                                                  },
+                                                                                  decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
+                                                                                ),
+                                                                                const SizedBox(height: 10),
+                                                                                TextField(
+                                                                                  controller: miktarController,
+                                                                                  keyboardType: TextInputType.number,
+                                                                                  decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                            actions: [
+                                                                              TextButton(
+                                                                                onPressed: () => Navigator.pop(context),
+                                                                                child: Text('cart.cancel'.tr()),
+                                                                              ),
+                                                                              ElevatedButton(
+                                                                                onPressed: () {
+                                                                                  final miktar = int.tryParse(miktarController.text);
+                                                                                  if (miktar != null && miktar > 0) {
+                                                                                    Navigator.pop(context, {
+                                                                                      'birimTipi': selectedBirimTipi,
+                                                                                      'miktar': miktar,
+                                                                                    });
+                                                                                  }
+                                                                                },
+                                                                                child: Text('cart.add'.tr()),
+                                                                              ),
+                                                                            ],
+                                                                          );
+                                                                        },
+                                                                      );
+
+                                                                      if (result == null) return;
+
+                                                                      final provider = Provider.of<CartProvider>(context, listen: false);
+                                                                      provider.customerName = customer!.kod!;
+
+                                                                      double freeFiyat = 0.0;
+                                                                      if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
+                                                                        freeFiyat = double.tryParse(product.adetFiyati.toString()) ?? 0.0;
+                                                                      } else if (result['birimTipi'] == 'Box' && product.birimKey2 != "0") {
+                                                                        freeFiyat = double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
+                                                                      }
+
+                                                                      final freeKey = "${product.stokKodu} (FREE${result['birimTipi']})";
+                                                                      if ((result['birimTipi'] == 'Unit' && product.birimKey1 != 0) ||
+                                                                          (result['birimTipi'] == 'Box' && product.birimKey2 != "0")) {
+                                                                        provider.addOrUpdateItem(
+                                                                          stokKodu: freeKey,
+                                                                          urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
+                                                                          birimFiyat: freeFiyat,
+                                                                          miktar: result['miktar'],
+                                                                          urunBarcode: product.barcode1,
+                                                                          iskonto: 100,
+                                                                          birimTipi: result['birimTipi'],
+                                                                          imsrc: product.imsrc,
+                                                                          vat: product.vat,
+                                                                          adetFiyati: '0',
+                                                                          kutuFiyati: '0',
+                                                                        );
+                                                                      } else {
+                                                                        ScaffoldMessenger.of(context).showSnackBar(
+                                                                          SnackBar(
+                                                                            content: Text('cart.unit_not_available'.tr()),
+                                                                            behavior: SnackBarBehavior.floating,
+                                                                            backgroundColor: Colors.orange.shade700,
+                                                                            duration: const Duration(seconds: 3),
+                                                                          ),
+                                                                        );
+                                                                      }
+                                                                    },
+                                                                  ),
+                                                                  // Box Badge (mavi)
+                                                                  Positioned(
+                                                                    right: 0,
+                                                                    top: 0,
+                                                                    child: Container(
+                                                                      padding: EdgeInsets.all(1.w),
+                                                                      decoration: BoxDecoration(
+                                                                        color: Theme.of(context).colorScheme.secondary,
+                                                                        shape: BoxShape.circle,
+                                                                      ),
+                                                                      constraints: BoxConstraints(
+                                                                        minWidth: 6.w,
+                                                                        minHeight: 6.w,
+                                                                      ),
+                                                                      child: Center(
+                                                                        child: Text(
+                                                                          () {
+                                                                            final matches = provider.items.values.where(
+                                                                              (item) =>
+                                                                                  item.urunAdi ==
+                                                                                      '${product.urunAdi}_(FREEBox)' &&
+                                                                                  item.birimTipi ==
+                                                                                      'Box',
+                                                                            );
+
+                                                                            if (matches.isNotEmpty) {
+                                                                              return '${matches.first.miktar}';
+                                                                            } else {
+                                                                              return '0';
+                                                                            }
+                                                                          }(),
+                                                                          style: TextStyle(
+                                                                            color: Colors.white,
+                                                                            fontSize: 12.sp,
+                                                                            fontWeight: FontWeight.bold,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  // Unit Badge (turuncu)
+                                                                  Positioned(
+                                                                    right: 0,
+                                                                    bottom: 0,
+                                                                    child: Container(
+                                                                      padding: EdgeInsets.all(1.w),
+                                                                      decoration: BoxDecoration(
+                                                                        color: Colors.orange,
+                                                                        shape: BoxShape.circle,
+                                                                      ),
+                                                                      constraints: BoxConstraints(
+                                                                        minWidth: 6.w,
+                                                                        minHeight: 6.w,
+                                                                      ),
+                                                                      child: Center(
+                                                                        child: Text(
+                                                                          () {
+                                                                            final matches = provider.items.values.where(
+                                                                              (item) =>
+                                                                                  item.urunAdi ==
+                                                                                      '${product.urunAdi}_(FREEUnit)' &&
+                                                                                  item.birimTipi ==
+                                                                                      'Unit',
+                                                                            );
+
+                                                                            if (matches.isNotEmpty) {
+                                                                              return '${matches.first.miktar}';
+                                                                            } else {
+                                                                              return '0';
+                                                                            }
+                                                                          }(),
+                                                                          style: TextStyle(
+                                                                            color: Colors.white,
+                                                                            fontSize: 12.sp,
+                                                                            fontWeight: FontWeight.bold,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              ),
+                                                            ],
                                                           ),
                                                         ],
                                                       ),
                                                     ),
-                                                  ],
-                                                ),
-
-                                                SizedBox(height: 1.h),
-
-                                                // Type Dropdown ve Miktar Kontrolleri - Row ile sıkıştırılmış
-                                                Row(
-                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                  children: [
-
-                                                    // Miktar azaltma butonu (-)
-                                                    Flexible(
-                                                      flex: 1,
-                                                      child: Container(
-                                                      width: 8.w,
-                                                      height: 8.w,
-                                                      decoration: BoxDecoration(
-                                                        color: quantity > 0
-                                                            ? Theme.of(context).colorScheme.error.withValues(alpha: 0.1)
-                                                            : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                                                        borderRadius: BorderRadius.circular(4),
-                                                      ),
-                                                      child: IconButton(
-                                                        padding: EdgeInsets.zero,
-                                                        onPressed: quantity > 0
-                                                            ? () {
-                                                                final provider = Provider.of<CartProvider>(context, listen: false);
-                                                                final key = product.stokKodu;
-                                                                final iskonto = _iskontoMap[key] ?? 0;
-                                                                final isBox = _isBoxMap[key] ?? false;
-
-                                                                final birimTipi = isBox ? 'Box' : 'Unit';
-                                                                final fiyat = isBox
-                                                                    ? double.parse(product.kutuFiyati.toString())
-                                                                    : double.parse(product.adetFiyati.toString());
-
-                                                                final currentQuantity = _quantityMap[key] ?? 0;
-                                                                final newQuantity = currentQuantity - 1;
-
-                                                                // Önce mevcut item'ı sil
-                                                                provider.removeItem(key);
-
-                                                                if (newQuantity > 0) {
-                                                                  provider.addOrUpdateItem(
-                                                                    urunAdi: product.urunAdi,
-                                                                    stokKodu: key,
-                                                                    birimFiyat: fiyat,
-                                                                    adetFiyati: product.adetFiyati,
-                                                                    kutuFiyati: product.kutuFiyati,
-                                                                    vat: product.vat,
-                                                                    urunBarcode: product.barcode1,
-                                                                    miktar: newQuantity,
-                                                                    iskonto: iskonto,
-                                                                    birimTipi: birimTipi,
-                                                                  );
-                                                                }
-
-                                                                setState(() {
-                                                                  _quantityMap[key] = newQuantity;
-                                                                });
-                                                                _quantityControllers[key]?.text = '$newQuantity';
-                                                              }
-                                                            : null,
-                                                        icon: Icon(
-                                                          Icons.remove,
-                                                          size: 4.w,
-                                                          color: quantity > 0
-                                                              ? Theme.of(context).colorScheme.error
-                                                              : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    ),
-
-                                                    SizedBox(width: 1.w),
-
-                                                    // Miktar gösterimi - TextField olarak
-                                                    Flexible(
-                                                      flex: 2,
-                                                      child: Container(
-                                                      width: 12.w,
-                                                      height: 8.w,
-                                                      child: TextField(
-                                                        key: ValueKey('quantity_$key'), // Unique key for debugging
-                                                        controller: _quantityControllers[key],
-                                                        keyboardType: TextInputType.number,
-                                                        textInputAction: TextInputAction.done,
-                                                        textAlign: TextAlign.center,
-                                                        style: TextStyle(
-                                                          fontSize: 14.sp,
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                        decoration: InputDecoration(
-                                                          border: OutlineInputBorder(
-                                                            borderRadius: BorderRadius.circular(4),
-                                                            borderSide: BorderSide(width: 1),
-                                                          ),
-                                                          contentPadding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.w),
-                                                          isDense: true,
-                                                        ),
-                                                        onSubmitted: (value) {
-                                                          _updateQuantityFromTextField(key, value, product);
-                                                        },
-                                                        onEditingComplete: () {
-                                                          final value = _quantityControllers[key]?.text ?? '0';
-                                                          _updateQuantityFromTextField(key, value, product);
-                                                        },
-                                                        onChanged: (value) {
-                                                          // 2 saniye sonra otomatik olarak güncelle
-                                                          Timer(Duration(seconds: 2), () {
-                                                            if (_quantityControllers[key]?.text == value) {
-                                                              _updateQuantityFromTextField(key, value, product);
-                                                            }
-                                                          });
-                                                        },
-                                                      ),
-                                                    ),
-                                                    ),
-
-                                                    SizedBox(width: 1.w),
-
-                                                    // Miktar artırma butonu (+)
-                                                    Flexible(
-                                                      flex: 1,
-                                                      child: Container(
-                                                      width: 8.w,
-                                                      height: 8.w,
-                                                      decoration: BoxDecoration(
-                                                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                                        borderRadius: BorderRadius.circular(4),
-                                                      ),
-                                                      child: IconButton(
-                                                        padding: EdgeInsets.zero,
-                                                        onPressed: () {
-                                                          final provider = Provider.of<CartProvider>(context, listen: false);
-                                                          final iskonto = _iskontoMap[key] ?? 0;
-                                                          final isBox = _isBoxMap[key] ?? false;
-
-                                                          final birimTipi = isBox ? 'Box' : 'Unit';
-                                                          final fiyat = isBox
-                                                              ? double.parse(product.kutuFiyati.toString())
-                                                              : double.parse(product.adetFiyati.toString());
-
-                                                          final newQuantity = (_quantityMap[key] ?? 0) + 1;
-
-                                                          provider.addOrUpdateItem(
-                                                            urunAdi: product.urunAdi,
-                                                            stokKodu: key,
-                                                            birimFiyat: fiyat,
-                                                            adetFiyati: product.adetFiyati,
-                                                            kutuFiyati: product.kutuFiyati,
-                                                            vat: product.vat,
-                                                            urunBarcode: product.barcode1,
-                                                            miktar: 1,
-                                                            iskonto: iskonto,
-                                                            birimTipi: birimTipi,
-                                                          );
-
-                                                          setState(() {
-                                                            _quantityMap[key] = newQuantity;
-                                                          });
-                                                          _quantityControllers[key]?.text = '$newQuantity';
-                                                        },
-                                                        icon: Icon(
-                                                          Icons.add,
-                                                          size: 4.w,
-                                                          color: Theme.of(context).colorScheme.primary,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    ),
 
                                                     SizedBox(width: 2.w),
 
-                                                    // El ikonu (hand.png) ve badge'ler - orijinal haliyle
-                                                    Flexible(
-                                                      flex: 2,
-                                                      child: Stack(
+                                                    // Sağ taraf: Miktar kontrolleri sütunu (iki satır yüksekliğinde)
+                                                    Column(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
                                                       children: [
-                                                        GestureDetector(
-                                                          behavior: HitTestBehavior.translucent,
-                                                          child: Container(
-                                                            padding: EdgeInsets.all(1.w),
-                                                            width: 15.w,
-                                                            height: 12.w,
-                                                            child: Image.asset(
-                                                              'assets/hand.png',
-                                                              width: 10.w,
-                                                              height: 10.w,
-                                                            ),
+                                                        // Miktar artırma butonu (+) - üstte
+                                                        Container(
+                                                          width: 18.w,
+                                                          height: 8.w,
+                                                          decoration: BoxDecoration(
+                                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                                                            borderRadius: BorderRadius.circular(4),
                                                           ),
-                                                          onTap: () async {
-                                                            String selectedBirimTipi = 'Box';
-                                                            final TextEditingController miktarController = TextEditingController(text: '1');
+                                                          child: IconButton(
+                                                            padding: EdgeInsets.zero,
+                                                            onPressed: () {
+                                                              final provider = Provider.of<CartProvider>(context, listen: false);
+                                                              final iskonto = _iskontoMap[key] ?? 0;
+                                                              final isBox = _isBoxMap[key] ?? false;
 
-                                                            final result = await showDialog<Map<String, dynamic>>(
-                                                              context: context,
-                                                              builder: (BuildContext context) {
-                                                                return AlertDialog(
-                                                                  title: Text('cart.add_free_product'.tr()),
-                                                                  content: Column(
-                                                                    mainAxisSize: MainAxisSize.min,
-                                                                    children: [
-                                                                      DropdownButtonFormField<String>(
-                                                                        value: selectedBirimTipi,
-                                                                        items: ['Unit', 'Box'].map((String value) {
-                                                                          return DropdownMenuItem<String>(
-                                                                            value: value,
-                                                                            child: Text(value),
-                                                                          );
-                                                                        }).toList(),
-                                                                        onChanged: (value) {
-                                                                          if (value != null) {
-                                                                            selectedBirimTipi = value;
-                                                                          }
-                                                                        },
-                                                                        decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
-                                                                      ),
-                                                                      const SizedBox(height: 10),
-                                                                      TextField(
-                                                                        controller: miktarController,
-                                                                        keyboardType: TextInputType.number,
-                                                                        decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                  actions: [
-                                                                    TextButton(
-                                                                      onPressed: () => Navigator.pop(context),
-                                                                      child: Text('cart.cancel'.tr()),
-                                                                    ),
-                                                                    ElevatedButton(
-                                                                      onPressed: () {
-                                                                        final miktar = int.tryParse(miktarController.text);
-                                                                        if (miktar != null && miktar > 0) {
-                                                                          Navigator.pop(context, {
-                                                                            'birimTipi': selectedBirimTipi,
-                                                                            'miktar': miktar,
-                                                                          });
-                                                                        }
-                                                                      },
-                                                                      child: Text('cart.add'.tr()),
-                                                                    ),
-                                                                  ],
-                                                                );
-                                                              },
-                                                            );
+                                                              final birimTipi = isBox ? 'Box' : 'Unit';
+                                                              final fiyat = isBox
+                                                                  ? double.parse(product.kutuFiyati.toString())
+                                                                  : double.parse(product.adetFiyati.toString());
 
-                                                            if (result == null) return;
+                                                              final newQuantity = (_quantityMap[key] ?? 0) + 1;
 
-                                                            final provider = Provider.of<CartProvider>(context, listen: false);
-                                                            provider.customerName = customer!.kod!;
-
-                                                            double freeFiyat = 0.0;
-                                                            if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
-                                                              freeFiyat = double.tryParse(product.adetFiyati.toString()) ?? 0.0;
-                                                            } else if (result['birimTipi'] == 'Box' && product.birimKey2 != "0") {
-                                                              freeFiyat = double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
-                                                            }
-
-                                                            final freeKey = "${product.stokKodu} (FREE${result['birimTipi']})";
-                                                            if ((result['birimTipi'] == 'Unit' && product.birimKey1 != 0) ||
-                                                                (result['birimTipi'] == 'Box' && product.birimKey2 != "0")) {
                                                               provider.addOrUpdateItem(
-                                                                stokKodu: freeKey,
-                                                                urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
-                                                                birimFiyat: freeFiyat,
-                                                                miktar: result['miktar'],
-                                                                urunBarcode: product.barcode1,
-                                                                iskonto: 100,
-                                                                birimTipi: result['birimTipi'],
-                                                                imsrc: product.imsrc,
+                                                                urunAdi: product.urunAdi,
+                                                                stokKodu: key,
+                                                                birimFiyat: fiyat,
+                                                                adetFiyati: product.adetFiyati,
+                                                                kutuFiyati: product.kutuFiyati,
                                                                 vat: product.vat,
-                                                                adetFiyati: '0',
-                                                                kutuFiyati: '0',
+                                                                urunBarcode: product.barcode1,
+                                                                miktar: 1,
+                                                                iskonto: iskonto,
+                                                                birimTipi: birimTipi,
                                                               );
-                                                            } else {
-                                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                                SnackBar(
-                                                                  content: Text('cart.unit_not_available'.tr()),
-                                                                  behavior: SnackBarBehavior.floating,
-                                                                  backgroundColor: Colors.orange.shade700,
-                                                                  duration: const Duration(seconds: 3),
-                                                                ),
-                                                              );
-                                                            }
-                                                          },
-                                                        ),
-                                                        // Box Badge (mavi)
-                                                        Positioned(
-                                                          right: 0,
-                                                          top: 0,
-                                                          child: Container(
-                                                            padding: EdgeInsets.all(1.w),
-                                                            decoration: BoxDecoration(
-                                                              color: Theme.of(context).colorScheme.secondary,
-                                                              shape: BoxShape.circle,
-                                                            ),
-                                                            constraints: BoxConstraints(
-                                                              minWidth: 6.w,
-                                                              minHeight: 6.w,
-                                                            ),
-                                                            child: Center(
-                                                              child: Text(
-                                                                () {
-                                                                  final matches = provider.items.values.where(
-                                                                    (item) =>
-                                                                        item.urunAdi ==
-                                                                            '${product.urunAdi}_(FREEBox)' &&
-                                                                        item.birimTipi ==
-                                                                            'Box',
-                                                                  );
 
-                                                                  if (matches.isNotEmpty) {
-                                                                    return '${matches.first.miktar}';
-                                                                  } else {
-                                                                    return '0';
-                                                                  }
-                                                                }(),
-                                                                style: TextStyle(
-                                                                  color: Colors.white,
-                                                                  fontSize: 12.sp,
-                                                                  fontWeight: FontWeight.bold,
-                                                                ),
-                                                              ),
+                                                              setState(() {
+                                                                _quantityMap[key] = newQuantity;
+                                                              });
+                                                              _quantityControllers[key]?.text = '$newQuantity';
+                                                            },
+                                                            icon: Icon(
+                                                              Icons.add,
+                                                              size: 6.w,
+                                                              color: Theme.of(context).colorScheme.primary,
                                                             ),
                                                           ),
                                                         ),
-                                                        // Unit Badge (turuncu)
-                                                        Positioned(
-                                                          right: 0,
-                                                          bottom: 0,
-                                                          child: Container(
-                                                            padding: EdgeInsets.all(1.w),
-                                                            decoration: BoxDecoration(
-                                                              color: Colors.orange,
-                                                              shape: BoxShape.circle,
-                                                            ),
-                                                            constraints: BoxConstraints(
-                                                              minWidth: 6.w,
-                                                              minHeight: 6.w,
-                                                            ),
-                                                            child: Center(
-                                                              child: Text(
-                                                                () {
-                                                                  final matches = provider.items.values.where(
-                                                                    (item) =>
-                                                                        item.urunAdi ==
-                                                                            '${product.urunAdi}_(FREEUnit)' &&
-                                                                        item.birimTipi ==
-                                                                            'Unit',
-                                                                  );
 
-                                                                  if (matches.isNotEmpty) {
-                                                                    return '${matches.first.miktar}';
-                                                                  } else {
-                                                                    return '0';
-                                                                  }
-                                                                }(),
-                                                                style: TextStyle(
-                                                                  color: Colors.white,
-                                                                  fontSize: 12.sp,
-                                                                  fontWeight: FontWeight.bold,
-                                                                ),
+                                                        SizedBox(height: 0.5.h),
+
+                                                        // Miktar gösterimi - TextField olarak - ortada
+                                                        Container(
+                                                          width: 18.w,
+                                                          height: 6.w,
+                                                          child: TextField(
+                                                            key: ValueKey('quantity_$key'), // Unique key for debugging
+                                                            controller: _quantityControllers[key],
+                                                            keyboardType: TextInputType.number,
+                                                            textInputAction: TextInputAction.done,
+                                                            textAlign: TextAlign.center,
+                                                            style: TextStyle(
+                                                              fontSize: 14.sp,
+                                                              fontWeight: FontWeight.bold,
+                                                            ),
+                                                            decoration: InputDecoration(
+                                                              border: OutlineInputBorder(
+                                                                borderRadius: BorderRadius.circular(4),
+                                                                borderSide: BorderSide(width: 1),
                                                               ),
+                                                              contentPadding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.w),
+                                                              isDense: true,
+                                                            ),
+                                                            onSubmitted: (value) {
+                                                              _updateQuantityFromTextField(key, value, product);
+                                                            },
+                                                            onEditingComplete: () {
+                                                              final value = _quantityControllers[key]?.text ?? '0';
+                                                              _updateQuantityFromTextField(key, value, product);
+                                                            },
+                                                            onChanged: (value) {
+                                                              // 2 saniye sonra otomatik olarak güncelle
+                                                              Timer(Duration(seconds: 2), () {
+                                                                if (_quantityControllers[key]?.text == value) {
+                                                                  _updateQuantityFromTextField(key, value, product);
+                                                                }
+                                                              });
+                                                            },
+                                                          ),
+                                                        ),
+
+                                                        SizedBox(height: 0.5.h),
+
+                                                        // Miktar azaltma butonu (-) - altta
+                                                        Container(
+                                                          width: 18.w,
+                                                          height: 8.w,
+                                                          decoration: BoxDecoration(
+                                                            color: quantity > 0
+                                                                ? Theme.of(context).colorScheme.error.withValues(alpha: 0.1)
+                                                                : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                                                            borderRadius: BorderRadius.circular(4),
+                                                          ),
+                                                          child: IconButton(
+                                                            padding: EdgeInsets.zero,
+                                                            onPressed: quantity > 0
+                                                                ? () {
+                                                                    final provider = Provider.of<CartProvider>(context, listen: false);
+                                                                    final key = product.stokKodu;
+                                                                    final iskonto = _iskontoMap[key] ?? 0;
+                                                                    final isBox = _isBoxMap[key] ?? false;
+
+                                                                    final birimTipi = isBox ? 'Box' : 'Unit';
+                                                                    final fiyat = isBox
+                                                                        ? double.parse(product.kutuFiyati.toString())
+                                                                        : double.parse(product.adetFiyati.toString());
+
+                                                                    final currentQuantity = _quantityMap[key] ?? 0;
+                                                                    final newQuantity = currentQuantity - 1;
+
+                                                                    // Önce mevcut item'ı sil
+                                                                    provider.removeItem(key);
+
+                                                                    if (newQuantity > 0) {
+                                                                      provider.addOrUpdateItem(
+                                                                        urunAdi: product.urunAdi,
+                                                                        stokKodu: key,
+                                                                        birimFiyat: fiyat,
+                                                                        adetFiyati: product.adetFiyati,
+                                                                        kutuFiyati: product.kutuFiyati,
+                                                                        vat: product.vat,
+                                                                        urunBarcode: product.barcode1,
+                                                                        miktar: newQuantity,
+                                                                        iskonto: iskonto,
+                                                                        birimTipi: birimTipi,
+                                                                      );
+                                                                    }
+
+                                                                    setState(() {
+                                                                      _quantityMap[key] = newQuantity;
+                                                                    });
+                                                                    _quantityControllers[key]?.text = '$newQuantity';
+                                                                  }
+                                                                : null,
+                                                            icon: Icon(
+                                                              Icons.remove,
+                                                              size: 6.w,
+                                                              color: quantity > 0
+                                                                  ? Theme.of(context).colorScheme.error
+                                                                  : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
                                                             ),
                                                           ),
                                                         ),
                                                       ],
-                                                    ),
                                                     ),
                                                   ],
                                                 ),
@@ -1876,10 +1859,17 @@ _barcodeFocusNode.requestFocus();
                                     ),
                                   ],
                                 ),
-                              ),
-                            ),
-                          ),
-                        );
+                                ),
+
+                                // Divider ekliyoruz - son item değilse göster
+                                if (index < _filteredProducts.length - 1)
+                                  Divider(
+                                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                                    thickness: 1,
+                                    height: 1,
+                                  ),
+                              ],
+                            );
                           },
                         ),
                   ),

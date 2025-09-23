@@ -63,16 +63,7 @@ for (var customer in customers) {
   }
 }
 
-print('\nİlk 10 ürün verisi:\n');
-
-int count = 0;
-for (var customer in customers) {
-  print('[$count] ${customer}');
-  print('---');
-
-  count++;
-  if (count >= 10) break;
-}
+// Debug log kaldırıldı - performans için
 
 
     return products;

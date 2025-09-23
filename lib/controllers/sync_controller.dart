@@ -23,8 +23,8 @@ class SyncController {
   // CLEAN SYNC
   cleanSync() async {
     print('🔄 Clean Sync başlatılıyor...');
-    balancecontroller.fetchAndStoreCustomers();
-    syncPendingRefunds();
+    await balancecontroller.fetchAndStoreCustomers();
+    await syncPendingRefunds();
     //open database
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
@@ -73,14 +73,18 @@ class SyncController {
     String nowString = DateFormat('dd.MM.yyyy HH:mm:ss').format(DateTime.now());
     await db.insert('updateDates', {'update_time': nowString});
     print('✅ Clean Sync tamamlandı!');
+
+    // Sync tamamlandıktan sonra resim indirmeyi başlat
+    print('📦 Resim indirme başlatılıyor...');
+    _downloadImagesInBackground();
     // Database açık kalacak - App Inspector için
   }
 
   //UPDATE SYNC
   //UPDATE SYNC
   updateSync() async {
-    balancecontroller.fetchAndStoreCustomers();
-    syncPendingRefunds();
+    await balancecontroller.fetchAndStoreCustomers();
+    await syncPendingRefunds();
     //update sonu son update saati güncelleme
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
@@ -109,6 +113,11 @@ class SyncController {
         'dd.MM.yyyy HH:mm:ss',
       ).format(DateTime.now());
       await db.insert('updateDates', {'update_time': nowString});
+      print('✅ Update Sync tamamlandı!');
+
+      // Sync tamamlandıktan sonra resim indirmeyi başlat
+      print('📦 Resim indirme başlatılıyor...');
+      _downloadImagesInBackground();
     } else {
       print('Son güncelleme zamanı yok, updateSync() çalıştırılmadı.');
     }
@@ -184,11 +193,11 @@ class SyncController {
           whereArgs: [musteriId],
         );
 
-        // Yeni refund verilerini ekle
-        for (final refund in refunds) {
-          print("id");
-          print(refund.musteriId);
-          await db.insert('Refunds', {
+        // Yeni refund verilerini batch olarak ekle
+        if (refunds.isNotEmpty) {
+          final batch = db.batch();
+          for (final refund in refunds) {
+            batch.insert('Refunds', {
             'fisNo': refund.fisNo,
             'musteriId': refund.musteriId,
             'fisTarihi': refund.fisTarihi.toIso8601String(),
@@ -199,7 +208,9 @@ class SyncController {
             'miktar': refund.miktar,
             'birim': refund.birim,
             'birimFiyat': refund.birimFiyat,
-          });
+            });
+          }
+          await batch.commit();
         }
 
         print('✅ ${refunds.length} refund senkronize edildi: $cariKod');
@@ -219,8 +230,9 @@ class SyncController {
   Future<void> SyncProducts(DateTime lastUpdateDate) async {
     final controller = ProductController();
     final products = await controller.getNewProduct(lastUpdateDate);
-    print("prod finished: $products");
-    downloadImages(products); // products zaten null olabilir, sorun değil
+    print("✅ ${products?.length ?? 0} ürün alındı");
+
+    // Resim indirme kaldırıldı - sync sonrasında yapılacak
 
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
@@ -265,11 +277,16 @@ class SyncController {
     }
 
     if (products != null) {
-      await db.transaction((txn) async {
-        for (var product in products) {
-          await txn.insert('Product', product.toMap());
-        }
-      });
+      // Batch operation ile çok daha hızlı insert
+      final batch = db.batch();
+
+      for (var product in products) {
+        batch.insert('Product', product.toMap());
+      }
+
+      print('📦 ${products.length} ürün veritabanına yazılıyor...');
+      await batch.commit(noResult: true);
+      print('✅ Ürün veritabanı yazma tamamlandı');
 
       //List<Map> list = await db.query('Product');
       //print('=== Products in database: ${list.length} $list===');
@@ -371,6 +388,24 @@ class SyncController {
     }
   }
 
+  // Arka planda resim indirme - sync'i bloklamaz
+  void _downloadImagesInBackground() async {
+    try {
+      // Veritabanından ürünleri al
+      DatabaseHelper dbHelper = DatabaseHelper();
+      Database db = await dbHelper.database;
+
+      final List<Map<String, dynamic>> maps = await db.query('Product');
+      final products = maps.map((map) => ProductModel.fromMap(map)).toList();
+
+      if (products.isNotEmpty) {
+        downloadImages(products);
+      }
+    } catch (e) {
+      print('⚠️ Resim indirme hatası: $e');
+    }
+  }
+
 Future<void> downloadImages(List<ProductModel>? products) async {
   final dir = await getApplicationDocumentsDirectory();
 
@@ -379,33 +414,61 @@ Future<void> downloadImages(List<ProductModel>? products) async {
     return;
   }
 
-  for (final product in products) {
-    final url = product.imsrc;
+  print('📦 ${products.length} ürün için resim indirme başlatılıyor...');
 
-    if (url != null && url.isNotEmpty) {
-      try {
-        final uri = Uri.parse(url);
-        final fileName = uri.pathSegments.isNotEmpty
-            ? uri.pathSegments.last
-            : 'unknown.jpg'; // örnek: 10002.jpg
+  // Memory kullanımını azaltmak için daha küçük batch'ler (3 paralel)
+  const int maxConcurrent = 3;
+  int downloaded = 0;
 
-        final filePath = '${dir.path}/$fileName';
-        final file = File(filePath);
+  for (int i = 0; i < products.length; i += maxConcurrent) {
+    final batch = products.skip(i).take(maxConcurrent);
+    final futures = <Future<void>>[];
 
-        final response = await http.get(Uri.parse(url));
-        if (response.statusCode == 200) {
-          await file.writeAsBytes(response.bodyBytes);
-          print('✓ Kaydedildi: $fileName  -  $filePath');
-        } else {
-          print('❌ HTTP hatası: ${response.statusCode}');
-        }
-      } catch (e) {
-        print('❌ Hata: $e');
+    for (final product in batch) {
+      if (product.imsrc != null && product.imsrc!.isNotEmpty) {
+        futures.add(_downloadSingleImage(product.imsrc!, dir.path));
       }
     }
+
+    // Her batch'i bekle
+    await Future.wait(futures);
+    downloaded += futures.length;
+
+    // İlerleme göster (her 10 resimde bir)
+    if (downloaded % 10 == 0) {
+      print('📦 $downloaded/${products.length} resim indirildi...');
+    }
+
+    // Memory GC için kısa bekleme
+    await Future.delayed(Duration(milliseconds: 100));
   }
 
-   
+  print('✅ Resim indirme tamamlandı');
+}
+
+Future<void> _downloadSingleImage(String url, String dirPath) async {
+  try {
+    final uri = Uri.parse(url);
+    final fileName = uri.pathSegments.isNotEmpty
+        ? uri.pathSegments.last
+        : 'unknown.jpg';
+
+    final filePath = '$dirPath/$fileName';
+    final file = File(filePath);
+
+    // Dosya zaten varsa indirme
+    if (await file.exists()) {
+      return;
+    }
+
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      await file.writeAsBytes(response.bodyBytes);
+      print('✓ İndirildi: $fileName');
+    }
+  } catch (e) {
+    // Sessizce geç - resim indirme hatası sync'i durdurmasın
+  }
 }
 
 }
