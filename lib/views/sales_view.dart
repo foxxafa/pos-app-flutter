@@ -36,7 +36,7 @@ class _SalesViewState extends State<SalesView> {
 
   Future<void> _loadSales() async {
     try {
-      final sales = await DatabaseHelper().getAll('Customer');
+      final sales = await DatabaseHelper().getAll('CustomerBalance');
       setState(() {
         _allSales = sales;
         _filteredSales = sales.take(100).toList();

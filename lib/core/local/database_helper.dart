@@ -60,21 +60,7 @@ class DatabaseHelper {
       )
     ''');
 
-    // Customer table
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS Customer (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        VergiNo TEXT,
-        VergiDairesi TEXT,
-        Adres TEXT,
-        Telefon TEXT,
-        Email TEXT,
-        Kod TEXT,
-        Unvan TEXT,
-        PostCode TEXT,
-        Aktif INTEGER NOT NULL DEFAULT 1
-      )
-    ''');
+    // Customer table kaldırıldı - CustomerBalance kullanılıyor
 
     // Product table
     await db.execute('''

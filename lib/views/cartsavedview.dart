@@ -27,7 +27,7 @@ class _CartListPageState extends State<CartListPage> {
     // Get customer data from database first
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
-    final customerRows = await db.query('Customer');
+    final customerRows = await db.query('CustomerBalance');
     final allItems = await db.query('cart_items'); // Get cart items directly
 
     // Group by customer

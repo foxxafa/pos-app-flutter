@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:pos_app/controllers/customer_controller.dart';
 import 'package:pos_app/controllers/customerbalance_controller.dart';
 import 'package:pos_app/controllers/order_controller.dart';
 import 'package:pos_app/controllers/product_controller.dart';
@@ -23,17 +22,15 @@ class SyncController {
   // CLEAN SYNC
   // CLEAN SYNC
   cleanSync() async {
+    print('🔄 Clean Sync başlatılıyor...');
     balancecontroller.fetchAndStoreCustomers();
-    print("0");
     syncPendingRefunds();
-    print("1");
     //open database
-    print("2");
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
-      await db.delete('Customer');
+      // Customer tablosu kaldırıldı - artık kullanılmıyor
 
-    print("3");
+    print('📋 UpdateDates tablosu kontrol ediliyor...');
     var result = await db.rawQuery(
       "SELECT name FROM sqlite_master WHERE type='table' AND name='updateDates';",
     );
@@ -46,22 +43,7 @@ class SyncController {
       ''');
     }
 
-    //eskiyi silme işlemi
-    await db.transaction((txn) async {
-      // Önce tablo var mı kontrol et
-      var result = await txn.rawQuery(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='Customer';",
-      );
-
-      if (result.isNotEmpty) {
-        // Tablo varsa sil
-        await txn.delete('Customer');
-        print('Customer tablosu bulundu ve silindi.');
-      } else {
-        print('Customer tablosu bulunamadı, silme işlemi yapılmadı.');
-      }
-    });
-    print("4");
+    // Customer tablosu artık kullanılmıyor - CustomerBalance kullanılıyor
     //eskiyi silme işlemi
     await db.transaction((txn) async {
       // Önce tablo var mı kontrol et
@@ -78,18 +60,19 @@ class SyncController {
       }
     });
 
-    print("5");
+    print('📦 Ürün senkronizasyonu başlatılıyor...');
     //sync işlemleri
     await SyncProducts(DateTime(2024, 5, 1, 15, 55, 30));
-    print("6");
+    print('✅ Ürün senkronizasyonu tamamlandı');
     //await SyncCustomers(DateTime.now());
 
-    await SyncCustomers(DateTime(2024, 5, 1, 15, 55, 30));
+    // await SyncCustomers(DateTime(2024, 5, 1, 15, 55, 30)); // Customer sync devre dışı
 
-    print("7");
+    print('⏰ Son güncelleme zamanı kaydediliyor...');
     //update sonu son update saati güncelleme
     String nowString = DateFormat('dd.MM.yyyy HH:mm:ss').format(DateTime.now());
     await db.insert('updateDates', {'update_time': nowString});
+    print('✅ Clean Sync tamamlandı!');
     // Database açık kalacak - App Inspector için
   }
 
@@ -119,7 +102,7 @@ class SyncController {
     //daha önce update edildi ve bu tarih kaydedildiyse
     if (lastUpdate != null) {
       await SyncProducts(lastUpdate);
-      await SyncCustomers(lastUpdate);
+      // await SyncCustomers(lastUpdate); // Customer sync devre dışı
 
       //son update zamanı güncelleme
       String nowString = DateFormat(
@@ -133,55 +116,23 @@ class SyncController {
     // Database açık kalacak - App Inspector için
   }
 
-  //SYNC CUSTOMERS
-  //SYNC CUSTOMERS
+  //SYNC CUSTOMERS - DEVRE DIŞI (Customer tablosu kaldırıldı)
+  //SYNC CUSTOMERS - ARTİK CUSTOMERBALANCE KULLANILIYOR
   //SYNC CUSTOMERS
   Future<void> SyncCustomers(DateTime lastupdatedate) async {
-    final controller = CustomerController();
-    //TODO keyi içerden alsın statik değil
+    // Bu fonksiyon devre dışı - Customer tablosu kaldırıldı
+    // Artık sadece CustomerBalance kullanılıyor (balancecontroller.fetchAndStoreCustomers() ile)
+    print('SyncCustomers devre dışı - CustomerBalance kullanılıyor');
+    return;
 
+    // ESKI KOD - KULLANILMIYOR
+    /*
+    final controller = CustomerController();
     final customers = await controller.getNewCustomer(lastupdatedate);
-    //print("all customers/()(() $customers");
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
-
-    var result = await db.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='Customer';",
-    );
-    if (result.isEmpty) {
-      await db.execute('''
-        CREATE TABLE Customer (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          VergiNo TEXT,
-          VergiDairesi TEXT,
-          Adres TEXT,
-          Telefon TEXT,
-          Email TEXT,
-          Kod TEXT,
-          Unvan TEXT,
-          PostCode TEXT,
-          Aktif INTEGER NOT NULL
-        )
-      ''');
-    } else {
-      // Tablo varsa sadece verileri temizle
-      // await db.delete('Customer');
-    }
-
-    if (customers != null) {
-      await db.transaction((txn) async {
-        // Eğer eski kayıtları temizlemek istersen açabilirsin
-        // await txn.delete('Customer');
-
-        for (var customer in customers) {
-          await txn.insert('Customer', customer.toMap());
-        }
-      });
-
-      List<Map> list = await db.query('Customer');
-
-      print('-!_!_!_!_!_!_Customers in database: ${list.length} $list ');
-    }
+    // ... eski Customer tablo işlemleri ...
+    */
   }
 
   Future<void> SyncAllRefunds() async {
@@ -204,13 +155,13 @@ class SyncController {
             .map((e) => e['MusteriId'].toString().trim()) // boşlukları temizle
             .toSet();
 
-    // 2. Veritabanındaki tüm Customer kayıtlarını al
-    final customers = await db.query('Customer');
+    // 2. Veritabanındaki tüm CustomerBalance kayıtlarını al
+    final customers = await db.query('CustomerBalance');
 
     // 3. Sadece API'den gelen carikod'lara sahip olanları filtrele
     final filteredCustomers =
         customers.where((customer) {
-          final cariKod = customer['Kod']?.toString().trim();
+          final cariKod = customer['kod']?.toString().trim();
           return allowedCariKodlar.contains(cariKod);
         }).toList();
 
@@ -218,7 +169,7 @@ class SyncController {
 
     // 4. Her uygun müşteri için refund senkronizasyonu yap
     for (final customer in filteredCustomers) {
-      final cariKod = customer['Kod'].toString().trim();
+      final cariKod = customer['kod'].toString().trim();
       final musteriId = customer['id'].toString();
 
       print("🔄 Senkronize ediliyor: $cariKod");
