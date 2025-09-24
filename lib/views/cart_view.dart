@@ -82,8 +82,13 @@ class _CartViewState extends State<CartView> {
     setState(() {
       for (var product in _allProducts) {
         final key = product.stokKodu;
-        final miktar = provider.getmiktar(key);
-        final iskonto = provider.getIskonto(key);
+
+        // Mevcut seçili birim tipine göre değerleri al
+        final isBox = _isBoxMap[key] ?? false;
+        final birimTipi = isBox ? 'Box' : 'Unit';
+
+        final miktar = provider.getmiktar(key, birimTipi);
+        final iskonto = provider.getIskonto(key, birimTipi);
 
         _quantityMap[key] = miktar;
         _iskontoMap[key] = iskonto;
@@ -119,12 +124,7 @@ class _CartViewState extends State<CartView> {
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Provider değiştiğinde map'leri güncelle
-    _syncWithProvider();
-  }
+  // didChangeDependencies kaldırıldı - gereksiz _syncWithProvider çağrılarını önlemek için
 
   @override
   void dispose() {
@@ -916,7 +916,10 @@ _barcodeFocusNode.requestFocus();
                               listen: true,
                             );
 
-                            _quantityMap[key] = providersafdas.getmiktar(key);
+                            // Mevcut seçili birim tipine göre miktarı al
+                            final isBox = _isBoxMap[key] ?? false;
+                            final birimTipi = isBox ? 'Box' : 'Unit';
+                            _quantityMap[key] = providersafdas.getmiktar(key, birimTipi);
 
                             // Quantity controller başlatma
                             if (!_quantityControllers.containsKey(key)) {
@@ -1869,7 +1872,7 @@ _barcodeFocusNode.requestFocus();
                                                                     final newQuantity = currentQuantity - 1;
 
                                                                     // Önce mevcut item'ı sil
-                                                                    provider.removeItem(key);
+                                                                    provider.removeItem(key, birimTipi);
 
                                                                     if (newQuantity > 0) {
                                                                       provider.addOrUpdateItem(
@@ -1943,7 +1946,8 @@ _barcodeFocusNode.requestFocus();
     final isBox = _isBoxMap[key] ?? false;
 
     // Önce mevcut item'ı sil
-    provider.removeItem(key);
+    final birimTipi = isBox ? 'Box' : 'Unit';
+    provider.removeItem(key, birimTipi);
 
     if (newQuantity > 0) {
       final birimTipi = isBox ? 'Box' : 'Unit';

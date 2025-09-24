@@ -86,19 +86,39 @@ class CartProvider extends ChangeNotifier {
 
   String get customerName => _customerName;
 
-  int getIskonto(String stokKodu) {
+  int getIskonto(String stokKodu, [String? birimTipi]) {
+    if (birimTipi != null) {
+      final cartKey = '${stokKodu}_$birimTipi';
+      return _items[cartKey]?.iskonto ?? 0;
+    }
+    // Backward compatibility: eski key ile dene
     return _items[stokKodu]?.iskonto ?? 0;
   }
 
-  String getBirimTipi(String stokKodu) {
+  String getBirimTipi(String stokKodu, [String? birimTipi]) {
+    if (birimTipi != null) {
+      final cartKey = '${stokKodu}_$birimTipi';
+      return _items[cartKey]?.birimTipi ?? birimTipi;
+    }
+    // Backward compatibility: eski key ile dene
     return _items[stokKodu]?.birimTipi ?? 'Box';
   }
 
-  double getBirimFiyat(String stokKodu) {
+  double getBirimFiyat(String stokKodu, [String? birimTipi]) {
+    if (birimTipi != null) {
+      final cartKey = '${stokKodu}_$birimTipi';
+      return _items[cartKey]?.birimFiyat ?? 0.0;
+    }
+    // Backward compatibility: eski key ile dene
     return _items[stokKodu]?.birimFiyat ?? 0.0;
   }
 
-  int getmiktar(String stokKodu) {
+  int getmiktar(String stokKodu, [String? birimTipi]) {
+    if (birimTipi != null) {
+      final cartKey = '${stokKodu}_$birimTipi';
+      return _items[cartKey]?.miktar ?? 0;
+    }
+    // Backward compatibility: eski key ile dene
     return _items[stokKodu]?.miktar ?? 0;
   }
 
@@ -138,12 +158,15 @@ class CartProvider extends ChangeNotifier {
     String adetFiyati = '',
     String kutuFiyati = '',
   }) {
-    if (_items.containsKey(stokKodu)) {
-      print("stokkou $stokKodu");
-      final current = _items[stokKodu]!;
+    // Sepet anahtarı: stokKodu + birimTipi (aynı ürünün farklı birimleri ayrı item olacak)
+    final cartKey = '${stokKodu}_$birimTipi';
+
+    if (_items.containsKey(cartKey)) {
+      print("cartKey $cartKey");
+      final current = _items[cartKey]!;
       current.miktar += miktar;
       if (current.miktar <= 0) {
-        _items.remove(stokKodu);
+        _items.remove(cartKey);
       } else {
         current.birimFiyat = birimFiyat;
         current.iskonto = iskonto;
@@ -155,7 +178,7 @@ class CartProvider extends ChangeNotifier {
         current.kutuFiyati = kutuFiyati;
       }
     } else {
-      _items[stokKodu] = CartItem(
+      _items[cartKey] = CartItem(
         stokKodu: stokKodu,
         urunAdi: urunAdi,
         birimFiyat: birimFiyat,
@@ -174,8 +197,23 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void removeItem(String stokKodu) {
-    _items.remove(stokKodu);
+  void removeItem(String stokKodu, [String? birimTipi]) {
+    if (birimTipi != null) {
+      // Yeni format: stokKodu_birimTipi
+      final cartKey = '${stokKodu}_$birimTipi';
+      _items.remove(cartKey);
+    } else {
+      // Eski format desteği veya tüm birim tiplerini sil
+      final keysToRemove = <String>[];
+      for (final key in _items.keys) {
+        if (key == stokKodu || key.startsWith('${stokKodu}_')) {
+          keysToRemove.add(key);
+        }
+      }
+      for (final key in keysToRemove) {
+        _items.remove(key);
+      }
+    }
     notifyListeners();
   }
 
@@ -227,7 +265,8 @@ class CartProvider extends ChangeNotifier {
         kutuFiyati: item['kutuFiyati'],
       );
 
-      _items[cartItem.stokKodu] = cartItem;
+      final cartKey = '${cartItem.stokKodu}_${cartItem.birimTipi}';
+      _items[cartKey] = cartItem;
     }
 
     // notifyListeners(); // isteğe bağlı

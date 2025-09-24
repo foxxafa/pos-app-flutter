@@ -183,21 +183,23 @@ class _CartView2State extends State<CartView2> {
                         itemBuilder: (context, index) {
                           final item = cartItems[index];
                           final stokKodu = item.stokKodu;
+                          // Unique key: stokKodu + birimTipi (aynı ürünün farklı birimleri için)
+                          final controllerKey = '${stokKodu}_${item.birimTipi}';
 
                           // Controller'ları başlat veya al
-                          if (!_priceControllers.containsKey(stokKodu)) {
-                            _priceControllers[stokKodu] = TextEditingController();
-                            _priceFocusNodes[stokKodu] = FocusNode();
+                          if (!_priceControllers.containsKey(controllerKey)) {
+                            _priceControllers[controllerKey] = TextEditingController();
+                            _priceFocusNodes[controllerKey] = FocusNode();
                           }
-                          if (!_discountControllers.containsKey(stokKodu)) {
-                            _discountControllers[stokKodu] = TextEditingController();
-                            _discountFocusNodes[stokKodu] = FocusNode();
+                          if (!_discountControllers.containsKey(controllerKey)) {
+                            _discountControllers[controllerKey] = TextEditingController();
+                            _discountFocusNodes[controllerKey] = FocusNode();
                           }
 
-                          final priceController = _priceControllers[stokKodu]!;
-                          final discountController = _discountControllers[stokKodu]!;
-                          final priceFocusNode = _priceFocusNodes[stokKodu]!;
-                          final discountFocusNode = _discountFocusNodes[stokKodu]!;
+                          final priceController = _priceControllers[controllerKey]!;
+                          final discountController = _discountControllers[controllerKey]!;
+                          final priceFocusNode = _priceFocusNodes[controllerKey]!;
+                          final discountFocusNode = _discountFocusNodes[controllerKey]!;
 
                           // İndirimli fiyatı hesapla
                           // birimFiyat zaten provider'da tutuluyor ve cart_view'dan geliyor
@@ -296,7 +298,7 @@ class _CartView2State extends State<CartView2> {
                                                   ),
                                                   onPressed:
                                                       () => cartProvider
-                                                          .removeItem(stokKodu),
+                                                          .removeItem(stokKodu, item.birimTipi),
                                                   constraints:
                                                       const BoxConstraints(),
                                                   padding: EdgeInsets.zero,
@@ -613,7 +615,7 @@ class _CartView2State extends State<CartView2> {
                                                     onPressed: () {
                                                       int newMiktar = item.miktar - 1;
                                                       if (newMiktar <= 0) {
-                                                        cartProvider.removeItem(stokKodu);
+                                                        cartProvider.removeItem(stokKodu, item.birimTipi);
                                                       } else {
                                                         final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
                                                         cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
@@ -653,7 +655,7 @@ class _CartView2State extends State<CartView2> {
                                                   ),
                                                   child: TextField(
                                                     controller: TextEditingController(
-                                                      text: "${Provider.of<CartProvider>(context, listen: true).items[stokKodu]?.miktar ?? 0}",
+                                                      text: "${item.miktar}",
                                                     ),
                                                     textAlign: TextAlign.center,
                                                     style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
@@ -665,7 +667,7 @@ class _CartView2State extends State<CartView2> {
                                                     onSubmitted: (value) {
                                                       final newMiktar = int.tryParse(value) ?? 0;
                                                       if (newMiktar <= 0) {
-                                                        cartProvider.removeItem(stokKodu);
+                                                        cartProvider.removeItem(stokKodu, item.birimTipi);
                                                       } else {
                                                         final difference = newMiktar - item.miktar;
                                                         if (difference != 0) {
