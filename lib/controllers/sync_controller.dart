@@ -23,6 +23,10 @@ class SyncController {
   // CLEAN SYNC
   cleanSync() async {
     print('🔄 Clean Sync başlatılıyor...');
+
+    // Önce yarım kalan resim indirme işlemi var mı kontrol et
+    await _checkAndResumeImageDownload();
+
     await balancecontroller.fetchAndStoreCustomers();
     await syncPendingRefunds();
     //open database
@@ -388,9 +392,12 @@ class SyncController {
     }
   }
 
-  // Arka planda resim indirme - sync'i bloklamaz
+  // Arka planda resim indirme - sync'i bloklamaz ve uygulama kapansa bile devam eder
   void _downloadImagesInBackground() async {
     try {
+      // Resim indirme durumunu kaydet
+      await _saveImageDownloadState('started');
+
       // Veritabanından ürünleri al
       DatabaseHelper dbHelper = DatabaseHelper();
       Database db = await dbHelper.database;
@@ -399,10 +406,74 @@ class SyncController {
       final products = maps.map((map) => ProductModel.fromMap(map)).toList();
 
       if (products.isNotEmpty) {
-        downloadImages(products);
+        print('📱 Resim indirme arka planda başlatıldı - uygulama kapansa bile devam eder');
+        await downloadImages(products);
+        await _saveImageDownloadState('completed');
       }
     } catch (e) {
       print('⚠️ Resim indirme hatası: $e');
+      await _saveImageDownloadState('failed');
+    }
+  }
+
+  // Resim indirme durumunu veritabanına kaydet
+  Future<void> _saveImageDownloadState(String state) async {
+    try {
+      DatabaseHelper dbHelper = DatabaseHelper();
+      Database db = await dbHelper.database;
+
+      // State tablosu yoksa oluştur
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS AppState (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+
+      final now = DateTime.now().toIso8601String();
+
+      await db.delete('AppState', where: 'key = ?', whereArgs: ['image_download_state']);
+      await db.insert('AppState', {
+        'key': 'image_download_state',
+        'value': state,
+        'updated_at': now,
+      });
+    } catch (e) {
+      print('⚠️ State kaydetme hatası: $e');
+    }
+  }
+
+  // Yarım kalan resim indirme işlemini kontrol et ve devam ettir
+  Future<void> _checkAndResumeImageDownload() async {
+    try {
+      DatabaseHelper dbHelper = DatabaseHelper();
+      Database db = await dbHelper.database;
+
+      final result = await db.query(
+        'AppState',
+        where: 'key = ?',
+        whereArgs: ['image_download_state'],
+        limit: 1,
+      );
+
+      if (result.isNotEmpty) {
+        final state = result.first['value'] as String;
+        final updatedAt = DateTime.parse(result.first['updated_at'] as String);
+        final timeDiff = DateTime.now().difference(updatedAt).inHours;
+
+        if (state == 'started' && timeDiff < 24) {
+          print('🔄 Yarım kalan resim indirme işlemi devam ettiriliyor...');
+          _downloadImagesInBackground();
+        } else if (state == 'completed') {
+          print('✅ Resim indirme zaten tamamlanmış');
+        }
+      } else {
+        print('📱 İlk kez resim indirme yapılacak');
+      }
+    } catch (e) {
+      print('⚠️ Resim indirme durumu kontrol hatası: $e');
     }
   }
 
@@ -414,20 +485,79 @@ Future<void> downloadImages(List<ProductModel>? products) async {
     return;
   }
 
-  print('📦 ${products.length} ürün için resim indirme başlatılıyor...');
+  _backgroundDownloadActive = true;
+  print('🔄 Arka plan resim indirme başlatıldı');
 
-  // Memory kullanımını azaltmak için daha küçük batch'ler (3 paralel)
-  const int maxConcurrent = 3;
+  // Resimleri öncelik sırasına göre ayır
+  final priorityProducts = <ProductModel>[];
+  final regularProducts = <ProductModel>[];
+
+  // Öncelik algoritması:
+  // 1. Aktif ürünler öncelikli
+  // 2. Fiyatı olan ürünler öncelikli
+  // 3. Barkodu olan ürünler öncelikli
+  final sortedProducts = products.where((p) => p.imsrc != null && p.imsrc!.isNotEmpty).toList();
+
+  sortedProducts.sort((a, b) {
+    // Aktif ürünler önce
+    int activeCompare = (b.aktif ?? 0).compareTo(a.aktif ?? 0);
+    if (activeCompare != 0) return activeCompare;
+
+    // Fiyatı olanlar önce
+    bool aHasPrice = (a.adetFiyati != null && a.adetFiyati!.isNotEmpty && a.adetFiyati != '0');
+    bool bHasPrice = (b.adetFiyati != null && b.adetFiyati!.isNotEmpty && b.adetFiyati != '0');
+    int priceCompare = bHasPrice.toString().compareTo(aHasPrice.toString());
+    if (priceCompare != 0) return priceCompare;
+
+    // Barkodu olanlar önce
+    bool aHasBarcode = (a.barcode1 != null && a.barcode1!.isNotEmpty);
+    bool bHasBarcode = (b.barcode1 != null && b.barcode1!.isNotEmpty);
+    return bHasBarcode.toString().compareTo(aHasBarcode.toString());
+  });
+
+  for (var product in sortedProducts) {
+    // Cart view'de görünen ürünleri öncelikle indir
+    // İlk 50 ürün hemen gösterilir, 500 ürüne kadar arama sonucu gösterilebilir
+    if (priorityProducts.length < 500) {
+      priorityProducts.add(product);
+    } else {
+      regularProducts.add(product);
+    }
+  }
+
+  final totalWithImages = priorityProducts.length + regularProducts.length;
+  print('📦 ${totalWithImages} resimli ürün bulundu');
+  print('🔥 ${priorityProducts.length} öncelikli resim');
+  print('📁 ${regularProducts.length} normal resim');
+
   int downloaded = 0;
+
+  // Önce öncelikli resimleri indir
+  if (priorityProducts.isNotEmpty) {
+    print('🔥 Öncelikli resimler indiriliyor...');
+    downloaded = await _downloadBatchWithProgress(priorityProducts, dir.path, downloaded, totalWithImages);
+  }
+
+  // Sonra geri kalanları indir
+  if (regularProducts.isNotEmpty) {
+    print('📁 Normal resimler indiriliyor...');
+    downloaded = await _downloadBatchWithProgress(regularProducts, dir.path, downloaded, totalWithImages);
+  }
+
+  print('✅ Resim indirme tamamlandı');
+  _backgroundDownloadActive = false;
+}
+
+Future<int> _downloadBatchWithProgress(List<ProductModel> products, String dirPath, int initialCount, int total) async {
+  const int maxConcurrent = 3;
+  int downloaded = initialCount;
 
   for (int i = 0; i < products.length; i += maxConcurrent) {
     final batch = products.skip(i).take(maxConcurrent);
     final futures = <Future<void>>[];
 
     for (final product in batch) {
-      if (product.imsrc != null && product.imsrc!.isNotEmpty) {
-        futures.add(_downloadSingleImage(product.imsrc!, dir.path));
-      }
+      futures.add(_downloadSingleImage(product.imsrc!, dirPath));
     }
 
     // Her batch'i bekle
@@ -436,14 +566,14 @@ Future<void> downloadImages(List<ProductModel>? products) async {
 
     // İlerleme göster (her 10 resimde bir)
     if (downloaded % 10 == 0) {
-      print('📦 $downloaded/${products.length} resim indirildi...');
+      print('📦 $downloaded/$total resim indirildi...');
     }
 
     // Memory GC için kısa bekleme
     await Future.delayed(Duration(milliseconds: 100));
   }
 
-  print('✅ Resim indirme tamamlandı');
+  return downloaded;
 }
 
 Future<void> _downloadSingleImage(String url, String dirPath) async {
@@ -456,19 +586,151 @@ Future<void> _downloadSingleImage(String url, String dirPath) async {
     final filePath = '$dirPath/$fileName';
     final file = File(filePath);
 
-    // Dosya zaten varsa indirme
-    if (await file.exists()) {
+    // Dosya zaten varsa veya aktif indirme varsa atla
+    if (await file.exists() || _activeDownloads.contains(fileName)) {
       return;
     }
 
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode == 200) {
-      await file.writeAsBytes(response.bodyBytes);
-      print('✓ İndirildi: $fileName');
+    _activeDownloads.add(fileName);
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        await file.writeAsBytes(response.bodyBytes);
+        print('✓ İndirildi: $fileName');
+      }
+    } finally {
+      _activeDownloads.remove(fileName);
     }
   } catch (e) {
     // Sessizce geç - resim indirme hatası sync'i durdurmasın
   }
 }
+
+// Duplicate indirmeyi önlemek için aktif indirme listesi
+static final Set<String> _activeDownloads = <String>{};
+
+// Genel arka plan resim indirme durumu
+static bool _backgroundDownloadActive = false;
+
+// Arama sonucu ürünlerin resimlerini hemen indir (Cart View'den çağrılır)
+static Future<void> downloadSearchResultImages(List<ProductModel> searchProducts, {Function? onImagesDownloaded}) async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    final futures = <Future<void>>[];
+
+    for (final product in searchProducts) {
+      if (product.imsrc != null && product.imsrc!.isNotEmpty) {
+        // Dosya var mı kontrol et
+        final uri = Uri.parse(product.imsrc!);
+        final fileName = uri.pathSegments.isNotEmpty
+            ? uri.pathSegments.last
+            : 'unknown.jpg';
+        final filePath = '${dir.path}/$fileName';
+        final file = File(filePath);
+
+        // Dosya yoksa ve aktif indirme yapılmıyorsa indir
+        if (!await file.exists() && !_activeDownloads.contains(fileName)) {
+          _activeDownloads.add(fileName);
+          futures.add(_downloadSearchImageWithCleanup(product.imsrc!, dir.path, product.urunAdi ?? 'Ürün', fileName));
+        }
+      }
+    }
+
+    if (futures.isNotEmpty) {
+      print('🔍 ${futures.length} arama sonucu resmi indiriliyor...');
+      await Future.wait(futures);
+      print('✅ Arama sonucu resimleri indirildi');
+
+      // Resimler indirildikten sonra callback çağır (UI'ı yenile)
+      if (onImagesDownloaded != null) {
+        onImagesDownloaded();
+      }
+    }
+  } catch (e) {
+    print('⚠️ Arama resmi indirme hatası: $e');
+  }
+}
+
+static Future<void> _downloadSearchImageWithCleanup(String url, String dirPath, String productName, String fileName) async {
+  try {
+    final uri = Uri.parse(url);
+    final filePath = '$dirPath/$fileName';
+    final file = File(filePath);
+
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      await file.writeAsBytes(response.bodyBytes);
+      print('🔍 Arama resmi indirildi: $productName');
+    }
+  } catch (e) {
+    print('⚠️ $productName resmi indirilemedi');
+  } finally {
+    // İndirme tamamlandı - listeden çıkar
+    _activeDownloads.remove(fileName);
+  }
+}
+
+static Future<void> _downloadSearchImage(String url, String dirPath, String productName) async {
+  try {
+    final uri = Uri.parse(url);
+    final fileName = uri.pathSegments.isNotEmpty
+        ? uri.pathSegments.last
+        : 'unknown.jpg';
+
+    final filePath = '$dirPath/$fileName';
+    final file = File(filePath);
+
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      await file.writeAsBytes(response.bodyBytes);
+      print('🔍 Arama resmi indirildi: $productName');
+    }
+  } catch (e) {
+    print('⚠️ $productName resmi indirilemedi');
+  }
+}
+
+// Cart items için basit resim indirme (ProductModel oluşturmadan)
+static Future<void> downloadCartItemImages(List<dynamic> cartItems, {Function? onImagesDownloaded}) async {
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    final futures = <Future<void>>[];
+
+    for (final item in cartItems) {
+      final imsrc = item.imsrc;
+      final urunAdi = item.urunAdi ?? 'Ürün';
+
+      if (imsrc != null && imsrc.isNotEmpty) {
+        final uri = Uri.parse(imsrc);
+        final fileName = uri.pathSegments.isNotEmpty
+            ? uri.pathSegments.last
+            : 'unknown.jpg';
+        final filePath = '${dir.path}/$fileName';
+        final file = File(filePath);
+
+        if (!await file.exists() && !_activeDownloads.contains(fileName)) {
+          _activeDownloads.add(fileName);
+          futures.add(_downloadSearchImageWithCleanup(imsrc, dir.path, urunAdi, fileName));
+        }
+      }
+    }
+
+    if (futures.isNotEmpty) {
+      print('🛒 ${futures.length} sepet resmi indiriliyor...');
+      await Future.wait(futures);
+      print('✅ Sepet resimleri indirildi');
+
+      if (onImagesDownloaded != null) {
+        onImagesDownloaded();
+      }
+    }
+  } catch (e) {
+    print('⚠️ Sepet resmi indirme hatası: $e');
+  }
+}
+
+// Arka plan resim indirme durumunu kontrol et
+static bool isBackgroundDownloadActive() => _backgroundDownloadActive;
 
 }

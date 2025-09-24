@@ -9,6 +9,7 @@ import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 import '../models/product_model.dart';
 import '../providers/cartcustomer_provider.dart';
+import '../controllers/sync_controller.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -53,6 +54,27 @@ class _CartViewState extends State<CartView> {
   final Map<String, int> _quantityMap = {};
   final Map<String, int> _iskontoMap = {};
   final Map<String, TextEditingController> _quantityControllers = {};
+
+  // Duplicate indirme önleme için timer
+  Timer? _imageDownloadTimer;
+
+  // Resim indirmeyi debounce ile zamanla
+  void _scheduleImageDownload() {
+    _imageDownloadTimer?.cancel();
+    _imageDownloadTimer = Timer(Duration(milliseconds: 500), () {
+      if (_filteredProducts.isNotEmpty && mounted) {
+        SyncController.downloadSearchResultImages(_filteredProducts, onImagesDownloaded: () {
+          // Resimler indirildikten sonra UI'ı yenile
+          if (mounted) {
+            setState(() {
+              // Cache'i force update ile yenile
+              _generateImageFutures(_filteredProducts, forceUpdate: true);
+            });
+          }
+        });
+      }
+    });
+  }
 
   void _syncWithProvider() {
     final provider = Provider.of<CartProvider>(context, listen: false);
@@ -116,6 +138,7 @@ class _CartViewState extends State<CartView> {
 
   @override
   void dispose() {
+    _imageDownloadTimer?.cancel();
     _barcodeFocusNode.dispose();
     _searchController.dispose();
     _quantityControllers.values.forEach((controller) => controller.dispose());
@@ -128,10 +151,10 @@ class _CartViewState extends State<CartView> {
     await _audioPlayer.play(AssetSource('wrong.mp3'));
   }
 
-  void _generateImageFutures(List<ProductModel> products) {
+  void _generateImageFutures(List<ProductModel> products, {bool forceUpdate = false}) {
     for (final product in products) {
       final stokKodu = product.stokKodu;
-      if (!_imageFutures.containsKey(stokKodu)) {
+      if (!_imageFutures.containsKey(stokKodu) || forceUpdate) {
         _imageFutures[stokKodu] = _loadImage(product.imsrc);
       }
     }
@@ -247,6 +270,9 @@ class _CartViewState extends State<CartView> {
       _filteredProducts = filtered.take(50).toList();
       _generateImageFutures(_filteredProducts);
     });
+
+    // Arama sonucundaki ürünlerin resimlerini dinamik olarak indir (debounced)
+    _scheduleImageDownload();
 
     if (_filteredProducts.length == 1 &&
         RegExp(r'^\d+$').hasMatch(_searchController2.text)) {
@@ -370,6 +396,9 @@ class _CartViewState extends State<CartView> {
       _filteredProducts = filtered.take(50).toList();
       _generateImageFutures(_filteredProducts);
     });
+
+    // Arama sonucundaki ürünlerin resimlerini dinamik olarak indir (debounced)
+    _scheduleImageDownload();
 
     if (_filteredProducts.length == 1 &&
         RegExp(r'^\d+$').hasMatch(_searchController.text)) {
@@ -1210,6 +1239,9 @@ _barcodeFocusNode.requestFocus();
                                                                         ? double.parse(product.kutuFiyati.toString())
                                                                         : double.parse(product.adetFiyati.toString());
 
+                                                                    // Fiyat controller'ını güncelle
+                                                                    _priceController.text = productFiyat.toStringAsFixed(2);
+
                                                                     final miktar = _quantityMap[key] ?? 0;
 
                                                                     if (miktar > 0) {
@@ -1224,6 +1256,7 @@ _barcodeFocusNode.requestFocus();
                                                                         miktar: 0,
                                                                         iskonto: _iskontoMap[key] ?? 0,
                                                                         birimTipi: val!,
+                                                                        imsrc: product.imsrc,
                                                                       );
                                                                     }
                                                                   }
@@ -1723,6 +1756,7 @@ _barcodeFocusNode.requestFocus();
                                                                 miktar: 1,
                                                                 iskonto: iskonto,
                                                                 birimTipi: birimTipi,
+                                                                imsrc: product.imsrc,
                                                               );
 
                                                               setState(() {
@@ -1824,6 +1858,7 @@ _barcodeFocusNode.requestFocus();
                                                                         miktar: newQuantity,
                                                                         iskonto: iskonto,
                                                                         birimTipi: birimTipi,
+                                                                        imsrc: product.imsrc,
                                                                       );
                                                                     }
 
@@ -1904,6 +1939,7 @@ _barcodeFocusNode.requestFocus();
         miktar: newQuantity, // Bu doğru, çünkü removeItem ile sildik
         iskonto: iskonto,
         birimTipi: birimTipi,
+        imsrc: product.imsrc,
       );
     }
 
