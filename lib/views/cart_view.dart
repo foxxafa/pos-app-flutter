@@ -599,11 +599,6 @@ class _CartViewState extends State<CartView> {
                   ),
                 ),
                 contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                prefixIcon: Icon(
-                  Icons.search,
-                  size: 20,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -1021,7 +1016,7 @@ _barcodeFocusNode.requestFocus();
           "${'cart.code'.tr()}= ${product.stokKodu}",
         ),
         Text(
-          "${'cart.unit_price'.tr()}= ${product.adetFiyati}"
+          "${'cart.unit_price'.tr()}= ${product.adetFiyati}",
         ),
         Text(
           "${'cart.box_price'.tr()}= ${product.kutuFiyati}",

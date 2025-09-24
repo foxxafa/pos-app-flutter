@@ -32,13 +32,49 @@ Future<List<ProductModel>?> getNewProduct(DateTime date) async {
     '$_baseUrl?r=apimobil/getnewproducts&time=$formattedDate',
   );
 
-  final response = await http.get(
-    url,
-    headers: {
-      'Authorization': 'Bearer $savedApiKey',
-      'Accept': 'application/json',
-    },
-  );
+  // HTTP client with timeout and retry
+  final client = http.Client();
+  http.Response? response;
+  int maxRetries = 3;
+  int retryDelay = 5; // seconds
+
+  for (int attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      print('📡 Ürün indirme denemesi $attempt/$maxRetries...');
+
+      response = await client.get(
+        url,
+        headers: {
+          'Authorization': 'Bearer $savedApiKey',
+          'Accept': 'application/json',
+        },
+      ).timeout(Duration(minutes: 5)); // 5 dakika timeout
+
+      break; // Başarılı olursa döngüden çık
+
+    } catch (e) {
+      print('⚠️ Deneme $attempt başarısız: $e');
+
+      if (attempt == maxRetries) {
+        print('❌ Tüm denemeler başarısız oldu');
+        client.close();
+        return null;
+      }
+
+      print('🔄 $retryDelay saniye bekleyip tekrar denenecek...');
+      await Future.delayed(Duration(seconds: retryDelay));
+      retryDelay *= 2; // Exponential backoff
+    }
+  }
+
+  client.close();
+
+  if (response == null) {
+    print('❌ HTTP response null - network problemi');
+    return null;
+  }
+
+  print('✅ HTTP response alındı: ${response.statusCode}');
 
   if (response.statusCode == 200) {
     final data = json.decode(response.body);
@@ -49,29 +85,15 @@ Future<List<ProductModel>?> getNewProduct(DateTime date) async {
     // Listeyi CustomerModel listesine dönüştür
     final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
 
-final mata = json.decode(response.body);
-
-
-final List<dynamic> customers = mata['customers'];
-
-// JM JELLY STAND ( METAL ) ürününü tam olarak yazdır
-for (var customer in customers) {
-  if (customer['UrunAdi'] == 'JM JELLY STAND ( METAL )') {
-    print('JM JELLY STAND ( METAL ) verisi:');
-    print(customer);
-    break; // yalnızca ilk eşleşeni yazdır, istersen break'i kaldır
-  }
-}
-
-// Debug log kaldırıldı - performans için
-
-
+    print('✅ ${products.length} ürün başarıyla alındı');
     return products;
+
+    } else {
+      print('❌ API status: ${data['status']} - Ürün bulunamadı');
+      return null;
     }
-return null;
   } else {
-    print('Hata oluştu: ${response.statusCode}');
-    print("hata response ${response.body}");
+    print('❌ HTTP Error: ${response.statusCode}');
     return null;
   }
 } 
