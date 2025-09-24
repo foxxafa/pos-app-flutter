@@ -28,6 +28,8 @@ class _CartView2State extends State<CartView2> {
   // Controller'ları her item için saklayacağız
   final Map<String, TextEditingController> _priceControllers = {};
   final Map<String, TextEditingController> _discountControllers = {};
+  final Map<String, FocusNode> _priceFocusNodes = {};
+  final Map<String, FocusNode> _discountFocusNodes = {};
 
   // Image cache sistemi
   Map<String, Future<String?>> _imageFutures = {};
@@ -38,6 +40,8 @@ class _CartView2State extends State<CartView2> {
     // Controller'ları temizle
     _priceControllers.forEach((_, controller) => controller.dispose());
     _discountControllers.forEach((_, controller) => controller.dispose());
+    _priceFocusNodes.forEach((_, node) => node.dispose());
+    _discountFocusNodes.forEach((_, node) => node.dispose());
     _imageDownloadTimer?.cancel();
     super.dispose();
   }
@@ -183,22 +187,38 @@ class _CartView2State extends State<CartView2> {
                           // Controller'ları başlat veya al
                           if (!_priceControllers.containsKey(stokKodu)) {
                             _priceControllers[stokKodu] = TextEditingController();
+                            _priceFocusNodes[stokKodu] = FocusNode();
                           }
                           if (!_discountControllers.containsKey(stokKodu)) {
                             _discountControllers[stokKodu] = TextEditingController();
+                            _discountFocusNodes[stokKodu] = FocusNode();
                           }
 
                           final priceController = _priceControllers[stokKodu]!;
                           final discountController = _discountControllers[stokKodu]!;
+                          final priceFocusNode = _priceFocusNodes[stokKodu]!;
+                          final discountFocusNode = _discountFocusNodes[stokKodu]!;
 
                           // İndirimli fiyatı hesapla
                           // birimFiyat zaten provider'da tutuluyor ve cart_view'dan geliyor
                           final discountAmount = (item.birimFiyat * item.iskonto) / 100;
                           final discountedPrice = item.birimFiyat - discountAmount;
 
-                          // Güncel değerleri controller'lara yaz
-                          priceController.text = discountedPrice.toStringAsFixed(2);
-                          discountController.text = item.iskonto > 0 ? item.iskonto.toString() : '0';
+                          // Controller'a değer yaz - sadece focus yoksa
+                          if (!priceFocusNode.hasFocus) {
+                            final currentText = priceController.text;
+                            final newText = discountedPrice.toStringAsFixed(2);
+                            if (currentText != newText) {
+                              priceController.text = newText;
+                            }
+                          }
+                          if (!discountFocusNode.hasFocus) {
+                            final currentText = discountController.text;
+                            final newText = item.iskonto > 0 ? item.iskonto.toString() : '0';
+                            if (currentText != newText) {
+                              discountController.text = newText;
+                            }
+                          }
 
                           return Column(
                             children: [
@@ -387,6 +407,7 @@ class _CartView2State extends State<CartView2> {
                                                   flex: 2,
                                                   child: TextField(
                                                         controller: priceController,
+                                                        focusNode: priceFocusNode,
                                                         keyboardType: TextInputType.numberWithOptions(decimal: true),
                                                         decoration: InputDecoration(
                                                           filled: true,
@@ -411,7 +432,10 @@ class _CartView2State extends State<CartView2> {
                                                           fontWeight: FontWeight.w500,
                                                         ),
                                                         onChanged: (value) {
-                                                          final yeniFiyat = double.tryParse(value.replaceAll(',', '.'));
+                                                          // Virgülü noktaya çevir
+                                                          final cleanValue = value.replaceAll(',', '.');
+
+                                                          final yeniFiyat = double.tryParse(cleanValue);
                                                           if (yeniFiyat != null && yeniFiyat >= 0) {
                                                             // Orjinal fiyatı al (birim tipine göre)
                                                             final orjinalFiyat = item.birimTipi == 'Unit'
@@ -425,7 +449,7 @@ class _CartView2State extends State<CartView2> {
                                                                   : 0;
 
                                                               // İndirim controller'ını güncelle
-                                                              discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+                                                              discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '0';
 
                                                               // Provider'ı güncelle
                                                               final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
@@ -445,6 +469,28 @@ class _CartView2State extends State<CartView2> {
                                                                 kutuFiyati: item.kutuFiyati,
                                                               );
                                                             }
+                                                          }
+                                                        },
+                                                        onEditingComplete: () {
+                                                          // Formatlama işlemi
+                                                          final value = priceController.text;
+                                                          final parsed = double.tryParse(value.replaceAll(',', '.'));
+                                                          if (parsed != null) {
+                                                            final formattedValue = parsed.toStringAsFixed(2);
+                                                            if (priceController.text != formattedValue) {
+                                                              priceController.text = formattedValue;
+                                                              priceController.selection = TextSelection.fromPosition(
+                                                                TextPosition(offset: formattedValue.length),
+                                                              );
+                                                            }
+                                                          }
+                                                        },
+                                                        onSubmitted: (value) {
+                                                          // Submit edildiğinde formatlama işlemi
+                                                          final parsed = double.tryParse(value.replaceAll(',', '.'));
+                                                          if (parsed != null) {
+                                                            final formattedValue = parsed.toStringAsFixed(2);
+                                                            priceController.text = formattedValue;
                                                           }
                                                         },
                                                       ),
@@ -468,6 +514,7 @@ class _CartView2State extends State<CartView2> {
                                                         child: TextField(
                                                           keyboardType: TextInputType.number,
                                                           controller: discountController,
+                                                          focusNode: discountFocusNode,
                                                           decoration: InputDecoration(
                                                             prefixText: '%',
                                                             prefixStyle: TextStyle(

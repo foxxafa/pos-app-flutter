@@ -1542,6 +1542,7 @@ _barcodeFocusNode.requestFocus();
                                                               // Hand kısmı - sağ tarafa
                                                               Flexible(
                                                                 child: Stack(
+                                                                clipBehavior: Clip.none,
                                                                 children: [
                                                                   GestureDetector(
                                                                     behavior: HitTestBehavior.translucent,
@@ -1654,8 +1655,8 @@ _barcodeFocusNode.requestFocus();
                                                                   ),
                                                                   // Box Badge (mavi)
                                                                   Positioned(
-                                                                    right: 0,
-                                                                    top: 0,
+                                                                    right: -2.w,
+                                                                    top: -1.w,
                                                                     child: Container(
                                                                       padding: EdgeInsets.all(1.w),
                                                                       decoration: BoxDecoration(
@@ -1694,8 +1695,8 @@ _barcodeFocusNode.requestFocus();
                                                                   ),
                                                                   // Unit Badge (turuncu)
                                                                   Positioned(
-                                                                    right: 0,
-                                                                    bottom: 0,
+                                                                    right: -2.w,
+                                                                    bottom: -1.w,
                                                                     child: Container(
                                                                       padding: EdgeInsets.all(1.w),
                                                                       decoration: BoxDecoration(
