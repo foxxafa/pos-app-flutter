@@ -290,62 +290,95 @@ class _CartView2State extends State<CartView2> {
                                             // İlk satır: Dropdown | Fiyat
                                             Row(
                                               children: [
-                                                // Dropdown (Unit/Box)
-                                                Container(
-                                                  padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
-                                                  decoration: BoxDecoration(
-                                                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                  ),
-                                                  child: DropdownButton<String>(
-                                                    value: item.birimTipi,
-                                                    isDense: true,
-                                                    underline: Container(),
-                                                    style: TextStyle(
-                                                      fontSize: 14.sp,
-                                                      color: Theme.of(context).colorScheme.primary,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                    items: ['Unit', 'Box'].map((value) {
-                                                      return DropdownMenuItem(
-                                                        value: value,
-                                                        child: Text(value),
-                                                      );
-                                                    }).toList(),
-                                                    onChanged: (newValue) {
-                                                      if ((newValue == 'Unit' && item.adetFiyati != 0) ||
-                                                          (newValue == 'Box' && item.kutuFiyati != "0")) {
-                                                        final fiyatStr = (newValue == 'Unit') ? item.adetFiyati : item.kutuFiyati;
-                                                        final fiyat = double.tryParse(fiyatStr.replaceAll(',', '.')) ?? 0.0;
-                                                        final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
-                                                        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-                                                        cartProvider.addOrUpdateItem(
-                                                          urunAdi: item.urunAdi,
-                                                          stokKodu: item.stokKodu,
-                                                          birimFiyat: fiyat,
-                                                          urunBarcode: item.urunBarcode,
-                                                          adetFiyati: item.adetFiyati,
-                                                          kutuFiyati: item.kutuFiyati,
-                                                          miktar: 0,
-                                                          iskonto: item.iskonto,
-                                                          birimTipi: newValue ?? "Box",
-                                                          durum: item.durum,
-                                                          vat: item.vat,
-                                                          imsrc: item.imsrc,
-                                                        );
-                                                      } else {
-                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                          SnackBar(
-                                                            content: Text('⚠️ Unit type not available for this product.'),
-                                                            behavior: SnackBarBehavior.floating,
-                                                            backgroundColor: Colors.orange.shade700,
-                                                            duration: Duration(seconds: 3),
-                                                          ),
-                                                        );
-                                                      }
-                                                    },
-                                                  ),
-                                                ),
+                                                // Birim kontrolü - tek birim varsa text, birden fazla varsa dropdown
+                                                () {
+                                                  // Mevcut birimleri kontrol et
+                                                  final hasUnit = item.adetFiyati != "0" && double.tryParse(item.adetFiyati.toString()) != 0;
+                                                  final hasBox = item.kutuFiyati != "0" && double.tryParse(item.kutuFiyati.toString()) != 0;
+                                                  final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
+
+                                                  if (availableUnits == 1) {
+                                                    // Tek birim varsa sadece text göster
+                                                    return Container(
+                                                      padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: Text(
+                                                        item.birimTipi,
+                                                        style: TextStyle(
+                                                          fontSize: 14.sp,
+                                                          color: Theme.of(context).colorScheme.primary,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    );
+                                                  } else {
+                                                    // Birden fazla birim varsa dropdown göster
+                                                    return Container(
+                                                      padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
+                                                      decoration: BoxDecoration(
+                                                        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                                                        borderRadius: BorderRadius.circular(8),
+                                                      ),
+                                                      child: DropdownButton<String>(
+                                                        value: item.birimTipi,
+                                                        isDense: true,
+                                                        underline: Container(),
+                                                        style: TextStyle(
+                                                          fontSize: 14.sp,
+                                                          color: Theme.of(context).colorScheme.primary,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                        items: [
+                                                          if (hasUnit)
+                                                            DropdownMenuItem(
+                                                              value: 'Unit',
+                                                              child: Text('Unit'),
+                                                            ),
+                                                          if (hasBox)
+                                                            DropdownMenuItem(
+                                                              value: 'Box',
+                                                              child: Text('Box'),
+                                                            ),
+                                                        ],
+                                                        onChanged: (newValue) {
+                                                          if ((newValue == 'Unit' && hasUnit) ||
+                                                              (newValue == 'Box' && hasBox)) {
+                                                            final fiyatStr = (newValue == 'Unit') ? item.adetFiyati : item.kutuFiyati;
+                                                            final fiyat = double.tryParse(fiyatStr.replaceAll(',', '.')) ?? 0.0;
+                                                            final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                            cartProvider.addOrUpdateItem(
+                                                              urunAdi: item.urunAdi,
+                                                              stokKodu: item.stokKodu,
+                                                              birimFiyat: fiyat,
+                                                              urunBarcode: item.urunBarcode,
+                                                              adetFiyati: item.adetFiyati,
+                                                              kutuFiyati: item.kutuFiyati,
+                                                              miktar: 0,
+                                                              iskonto: item.iskonto,
+                                                              birimTipi: newValue ?? "Box",
+                                                              durum: item.durum,
+                                                              vat: item.vat,
+                                                              imsrc: item.imsrc,
+                                                            );
+                                                          } else {
+                                                            ScaffoldMessenger.of(context).showSnackBar(
+                                                              SnackBar(
+                                                                content: Text('⚠️ Unit type not available for this product.'),
+                                                                behavior: SnackBarBehavior.floating,
+                                                                backgroundColor: Colors.orange.shade700,
+                                                                duration: Duration(seconds: 3),
+                                                              ),
+                                                            );
+                                                          }
+                                                        },
+                                                      ),
+                                                    );
+                                                  }
+                                                }(),
 
                                                 SizedBox(width: 2.w),
 
@@ -548,6 +581,8 @@ class _CartView2State extends State<CartView2> {
                                                           durum: item.durum,
                                                           vat: item.vat,
                                                           imsrc: item.imsrc,
+                                                          adetFiyati: item.adetFiyati,
+                                                          kutuFiyati: item.kutuFiyati,
                                                         );
                                                       }
                                                     },
@@ -600,6 +635,8 @@ class _CartView2State extends State<CartView2> {
                                                             durum: item.durum,
                                                             vat: item.vat,
                                                             imsrc: item.imsrc,
+                                                            adetFiyati: item.adetFiyati,
+                                                            kutuFiyati: item.kutuFiyati,
                                                           );
                                                         }
                                                       }
@@ -633,6 +670,8 @@ class _CartView2State extends State<CartView2> {
                                                         durum: item.durum,
                                                         vat: item.vat,
                                                         imsrc: item.imsrc,
+                                                        adetFiyati: item.adetFiyati,
+                                                        kutuFiyati: item.kutuFiyati,
                                                       );
                                                     },
                                                     icon: Icon(

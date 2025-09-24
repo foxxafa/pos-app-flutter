@@ -25,7 +25,7 @@ class SyncController {
     print('🔄 Clean Sync başlatılıyor...');
 
     // Önce yarım kalan resim indirme işlemi var mı kontrol et
-    await _checkAndResumeImageDownload();
+    await checkAndResumeImageDownload();
 
     await balancecontroller.fetchAndStoreCustomers();
     await syncPendingRefunds();
@@ -446,7 +446,7 @@ class SyncController {
   }
 
   // Yarım kalan resim indirme işlemini kontrol et ve devam ettir
-  Future<void> _checkAndResumeImageDownload() async {
+  Future<void> checkAndResumeImageDownload() async {
     try {
       DatabaseHelper dbHelper = DatabaseHelper();
       Database db = await dbHelper.database;

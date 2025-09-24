@@ -9,6 +9,7 @@ import 'package:pos_app/views/sync_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/controllers/sync_controller.dart';
 
 class MenuView extends StatefulWidget {
   const MenuView({Key? key}) : super(key: key);
@@ -24,6 +25,7 @@ class _MenuViewState extends State<MenuView> {
   void initState() {
     super.initState();
     _loadUserData();
+    _checkPendingImageDownloads();
   }
 
   Future<void> _loadUserData() async {
@@ -32,6 +34,16 @@ class _MenuViewState extends State<MenuView> {
       setState(() {
         _userName = userProvider.username;
       });
+    }
+  }
+
+  // Yarım kalan resim indirmelerini kontrol et
+  Future<void> _checkPendingImageDownloads() async {
+    try {
+      final syncController = SyncController();
+      await syncController.checkAndResumeImageDownload();
+    } catch (e) {
+      print('⚠️ Resim indirme kontrol hatası: $e');
     }
   }
 

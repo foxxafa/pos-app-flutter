@@ -85,7 +85,11 @@ Future<String?> _loadImage(String? imsrc) async {
 
   Future<void> _loadProducts() async {
     final raw = await DatabaseHelper().getAll("Product");
-    final products = raw.map((e) => ProductModel.fromMap(e)).toList();
+    final allProducts = raw.map((e) => ProductModel.fromMap(e)).toList();
+
+    // Sadece aktif ürünleri filtrele (aktif = 1)
+    final products = allProducts.where((product) => product.aktif == 1).toList();
+
     setState(() {
       _allProducts = products;
       _filteredProducts = products.take(1000).toList();
@@ -158,7 +162,7 @@ Future<String?> _loadImage(String? imsrc) async {
       if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
               product.birimKey1 != 0) ||
           (provider.getBirimTipi(product.stokKodu) == 'Box' &&
-              product.birimKey2 != "0")) {
+              product.birimKey2 != 0)) {
         provider.addOrUpdateItem(
           urunAdi: product.urunAdi,
           adetFiyati: product.adetFiyati,
@@ -280,7 +284,7 @@ Future<String?> _loadImage(String? imsrc) async {
       if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
               product.birimKey1 != 0) ||
           (provider.getBirimTipi(product.stokKodu) == 'Box' &&
-              product.birimKey2 != "0")) {
+              product.birimKey2 != 0)) {
         provider.addOrUpdateItem(
           urunAdi: product.urunAdi,
           adetFiyati: product.adetFiyati,
@@ -1032,7 +1036,7 @@ Future<String?> _loadImage(String? imsrc) async {
                                                                         ) ==
                                                                         'Box' &&
                                                                     product.birimKey2 !=
-                                                                        "0")) {
+                                                                        0)) {
   final bool newValue =
       (val == 'Unit');
   
