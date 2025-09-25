@@ -8,7 +8,6 @@ import 'package:pos_app/views/customerdetail_view.dart';
 import 'package:pos_app/views/invoice_activity.dart';
 import 'package:pos_app/views/menu_view.dart';
 import 'package:pos_app/views/refund_activity.dart';
-import 'package:pos_app/views/sales_view.dart';
 import 'package:pos_app/views/statement_view.dart';
 import 'package:provider/provider.dart';
 import 'package:pos_app/providers/cartcustomer_provider.dart';
@@ -213,18 +212,6 @@ Future<CustomerBalanceModel?> loadCustomerBalanceByName(String customerName) asy
                     Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => StatementScreen()),
-                    );
-                  },
-                ),
-                _buildMenuItem(
-                  context,
-                  title: 'customer_menu.back_to_list'.tr(),
-                  icon: Icons.arrow_back_outlined,
-                  onTap: () {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SalesView()),
-                      (route) => false,
                     );
                   },
                 ),

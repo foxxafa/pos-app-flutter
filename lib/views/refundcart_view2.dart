@@ -158,9 +158,9 @@ class _RefundCartView2State extends State<RefundCartView2> {
                             child: const Text("Cancel"),
                           ),
                           ElevatedButton(
-                            onPressed: () {
+                            onPressed: () async {
                               cartProvider.items.clear();
-                              cartProvider.clearCart();
+                              await cartProvider.clearCart();
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Cart cleared.')),
@@ -845,7 +845,7 @@ class _RefundCartView2State extends State<RefundCartView2> {
                           );
 
                           cartProvider.items.clear();
-                          cartProvider.clearCart();
+                          await cartProvider.clearCart();
 
                           final selectedCustomer =
                               Provider.of<SalesCustomerProvider>(

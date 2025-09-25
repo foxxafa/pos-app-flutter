@@ -919,15 +919,19 @@ _barcodeFocusNode.requestFocus();
                             // Mevcut seçili birim tipine göre miktarı al
                             final isBox = _isBoxMap[key] ?? false;
                             final birimTipi = isBox ? 'Box' : 'Unit';
-                            _quantityMap[key] = providersafdas.getmiktar(key, birimTipi);
+                            final currentMiktar = providersafdas.getmiktar(key, birimTipi);
+                            _quantityMap[key] = currentMiktar;
 
-                            // Quantity controller başlatma
+                            // Quantity controller başlatma ve güncelleme
                             if (!_quantityControllers.containsKey(key)) {
                               _quantityControllers[key] = TextEditingController(
-                                text: (_quantityMap[key] ?? 0).toString(),
+                                text: currentMiktar.toString(),
                               );
                             } else {
-                              // Controller zaten var
+                              // Controller zaten var - değeri güncelle
+                              if (_quantityControllers[key]!.text != currentMiktar.toString()) {
+                                _quantityControllers[key]!.text = currentMiktar.toString();
+                              }
                             }
 
                             // final isBox = _isBoxMap[key] ?? false;

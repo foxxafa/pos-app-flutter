@@ -35,9 +35,27 @@ class _CartView2State extends State<CartView2> {
   Map<String, Future<String?>> _imageFutures = {};
   Timer? _imageDownloadTimer;
 
+  void _clearUIState() {
+    // Controller'ları temizle
+    _priceControllers.forEach((_, controller) => controller.clear());
+    _discountControllers.forEach((_, controller) => controller.clear());
+    _priceControllers.clear();
+    _discountControllers.clear();
+    
+    // Focus node'ları temizle
+    _priceFocusNodes.clear();
+    _discountFocusNodes.clear();
+    
+    // Image cache'ini temizle
+    _imageFutures.clear();
+    
+    // Image download timer'ını iptal et
+    _imageDownloadTimer?.cancel();
+  }
+
   @override
   void dispose() {
-    // Controller'ları temizle
+    // Controller'ları dispose et
     _priceControllers.forEach((_, controller) => controller.dispose());
     _discountControllers.forEach((_, controller) => controller.dispose());
     _priceFocusNodes.forEach((_, node) => node.dispose());
@@ -138,15 +156,15 @@ class _CartView2State extends State<CartView2> {
                             child: const Text("Cancel"),
                           ),
                           ElevatedButton(
-                            onPressed: () {
+                            onPressed: () async {
                               // Provider'ı temizle
-                              cartProvider.clearCart();
+                              await cartProvider.clearCart();
 
-                              // Controller'ları temizle
-                              _priceControllers.forEach((_, controller) => controller.clear());
-                              _discountControllers.forEach((_, controller) => controller.clear());
-                              _priceControllers.clear();
-                              _discountControllers.clear();
+                              // UI state'ini de temizle
+                              _clearUIState();
+                              
+                              // UI'yi yenile
+                              setState(() {});
 
                               Navigator.pop(ctx);
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -963,8 +981,13 @@ class _CartView2State extends State<CartView2> {
                             );
                             print("Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString");
 
-                            cartProvider.items.clear();
-                            cartProvider.clearCart();
+                            await cartProvider.clearCart();
+                            
+                            // UI state'ini de temizle
+                            _clearUIState();
+                            
+                            // UI'yi yenile
+                            setState(() {});
 
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(

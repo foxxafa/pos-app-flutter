@@ -217,34 +217,44 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearCart() {
+  Future<void> clearCart() async {
+    print("DEBUG: CartProvider.clearCart() called - items before clear: ${_items.length}");
     _items.clear();
+    print("DEBUG: CartProvider items cleared - current count: ${_items.length}");
+    await _saveCartToDatabase();
+    print("DEBUG: CartProvider _saveCartToDatabase() completed");
     notifyListeners();
+    print("DEBUG: CartProvider notifyListeners() completed");
   }
 
   @override
   void notifyListeners() {
-    _saveCartToDatabase();
+    _saveCartToDatabase(); // Fire and forget for other operations
     super.notifyListeners();
   }
 
-  void _saveCartToDatabase() async {
+  Future<void> _saveCartToDatabase() async {
     // Use actual customer name instead of empty string
     String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
 
     // Debug: Print what we're saving
-    print("DEBUG CartProvider saving: customerName = '$actualCustomerName'");
+    print("DEBUG _saveCartToDatabase: customerName = '$actualCustomerName', items count = ${_items.length}");
 
     final dbHelper = DatabaseHelper();
     await dbHelper.clearCartItemsByCustomer(actualCustomerName);
+    print("DEBUG _saveCartToDatabase: clearCartItemsByCustomer completed for '$actualCustomerName'");
+    
     for (final item in _items.values) {
       await dbHelper.insertCartItem(item, actualCustomerName);
     }
+    print("DEBUG _saveCartToDatabase: ${_items.length} items inserted for '$actualCustomerName'");
   }
 
   Future<void> loadCartFromDatabase(String customerName) async {
+    print("DEBUG loadCartFromDatabase: Loading cart for customer '$customerName'");
     final dbHelper = DatabaseHelper();
     final cartData = await dbHelper.getCartItemsByCustomer(customerName);
+    print("DEBUG loadCartFromDatabase: Found ${cartData.length} items in database for '$customerName'");
 
     _items.clear();
     _customerName = customerName;
@@ -268,6 +278,7 @@ class CartProvider extends ChangeNotifier {
       final cartKey = '${cartItem.stokKodu}_${cartItem.birimTipi}';
       _items[cartKey] = cartItem;
     }
+    print("DEBUG loadCartFromDatabase: Loaded ${_items.length} items into provider for '$customerName'");
 
     // notifyListeners(); // isteğe bağlı
   }

@@ -103,8 +103,10 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
     notifyListeners();
   }
 
-  void clearCart() {
+  Future<void> clearCart() async {
     _items.clear();
+    await _saveCartToDatabase();
+    notifyListeners();
   }
 
   @override
@@ -113,7 +115,7 @@ void notifyListeners() {
   super.notifyListeners();
 }
 
-void _saveCartToDatabase() async {
+Future<void> _saveCartToDatabase() async {
   final dbHelper = DatabaseHelper();
   await dbHelper.clearRefundCartItemsByCustomer(_customerName); // önce temizle
   for (final item in _items.values) {
