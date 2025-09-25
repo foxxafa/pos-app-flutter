@@ -17,6 +17,8 @@ class CartItem {
   String adetFiyati; // yeni alan
   String kutuFiyati; // yeni alan
   String aciklama = "";
+  int birimKey1; // yeni alan
+  int birimKey2; // yeni alan
 
   CartItem({
     required this.stokKodu,
@@ -31,7 +33,9 @@ class CartItem {
     this.imsrc,
     this.adetFiyati = '',
     this.kutuFiyati = '',
-    this.aciklama = ''
+    this.aciklama = '',
+    this.birimKey1 = 0,
+    this.birimKey2 = 0,
   });
 
   double get fiyat => birimFiyat * miktar;
@@ -70,6 +74,8 @@ extension CartItemExtension on CartItem {
       "AdetFiyati": adetFiyati,
       "KutuFiyati": kutuFiyati,
       "Aciklama": aciklama,
+      "BirimKey1": birimKey1,
+      "BirimKey2": birimKey2,
     };
   }
 }
@@ -157,6 +163,8 @@ class CartProvider extends ChangeNotifier {
     int vat = 18,
     String adetFiyati = '',
     String kutuFiyati = '',
+    int birimKey1 = 0,
+    int birimKey2 = 0,
   }) {
     // Sepet anahtarı: stokKodu + birimTipi (aynı ürünün farklı birimleri ayrı item olacak)
     final cartKey = '${stokKodu}_$birimTipi';
@@ -176,6 +184,8 @@ class CartProvider extends ChangeNotifier {
         current.durum = durum;
         current.adetFiyati = adetFiyati;
         current.kutuFiyati = kutuFiyati;
+        current.birimKey1 = birimKey1;
+        current.birimKey2 = birimKey2;
       }
     } else {
       _items[cartKey] = CartItem(
@@ -191,6 +201,8 @@ class CartProvider extends ChangeNotifier {
         vat: vat,
         adetFiyati: adetFiyati,
         kutuFiyati: kutuFiyati,
+        birimKey1: birimKey1,
+        birimKey2: birimKey2,
       );
     }
 

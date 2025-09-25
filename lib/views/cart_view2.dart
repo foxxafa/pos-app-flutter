@@ -219,25 +219,15 @@ class _CartView2State extends State<CartView2> {
                           final priceFocusNode = _priceFocusNodes[controllerKey]!;
                           final discountFocusNode = _discountFocusNodes[controllerKey]!;
 
-                          // İndirimli fiyatı hesapla
-                          // birimFiyat zaten provider'da tutuluyor ve cart_view'dan geliyor
-                          final discountAmount = (item.birimFiyat * item.iskonto) / 100;
-                          final discountedPrice = item.birimFiyat - discountAmount;
-
-                          // Controller'a değer yaz - sadece focus yoksa
-                          if (!priceFocusNode.hasFocus) {
-                            final currentText = priceController.text;
-                            final newText = discountedPrice.toStringAsFixed(2);
-                            if (currentText != newText) {
-                              priceController.text = newText;
-                            }
+                          // İlk kez oluşturuluyorsa controller'a değer ata
+                          if (priceController.text.isEmpty) {
+                            final discountAmount = (item.birimFiyat * item.iskonto) / 100;
+                            final discountedPrice = item.birimFiyat - discountAmount;
+                            priceController.text = discountedPrice.toStringAsFixed(2);
                           }
-                          if (!discountFocusNode.hasFocus) {
-                            final currentText = discountController.text;
-                            final newText = item.iskonto > 0 ? item.iskonto.toString() : '0';
-                            if (currentText != newText) {
-                              discountController.text = newText;
-                            }
+                          // İndirim controller'ını sadece ilk kez doldur, sonra kullanıcıya bırak
+                          if (discountController.text.isEmpty && !discountFocusNode.hasFocus) {
+                            discountController.text = item.iskonto > 0 ? item.iskonto.toString() : '';
                           }
 
                           return Column(
@@ -330,14 +320,24 @@ class _CartView2State extends State<CartView2> {
                                             // İlk satır: Dropdown | Fiyat
                                             Row(
                                               children: [
-                                                // Birim kontrolü - tek birim varsa text, birden fazla varsa dropdown
-                                                () {
-                                                  // Mevcut birimleri kontrol et
-                                                  final hasUnit = item.adetFiyati != "0" && double.tryParse(item.adetFiyati.toString()) != 0;
-                                                  final hasBox = item.kutuFiyati != "0" && double.tryParse(item.kutuFiyati.toString()) != 0;
-                                                  final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
-
-                                                  if (availableUnits == 1) {
+                                                              // Birim kontrolü - tek birim varsa text, birden fazla varsa dropdown
+                                                              () {
+                                                                // Mevcut birimleri kontrol et - akıllı kontrol
+                                                                // Eğer ürün zaten bir birimle sepette varsa, o birim kesinlikle mevcuttur
+                                                                final hasUnit = (item.birimTipi == 'Unit') || // Mevcut birim Unit ise Unit var demektir
+                                                                    (item.birimKey1 > 0) || 
+                                                                    (item.adetFiyati != "0" && 
+                                                                     item.adetFiyati.isNotEmpty &&
+                                                                     (double.tryParse(item.adetFiyati.toString().replaceAll(',', '.')) ?? 0) > 0);
+                                                                final hasBox = (item.birimTipi == 'Box') || // Mevcut birim Box ise Box var demektir  
+                                                                    (item.birimKey2 > 0) || 
+                                                                    (item.kutuFiyati != "0" && 
+                                                                     item.kutuFiyati.isNotEmpty &&
+                                                                     (double.tryParse(item.kutuFiyati.toString().replaceAll(',', '.')) ?? 0) > 0);
+                                                                
+                                                                // Debug için
+                                                                print("DEBUG - ${item.urunAdi}: birimTipi=${item.birimTipi}, hasUnit=$hasUnit (key1=${item.birimKey1}, fiyat=${item.adetFiyati}), hasBox=$hasBox (key2=${item.birimKey2}, fiyat=${item.kutuFiyati})");
+                                                                final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);                                                  if (availableUnits == 1) {
                                                     // Tek birim varsa sadece text göster
                                                     return Container(
                                                       padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
@@ -363,7 +363,9 @@ class _CartView2State extends State<CartView2> {
                                                         borderRadius: BorderRadius.circular(8),
                                                       ),
                                                       child: DropdownButton<String>(
-                                                        value: item.birimTipi,
+                                                        value: (item.birimTipi == 'Unit' && hasUnit) || (item.birimTipi == 'Box' && hasBox) 
+                                                            ? item.birimTipi 
+                                                            : (hasUnit ? 'Unit' : (hasBox ? 'Box' : 'Unit')),
                                                         isDense: true,
                                                         underline: Container(),
                                                         style: TextStyle(
@@ -384,10 +386,27 @@ class _CartView2State extends State<CartView2> {
                                                             ),
                                                         ],
                                                         onChanged: (newValue) {
-                                                          if ((newValue == 'Unit' && hasUnit) ||
-                                                              (newValue == 'Box' && hasBox)) {
+                                                          if (newValue != null) {
+                                                            // Yeni birim tipinin fiyatını kontrol et
                                                             final fiyatStr = (newValue == 'Unit') ? item.adetFiyati : item.kutuFiyati;
                                                             final fiyat = double.tryParse(fiyatStr.replaceAll(',', '.')) ?? 0.0;
+                                                            
+                                                            print("DROPDOWN DEBUG - ${item.urunAdi}: ${newValue} seçildi, fiyatStr='$fiyatStr', fiyat=$fiyat");
+                                                            
+                                                            // Fiyat kontrolü - eğer 0 veya null ise hata göster
+                                                            if (fiyat <= 0) {
+                                                              print("DROPDOWN ERROR - ${newValue} fiyat hatası: $fiyat");
+                                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                                SnackBar(
+                                                                  content: Text('⚠️ ${newValue} fiyatı bulunamadı (${fiyat}).'),
+                                                                  behavior: SnackBarBehavior.floating,
+                                                                  backgroundColor: Colors.orange.shade700,
+                                                                  duration: Duration(seconds: 3),
+                                                                ),
+                                                              );
+                                                              return;
+                                                            }
+                                                            
                                                             final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
                                                             cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.addOrUpdateItem(
@@ -399,19 +418,12 @@ class _CartView2State extends State<CartView2> {
                                                               kutuFiyati: item.kutuFiyati,
                                                               miktar: 0,
                                                               iskonto: item.iskonto,
-                                                              birimTipi: newValue ?? "Box",
+                                                              birimTipi: newValue,
                                                               durum: item.durum,
                                                               vat: item.vat,
                                                               imsrc: item.imsrc,
-                                                            );
-                                                          } else {
-                                                            ScaffoldMessenger.of(context).showSnackBar(
-                                                              SnackBar(
-                                                                content: Text('⚠️ Unit type not available for this product.'),
-                                                                behavior: SnackBarBehavior.floating,
-                                                                backgroundColor: Colors.orange.shade700,
-                                                                duration: Duration(seconds: 3),
-                                                              ),
+                                                              birimKey1: item.birimKey1,
+                                                              birimKey2: item.birimKey2,
                                                             );
                                                           }
                                                         },
@@ -426,6 +438,7 @@ class _CartView2State extends State<CartView2> {
                                                 Expanded(
                                                   flex: 2,
                                                   child: TextField(
+                                                        enabled: item.miktar > 0,
                                                         controller: priceController,
                                                         focusNode: priceFocusNode,
                                                         keyboardType: TextInputType.numberWithOptions(decimal: true),
@@ -458,37 +471,46 @@ class _CartView2State extends State<CartView2> {
                                                           final yeniFiyat = double.tryParse(cleanValue);
                                                           if (yeniFiyat != null && yeniFiyat >= 0) {
                                                             // Orjinal fiyatı al (birim tipine göre)
-                                                            final orjinalFiyat = item.birimTipi == 'Unit'
+                                                            var orjinalFiyat = item.birimTipi == 'Unit'
                                                                 ? double.tryParse(item.adetFiyati.toString()) ?? 0.0
                                                                 : double.tryParse(item.kutuFiyati.toString()) ?? 0.0;
 
-                                                            if (orjinalFiyat > 0) {
-                                                              // İndirim yüzdesini hesapla
-                                                              final indirimOrani = yeniFiyat < orjinalFiyat
-                                                                  ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-                                                                  : 0;
-
-                                                              // İndirim controller'ını güncelle
-                                                              discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '0';
-
-                                                              // Provider'ı güncelle
-                                                              final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
-                                                              cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-                                                              cartProvider.addOrUpdateItem(
-                                                                stokKodu: item.stokKodu,
-                                                                urunAdi: item.urunAdi,
-                                                                birimFiyat: orjinalFiyat,
-                                                                urunBarcode: item.urunBarcode,
-                                                                miktar: 0,
-                                                                iskonto: indirimOrani,
-                                                                birimTipi: item.birimTipi,
-                                                                durum: item.durum,
-                                                                vat: item.vat,
-                                                                imsrc: item.imsrc,
-                                                                adetFiyati: item.adetFiyati,
-                                                                kutuFiyati: item.kutuFiyati,
-                                                              );
+                                                            // Eğer orjinal fiyat 0 ise, yeni fiyatı orjinal fiyat olarak kabul et
+                                                            if (orjinalFiyat <= 0) {
+                                                              orjinalFiyat = yeniFiyat;
                                                             }
+
+                                                            // İndirim yüzdesini hesapla
+                                                            final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+                                                                ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+                                                                : 0;
+
+                                                            // İndirim controller'ını güncelle - sadece focus değilse
+                                                            if (!discountFocusNode.hasFocus) {
+                                                              discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+                                                            }
+
+                                                            print("FIYAT DEBUG - yeniFiyat: $yeniFiyat, orjinalFiyat: $orjinalFiyat, indirimOrani: $indirimOrani");
+
+                                                            // Provider'ı güncelle
+                                                            final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                            cartProvider.addOrUpdateItem(
+                                                              stokKodu: item.stokKodu,
+                                                              urunAdi: item.urunAdi,
+                                                              birimFiyat: orjinalFiyat, // Gerçek orjinal fiyatı kullan
+                                                              urunBarcode: item.urunBarcode,
+                                                              miktar: 0,
+                                                              iskonto: indirimOrani,
+                                                              birimTipi: item.birimTipi,
+                                                              durum: item.durum,
+                                                              vat: item.vat,
+                                                              imsrc: item.imsrc,
+                                                              adetFiyati: item.adetFiyati,
+                                                              kutuFiyati: item.kutuFiyati,
+                                                              birimKey1: item.birimKey1,
+                                                              birimKey2: item.birimKey2,
+                                                            );
                                                           }
                                                         },
                                                         onEditingComplete: () {
@@ -560,6 +582,30 @@ class _CartView2State extends State<CartView2> {
                                                             ),
                                                           ),
                                                           onChanged: (value) {
+                                                            // Eğer kullanıcı alanı boşaltmak istiyorsa, 0 değil boş bırak
+                                                            if (value.isEmpty) {
+                                                              // Provider'ı 0 indirim ile güncelle ama field'ı boş bırak
+                                                              final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                              cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                              cartProvider.addOrUpdateItem(
+                                                                urunAdi: item.urunAdi,
+                                                                stokKodu: item.stokKodu,
+                                                                birimFiyat: item.birimFiyat,
+                                                                urunBarcode: item.urunBarcode,
+                                                                miktar: 0,
+                                                                iskonto: 0, // İndirim sıfırla
+                                                                birimTipi: item.birimTipi,
+                                                                durum: item.durum,
+                                                                vat: item.vat,
+                                                                imsrc: item.imsrc,
+                                                                adetFiyati: item.adetFiyati,
+                                                                kutuFiyati: item.kutuFiyati,
+                                                                birimKey1: item.birimKey1,
+                                                                birimKey2: item.birimKey2,
+                                                              );
+                                                              return;
+                                                            }
+                                                            
                                                             // İndirim yüzdesini al ve sınırla
                                                             int discountPercent = int.tryParse(value) ?? 0;
                                                             discountPercent = discountPercent.clamp(0, 100);
@@ -567,19 +613,27 @@ class _CartView2State extends State<CartView2> {
                                                             // İmleç konumunu kaydet
                                                             final cursorPos = discountController.selection.baseOffset;
 
-                                                            // Orjinal fiyatı al (birim tipine göre)
-                                                            final originalPrice = item.birimTipi == 'Unit'
-                                                                ? double.tryParse(item.adetFiyati.toString()) ?? 0.0
-                                                                : double.tryParse(item.kutuFiyati.toString()) ?? 0.0;
+                                                            // Şu anki fiyat controller'ındaki değeri al (kullanıcının girdiği fiyat)
+                                                            final currentPrice = double.tryParse(priceController.text.replaceAll(',', '.')) ?? item.birimFiyat;
+                                                            
+                                                            // Orjinal fiyat (yeni girilen fiyat baz alınacak)
+                                                            var originalPrice = currentPrice;
+                                                            
+                                                            // Eğer orjinal fiyat 0 ise mevcut item fiyatını kullan
+                                                            if (originalPrice <= 0) {
+                                                              originalPrice = item.birimFiyat > 0 ? item.birimFiyat : currentPrice;
+                                                            }
 
                                                             // İndirim miktarını hesapla
                                                             final discountAmount = (originalPrice * discountPercent) / 100;
 
-                                                            // İndirimli fiyatı hesapla
+                                                            // İndirimli fiyatı hesapla  
                                                             final discountedPrice = originalPrice - discountAmount;
 
                                                             // Fiyat controller'ını güncelle
                                                             priceController.text = discountedPrice.toStringAsFixed(2);
+
+                                                            print("İNDİRİM DEBUG - currentPrice: $currentPrice, originalPrice: $originalPrice, discountPercent: $discountPercent, discountedPrice: $discountedPrice");
 
                                                             // Provider'ı güncelle
                                                             final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
@@ -587,7 +641,7 @@ class _CartView2State extends State<CartView2> {
                                                             cartProvider.addOrUpdateItem(
                                                               urunAdi: item.urunAdi,
                                                               stokKodu: item.stokKodu,
-                                                              birimFiyat: originalPrice,
+                                                              birimFiyat: originalPrice, // Yeni fiyatı orjinal fiyat olarak kullan
                                                               urunBarcode: item.urunBarcode,
                                                               miktar: 0,
                                                               iskonto: discountPercent,
@@ -597,6 +651,8 @@ class _CartView2State extends State<CartView2> {
                                                               imsrc: item.imsrc,
                                                               adetFiyati: item.adetFiyati,
                                                               kutuFiyati: item.kutuFiyati,
+                                                              birimKey1: item.birimKey1,
+                                                              birimKey2: item.birimKey2,
                                                             );
 
                                                             // İmleç pozisyonunu geri yükle
@@ -650,6 +706,8 @@ class _CartView2State extends State<CartView2> {
                                                           imsrc: item.imsrc,
                                                           adetFiyati: item.adetFiyati,
                                                           kutuFiyati: item.kutuFiyati,
+                                                          birimKey1: item.birimKey1,
+                                                          birimKey2: item.birimKey2,
                                                         );
                                                       }
                                                     },
@@ -704,6 +762,8 @@ class _CartView2State extends State<CartView2> {
                                                             imsrc: item.imsrc,
                                                             adetFiyati: item.adetFiyati,
                                                             kutuFiyati: item.kutuFiyati,
+                                                            birimKey1: item.birimKey1,
+                                                            birimKey2: item.birimKey2,
                                                           );
                                                         }
                                                       }
@@ -739,6 +799,8 @@ class _CartView2State extends State<CartView2> {
                                                         imsrc: item.imsrc,
                                                         adetFiyati: item.adetFiyati,
                                                         kutuFiyati: item.kutuFiyati,
+                                                        birimKey1: item.birimKey1,
+                                                        birimKey2: item.birimKey2,
                                                       );
                                                     },
                                                     icon: Icon(

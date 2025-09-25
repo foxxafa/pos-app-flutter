@@ -292,6 +292,8 @@ class _CartViewState extends State<CartView> {
           miktar: 1,
           iskonto: _iskontoMap[key] ?? 0,
           birimTipi: provider.getBirimTipi(product.stokKodu),
+          birimKey1: product.birimKey1,
+          birimKey2: product.birimKey2,
         );
       } else {}
 
@@ -418,6 +420,8 @@ class _CartViewState extends State<CartView> {
           miktar: 1,
           iskonto: _iskontoMap[key] ?? 0,
           birimTipi: provider.getBirimTipi(product.stokKodu),
+          birimKey1: product.birimKey1,
+          birimKey2: product.birimKey2,
         );
       } else {}
       
@@ -1332,107 +1336,48 @@ _barcodeFocusNode.requestFocus();
                                                                         ),
                                                                   ),
                                                                   onChanged: (value) {
-                                                                    final parsed =
-                                                                        double.tryParse(
-                                                                          value,
-                                                                        );
-                                                                    if (parsed != null) {
-                                                                      final customerProvider =
-                                                                          Provider.of<
-                                                                            SalesCustomerProvider
-                                                                          >(
-                                                                            context,
-                                                                            listen: false,
-                                                                          );
-                                                                      provider.customerName =
-                                                                          customerProvider
-                                                                              .selectedCustomer!
-                                                                              .kod!;
+                                                                    // Fiyatı ayrıştır
+                                                                    final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
 
-                                                                      // Normal birim fiyatını al
-                                                                      final normalPrice = selectedType == 'Unit'
-                                                                          ? double.tryParse(product.adetFiyati.toString()) ?? 0
-                                                                          : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+                                                                    // Orjinal fiyatı al (eğer varsa, yoksa ürünün kendi fiyatını kullan)
+                                                                    var orjinalFiyat = selectedType == 'Unit'
+                                                                        ? (double.tryParse(product.adetFiyati.toString().replaceAll(',', '.')) ?? 0)
+                                                                        : (double.tryParse(product.kutuFiyati.toString().replaceAll(',', '.')) ?? 0);
 
-                                                                      // İndirim miktarını hesapla (normal fiyat - girilen fiyat)
-                                                                      final calculatedDiscount = normalPrice - parsed;
-                                                                      final discountPercentage = normalPrice > 0
-                                                                          ? ((calculatedDiscount / normalPrice) * 100).round()
-                                                                          : 0;
-
-                                                                      // İndirim controller'ını güncelle
-                                                                      if (discountPercentage >= 0) {
-                                                                        _iskontoMap[key] = discountPercentage;
-                                                                        _discountController.text = discountPercentage == 0 ? '' : discountPercentage.toString();
-                                                                      }
-
-                                                                      if ((provider.getBirimTipi(
-                                                                                    product
-                                                                                        .stokKodu,
-                                                                                  ) ==
-                                                                                  'Unit' &&
-                                                                              product.birimKey1 !=
-                                                                                  0) ||
-                                                                          (provider.getBirimTipi(
-                                                                                    product
-                                                                                        .stokKodu,
-                                                                                  ) ==
-                                                                                  'Box' &&
-                                                                              product.birimKey2 !=
-                                                                                  0)) {
-                                                                        provider.addOrUpdateItem(
-                                                                          urunAdi:
-                                                                              product
-                                                                                  .urunAdi,
-                                                                          adetFiyati:
-                                                                              product
-                                                                                  .adetFiyati,
-                                                                          kutuFiyati:
-                                                                              product
-                                                                                  .kutuFiyati,
-                                                                          stokKodu: key,
-                                                                          vat:
-                                                                              product.vat,
-                                                                          birimFiyat:
-                                                                              parsed,
-                                                                          urunBarcode:
-                                                                              product
-                                                                                  .barcode1,
-                                                                          miktar: 0,
-                                                                          iskonto:
-                                                                              discountPercentage,
-                                                                          birimTipi: provider
-                                                                              .getBirimTipi(
-                                                                                product
-                                                                                    .stokKodu,
-                                                                              ),
-                                                                        );
-                                                                      } else {
-                                                                        ScaffoldMessenger.of(
-                                                                          context,
-                                                                        ).showSnackBar(
-                                                                          SnackBar(
-                                                                            content: Text(
-                                                                              '⚠️ ${'cart.unit_not_available'.tr()}',
-                                                                            ),
-                                                                            behavior:
-                                                                                SnackBarBehavior
-                                                                                    .floating,
-                                                                            backgroundColor:
-                                                                                Colors
-                                                                                    .orange
-                                                                                    .shade700,
-                                                                            duration:
-                                                                                Duration(
-                                                                                  seconds:
-                                                                                      3,
-                                                                                ),
-                                                                          ),
-                                                                        );
-                                                                      }
+                                                                    // Eğer orjinal fiyat 0 ise, yeni girilen fiyatı orjinal kabul et
+                                                                    if (orjinalFiyat <= 0) {
+                                                                      orjinalFiyat = yeniFiyat;
                                                                     }
 
-                                                                    setState(() {}); // Result alanını güncelle
+                                                                    // İndirim yüzdesini hesapla
+                                                                    final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+                                                                        ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+                                                                        : 0;
+
+                                                                    // İndirim controller'ını güncelle
+                                                                    _discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+
+
+                                                                    // Provider'ı güncelle
+                                                                    final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                                    provider.customerName = customerProvider.selectedCustomer!.kod!;
+                                                                    provider.addOrUpdateItem(
+                                                                      stokKodu: key,
+                                                                      urunAdi: product.urunAdi,
+                                                                      birimFiyat: orjinalFiyat, // Gerçek orjinal fiyatı kullan
+                                                                      urunBarcode: product.barcode1,
+                                                                      miktar: 0, // Miktarı değiştirmeden sadece fiyat ve indirimi güncelle
+                                                                      iskonto: indirimOrani,
+                                                                      birimTipi: selectedType,
+                                                                      vat: product.vat,
+                                                                      imsrc: product.imsrc,
+                                                                      adetFiyati: product.adetFiyati,
+                                                                      kutuFiyati: product.kutuFiyati,
+                                                                      birimKey1: product.birimKey1,
+                                                                      birimKey2: product.birimKey2,
+                                                                    );
+
+                                                                    setState(() {}); // UI'ı güncelle
                                                                   },
                                                                   onEditingComplete: () {
                                                                     _formatPriceField(_priceController);
@@ -1498,12 +1443,36 @@ _barcodeFocusNode.requestFocus();
                                                                         fontWeight: FontWeight.w500,
                                                                       ),
                                                                       onChanged: (val) {
-                                                                        final parsed =
-                                                                            int.tryParse(val) ?? 0;
-                                                                        final clamped = parsed.clamp(
-                                                                          0,
-                                                                          100,
-                                                                        );
+                                                                        // Eğer kullanıcı alanı boşaltmak istiyorsa
+                                                                        if (val == null || val.isEmpty) {
+                                                                          // Fiyatı orjinal fiyata döndür
+                                                                          final originalPrice = selectedType == 'Unit'
+                                                                              ? double.tryParse(product.adetFiyati.toString()) ?? 0
+                                                                              : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+                                                                          _priceController.text = originalPrice.toStringAsFixed(2);
+                                                                          
+                                                                          // Provider'ı 0 indirim ile güncelle
+                                                                          provider.addOrUpdateItem(
+                                                                            urunAdi: product.urunAdi,
+                                                                            stokKodu: key,
+                                                                            birimFiyat: originalPrice,
+                                                                            miktar: 0,
+                                                                            iskonto: 0,
+                                                                            birimTipi: selectedType,
+                                                                            // ... diğer alanlar
+                                                                             adetFiyati: product.adetFiyati,
+                                                                            kutuFiyati: product.kutuFiyati,
+                                                                            vat: product.vat,
+                                                                            urunBarcode: product.barcode1,
+                                                                            imsrc: product.imsrc,
+                                                                            birimKey1: product.birimKey1,
+                                                                            birimKey2: product.birimKey2,
+                                                                          );
+                                                                          return;
+                                                                        }
+
+                                                                        final parsed = int.tryParse(val) ?? 0;
+                                                                        final clamped = parsed.clamp(0, 100);
 
                                                                         // Controller'ı formatlı değerle güncelle
                                                                         if (clamped.toString() != val) {
@@ -1517,19 +1486,45 @@ _barcodeFocusNode.requestFocus();
                                                                           _iskontoMap[key] = clamped;
                                                                         });
 
-                                                                        // Normal birim fiyatını al
-                                                                        final normalPrice = selectedType == 'Unit'
-                                                                            ? double.tryParse(product.adetFiyati.toString()) ?? 0
-                                                                            : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+                                                                        // Şu anki fiyat controller'ındaki değeri al (kullanıcının girdiği fiyat olabilir)
+                                                                        final currentPrice = double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0;
+
+                                                                        // Orjinal fiyatı al
+                                                                        var originalPrice = selectedType == 'Unit'
+                                                                            ? (double.tryParse(product.adetFiyati.toString().replaceAll(',', '.')) ?? 0)
+                                                                            : (double.tryParse(product.kutuFiyati.toString().replaceAll(',', '.')) ?? 0);
+                                                                        
+                                                                        // Eğer orjinal fiyat 0 ise, mevcut fiyatı orjinal kabul et
+                                                                        if (originalPrice <= 0) {
+                                                                          originalPrice = currentPrice > 0 ? currentPrice : (selectedType == 'Unit' ? (double.tryParse(product.adetFiyati.toString()) ?? 0) : (double.tryParse(product.kutuFiyati.toString()) ?? 0));
+                                                                        }
 
                                                                         // İndirim yüzdesine göre yeni fiyatı hesapla
-                                                                        final discountAmount = (normalPrice * clamped) / 100;
-                                                                        final discountedPrice = normalPrice - discountAmount;
+                                                                        final discountAmount = (originalPrice * clamped) / 100;
+                                                                        final discountedPrice = originalPrice - discountAmount;
 
                                                                         // Fiyat controller'ını güncelle
                                                                         if (discountedPrice >= 0) {
                                                                           _priceController.text = discountedPrice.toStringAsFixed(2);
                                                                         }
+
+                                                                        // Provider'ı güncelle
+                                                                        provider.addOrUpdateItem(
+                                                                          urunAdi: product.urunAdi,
+                                                                          stokKodu: key,
+                                                                          birimFiyat: originalPrice, // Orjinal fiyatı koru
+                                                                          miktar: 0,
+                                                                          iskonto: clamped,
+                                                                          birimTipi: selectedType,
+                                                                          // ... diğer alanlar
+                                                                          adetFiyati: product.adetFiyati,
+                                                                          kutuFiyati: product.kutuFiyati,
+                                                                          vat: product.vat,
+                                                                          urunBarcode: product.barcode1,
+                                                                          imsrc: product.imsrc,
+                                                                          birimKey1: product.birimKey1,
+                                                                          birimKey2: product.birimKey2,
+                                                                        );
                                                                       },
                                                                       ),
                                                                     ),
@@ -1640,6 +1635,8 @@ _barcodeFocusNode.requestFocus();
                                                                           vat: product.vat,
                                                                           adetFiyati: '0',
                                                                           kutuFiyati: '0',
+                                                                          birimKey1: product.birimKey1,
+                                                                          birimKey2: product.birimKey2,
                                                                         );
                                                                       } else {
                                                                         ScaffoldMessenger.of(context).showSnackBar(
@@ -1782,6 +1779,8 @@ _barcodeFocusNode.requestFocus();
                                                                 iskonto: iskonto,
                                                                 birimTipi: birimTipi,
                                                                 imsrc: product.imsrc,
+                                                                birimKey1: product.birimKey1,
+                                                                birimKey2: product.birimKey2,
                                                               );
 
                                                               setState(() {
@@ -1884,6 +1883,8 @@ _barcodeFocusNode.requestFocus();
                                                                         iskonto: iskonto,
                                                                         birimTipi: birimTipi,
                                                                         imsrc: product.imsrc,
+                                                                        birimKey1: product.birimKey1,
+                                                                        birimKey2: product.birimKey2,
                                                                       );
                                                                     }
 
@@ -1966,6 +1967,8 @@ _barcodeFocusNode.requestFocus();
         iskonto: iskonto,
         birimTipi: birimTipi,
         imsrc: product.imsrc,
+        birimKey1: product.birimKey1,
+        birimKey2: product.birimKey2,
       );
     }
 
