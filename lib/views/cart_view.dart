@@ -900,7 +900,6 @@ _barcodeFocusNode.requestFocus();
 
                             // Discount controller setup - similar to price controller
                             final discountValue = context.read<CartProvider>().getIskonto(key2);
-                            final miktarValue = context.read<CartProvider>().getmiktar(key2);
 
                             if (!_discountControllers.containsKey(key2)) {
                               _discountControllers[key2] = TextEditingController();

@@ -229,7 +229,9 @@ class CartProvider extends ChangeNotifier {
 
   @override
   void notifyListeners() {
-    _saveCartToDatabase(); // Fire and forget for other operations
+    _saveCartToDatabase().catchError((error) {
+      print("Error saving cart to database: $error");
+    }); // Fire and forget for other operations
     super.notifyListeners();
   }
 

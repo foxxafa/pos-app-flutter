@@ -500,18 +500,18 @@ Future<void> downloadImages(List<ProductModel>? products) async {
 
   sortedProducts.sort((a, b) {
     // Aktif ürünler önce
-    int activeCompare = (b.aktif ?? 0).compareTo(a.aktif ?? 0);
+    int activeCompare = b.aktif.compareTo(a.aktif);
     if (activeCompare != 0) return activeCompare;
 
     // Fiyatı olanlar önce
-    bool aHasPrice = (a.adetFiyati != null && a.adetFiyati!.isNotEmpty && a.adetFiyati != '0');
-    bool bHasPrice = (b.adetFiyati != null && b.adetFiyati!.isNotEmpty && b.adetFiyati != '0');
+    bool aHasPrice = (a.adetFiyati.isNotEmpty && a.adetFiyati != '0');
+    bool bHasPrice = (b.adetFiyati.isNotEmpty && b.adetFiyati != '0');
     int priceCompare = bHasPrice.toString().compareTo(aHasPrice.toString());
     if (priceCompare != 0) return priceCompare;
 
     // Barkodu olanlar önce
-    bool aHasBarcode = (a.barcode1 != null && a.barcode1!.isNotEmpty);
-    bool bHasBarcode = (b.barcode1 != null && b.barcode1!.isNotEmpty);
+    bool aHasBarcode = a.barcode1.isNotEmpty;
+    bool bHasBarcode = b.barcode1.isNotEmpty;
     return bHasBarcode.toString().compareTo(aHasBarcode.toString());
   });
 
@@ -632,7 +632,7 @@ static Future<void> downloadSearchResultImages(List<ProductModel> searchProducts
         // Dosya yoksa ve aktif indirme yapılmıyorsa indir
         if (!await file.exists() && !_activeDownloads.contains(fileName)) {
           _activeDownloads.add(fileName);
-          futures.add(_downloadSearchImageWithCleanup(product.imsrc!, dir.path, product.urunAdi ?? 'Ürün', fileName));
+          futures.add(_downloadSearchImageWithCleanup(product.imsrc!, dir.path, product.urunAdi, fileName));
         }
       }
     }
@@ -654,7 +654,6 @@ static Future<void> downloadSearchResultImages(List<ProductModel> searchProducts
 
 static Future<void> _downloadSearchImageWithCleanup(String url, String dirPath, String productName, String fileName) async {
   try {
-    final uri = Uri.parse(url);
     final filePath = '$dirPath/$fileName';
     final file = File(filePath);
 
@@ -668,26 +667,6 @@ static Future<void> _downloadSearchImageWithCleanup(String url, String dirPath, 
   } finally {
     // İndirme tamamlandı - listeden çıkar
     _activeDownloads.remove(fileName);
-  }
-}
-
-static Future<void> _downloadSearchImage(String url, String dirPath, String productName) async {
-  try {
-    final uri = Uri.parse(url);
-    final fileName = uri.pathSegments.isNotEmpty
-        ? uri.pathSegments.last
-        : 'unknown.jpg';
-
-    final filePath = '$dirPath/$fileName';
-    final file = File(filePath);
-
-    final response = await http.get(Uri.parse(url));
-    if (response.statusCode == 200) {
-      await file.writeAsBytes(response.bodyBytes);
-      print('🔍 Arama resmi indirildi: $productName');
-    }
-  } catch (e) {
-    print('⚠️ $productName resmi indirilemedi');
   }
 }
 
