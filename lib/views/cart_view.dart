@@ -1251,15 +1251,18 @@ _barcodeFocusNode.requestFocus();
                                                                       onChanged: (val) {
                                                                         if ((val == 'Unit' && product.birimKey1 != 0) ||
                                                                             (val == 'Box' && product.birimKey2 != 0)) {
-                                                                          final bool newValue = (val == 'Box');
-                                                                          setState(() {
-                                                                            _isBoxMap[key] = newValue;
-                                                                          });
-
                                                                           final provider = Provider.of<CartProvider>(
                                                                             context,
                                                                             listen: false,
                                                                           );
+
+                                                                          final bool newValue = (val == 'Box');
+                                                                          final newBirimTipi = val!;
+
+                                                                          setState(() {
+                                                                            _isBoxMap[key] = newValue;
+                                                                          });
+
                                                                           final productFiyat = newValue
                                                                               ? double.parse(product.kutuFiyati.toString())
                                                                               : double.parse(product.adetFiyati.toString());
@@ -1267,23 +1270,14 @@ _barcodeFocusNode.requestFocus();
                                                                           // Fiyat controller'ını güncelle
                                                                           _priceController.text = productFiyat.toStringAsFixed(2);
 
-                                                                          final miktar = _quantityMap[key] ?? 0;
+                                                                          // Yeni birim tipinde ne kadar ürün var kontrol et
+                                                                          final newMiktar = provider.getmiktar(key, newBirimTipi);
 
-                                                                          if (miktar > 0) {
-                                                                            provider.addOrUpdateItem(
-                                                                              urunAdi: product.urunAdi,
-                                                                              stokKodu: key,
-                                                                              birimFiyat: productFiyat,
-                                                                              adetFiyati: product.adetFiyati,
-                                                                              kutuFiyati: product.kutuFiyati,
-                                                                              vat: product.vat,
-                                                                              urunBarcode: product.barcode1,
-                                                                              miktar: 0,
-                                                                              iskonto: _iskontoMap[key] ?? 0,
-                                                                              birimTipi: val!,
-                                                                              imsrc: product.imsrc,
-                                                                            );
-                                                                          }
+                                                                          // UI'daki miktarı güncelle - yeni birim tipindeki gerçek miktarı göster
+                                                                          setState(() {
+                                                                            _quantityMap[key] = newMiktar;
+                                                                          });
+                                                                          _quantityControllers[key]?.text = newMiktar.toString();
                                                                         }
                                                                       },
                                                                     ),
