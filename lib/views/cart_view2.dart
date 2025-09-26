@@ -582,18 +582,24 @@ class _CartView2State extends State<CartView2> {
                                                             ),
                                                           ),
                                                           onChanged: (value) {
-                                                            // Eğer kullanıcı alanı boşaltmak istiyorsa, 0 değil boş bırak
+                                                            // İmleç konumunu kaydet
+                                                            final cursorPos = discountController.selection.baseOffset;
+
+                                                            // Eğer kullanıcı alanı boşaltmak istiyorsa, indirimi sıfırla
                                                             if (value.isEmpty) {
-                                                              // Provider'ı 0 indirim ile güncelle ama field'ı boş bırak
+                                                              // Fiyatı orjinal fiyata döndür
+                                                              priceController.text = item.birimFiyat.toStringAsFixed(2);
+                                                              
+                                                              // Provider'ı 0 indirim ile güncelle
                                                               final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
                                                               cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                               cartProvider.addOrUpdateItem(
                                                                 urunAdi: item.urunAdi,
                                                                 stokKodu: item.stokKodu,
-                                                                birimFiyat: item.birimFiyat,
+                                                                birimFiyat: item.birimFiyat, // Orjinal fiyatı kullan
                                                                 urunBarcode: item.urunBarcode,
                                                                 miktar: 0,
-                                                                iskonto: 0, // İndirim sıfırla
+                                                                iskonto: 0, // İndirimi sıfırla
                                                                 birimTipi: item.birimTipi,
                                                                 durum: item.durum,
                                                                 vat: item.vat,
@@ -610,19 +616,8 @@ class _CartView2State extends State<CartView2> {
                                                             int discountPercent = int.tryParse(value) ?? 0;
                                                             discountPercent = discountPercent.clamp(0, 100);
 
-                                                            // İmleç konumunu kaydet
-                                                            final cursorPos = discountController.selection.baseOffset;
-
-                                                            // Şu anki fiyat controller'ındaki değeri al (kullanıcının girdiği fiyat)
-                                                            final currentPrice = double.tryParse(priceController.text.replaceAll(',', '.')) ?? item.birimFiyat;
-                                                            
-                                                            // Orjinal fiyat (yeni girilen fiyat baz alınacak)
-                                                            var originalPrice = currentPrice;
-                                                            
-                                                            // Eğer orjinal fiyat 0 ise mevcut item fiyatını kullan
-                                                            if (originalPrice <= 0) {
-                                                              originalPrice = item.birimFiyat > 0 ? item.birimFiyat : currentPrice;
-                                                            }
+                                                            // Orjinal fiyat HER ZAMAN item'ın kendi birim fiyatıdır.
+                                                            final originalPrice = item.birimFiyat;
 
                                                             // İndirim miktarını hesapla
                                                             final discountAmount = (originalPrice * discountPercent) / 100;
@@ -633,7 +628,7 @@ class _CartView2State extends State<CartView2> {
                                                             // Fiyat controller'ını güncelle
                                                             priceController.text = discountedPrice.toStringAsFixed(2);
 
-                                                            print("İNDİRİM DEBUG - currentPrice: $currentPrice, originalPrice: $originalPrice, discountPercent: $discountPercent, discountedPrice: $discountedPrice");
+                                                            print("İNDİRİM DEBUG - originalPrice: $originalPrice, discountPercent: $discountPercent, discountedPrice: $discountedPrice");
 
                                                             // Provider'ı güncelle
                                                             final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
@@ -641,7 +636,7 @@ class _CartView2State extends State<CartView2> {
                                                             cartProvider.addOrUpdateItem(
                                                               urunAdi: item.urunAdi,
                                                               stokKodu: item.stokKodu,
-                                                              birimFiyat: originalPrice, // Yeni fiyatı orjinal fiyat olarak kullan
+                                                              birimFiyat: originalPrice, // Her zaman orjinal fiyatı gönder
                                                               urunBarcode: item.urunBarcode,
                                                               miktar: 0,
                                                               iskonto: discountPercent,
