@@ -718,6 +718,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                             child: TextField(
                                               keyboardType:
                                                   TextInputType.number,
+                                              textAlign: TextAlign.center,
                                               controller: TextEditingController(
                                                 text:
                                                     provider
@@ -877,13 +878,10 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                                                 text:
                                                     "${Provider.of<CartProvider>(context, listen: true).items[key]?.miktar ?? 0}",
                                               ),
+                                              textAlign: TextAlign.center,
                                               style: TextStyle(fontSize: 18.sp),
                                               decoration: InputDecoration(
-                                                contentPadding:
-                                                    EdgeInsets.symmetric(
-                                                      horizontal: 2.w,
-                                                      vertical: 1.h,
-                                                    ),
+                                                contentPadding: EdgeInsets.zero,
                                                 border: OutlineInputBorder(
                                                   borderRadius:
                                                       BorderRadius.circular(

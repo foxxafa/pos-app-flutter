@@ -23,7 +23,6 @@ class CartView extends StatefulWidget {
   const CartView({
     super.key,
     required this.refundProductNames,
-
     required this.refunds,
   });
 
@@ -32,6 +31,7 @@ class CartView extends StatefulWidget {
 }
 
 class _CartViewState extends State<CartView> {
+  // --- State Variables ---
   final Map<String, TextEditingController> _priceControllers = {};
   final Map<String, TextEditingController> _discountControllers = {};
   final Map<String, FocusNode> _discountFocusNodes = {};
@@ -39,12 +39,7 @@ class _CartViewState extends State<CartView> {
   final FocusNode _barcodeFocusNode2 = FocusNode();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _searchController2 = TextEditingController();
-
-  void onBarcodeScanned(String scannedValue) {
-    //_barcodeFocusNode.requestFocus();
-    _searchController.text = scannedValue;
-  }
-
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   List<ProductModel> _allProducts = [];
   List<ProductModel> _filteredProducts = [];
@@ -53,95 +48,93 @@ class _CartViewState extends State<CartView> {
 
   final Map<String, bool> _isBoxMap = {};
   final Map<String, int> _quantityMap = {};
-  final Map<String, int> _iskontoMap = {};
   final Map<String, TextEditingController> _quantityControllers = {};
 
-  // Duplicate indirme önleme için timer
   Timer? _imageDownloadTimer;
 
-  // Resim indirmeyi debounce ile zamanla
-  void _scheduleImageDownload() {
-    _imageDownloadTimer?.cancel();
-    _imageDownloadTimer = Timer(Duration(milliseconds: 500), () {
-      if (_filteredProducts.isNotEmpty && mounted) {
-        SyncController.downloadSearchResultImages(_filteredProducts, onImagesDownloaded: () {
-          // Resimler indirildikten sonra UI'ı yenile
-          if (mounted) {
-            setState(() {
-              // Cache'i force update ile yenile
-              _generateImageFutures(_filteredProducts, forceUpdate: true);
-            });
-          }
-        });
-      }
-    });
-  }
-
-  void _syncWithProvider() {
-    final provider = Provider.of<CartProvider>(context, listen: false);
-
-    setState(() {
-      for (var product in _allProducts) {
-        final key = product.stokKodu;
-
-        // Mevcut seçili birim tipine göre değerleri al
-        final isBox = _isBoxMap[key] ?? false;
-        final birimTipi = isBox ? 'Box' : 'Unit';
-
-        final miktar = provider.getmiktar(key, birimTipi);
-        final iskonto = provider.getIskonto(key, birimTipi);
-
-        _quantityMap[key] = miktar;
-        _iskontoMap[key] = iskonto;
-
-        if (_quantityControllers.containsKey(key)) {
-          _quantityControllers[key]!.text = miktar.toString();
-        }
-
-        if (_discountControllers.containsKey(key)) {
-          // İskonto değerini yaz - 0 ise '0', büyükse değeri
-          _discountControllers[key]!.text = iskonto > 0 ? iskonto.toString() : '0';
-        }
-
-        if (_priceControllers.containsKey(key) && miktar == 0) {
-          _priceControllers[key]!.clear();
-        }
-      }
-    });
-  }
-
+  // --- Lifecycle Methods ---
   @override
   void initState() {
     super.initState();
-    print("sasssss ${widget.refunds}");
-    print("sasssss ${widget.refundProductNames}");
-
     _loadProducts();
-    //_searchController.addListener(_filterProducts);
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _barcodeFocusNode.requestFocus();
-      _syncWithProvider(); // Provider'dan veriyi çek
+      _syncWithProvider();
     });
   }
-
-  // didChangeDependencies kaldırıldı - gereksiz _syncWithProvider çağrılarını önlemek için
 
   @override
   void dispose() {
     _imageDownloadTimer?.cancel();
     _barcodeFocusNode.dispose();
+    _barcodeFocusNode2.dispose();
     _searchController.dispose();
-    _quantityControllers.values.forEach((controller) => controller.dispose());
+    _searchController2.dispose();
+    _priceControllers.values.forEach((c) => c.dispose());
+    _discountControllers.values.forEach((c) => c.dispose());
+    _quantityControllers.values.forEach((c) => c.dispose());
+    _discountFocusNodes.values.forEach((f) => f.dispose());
+    _audioPlayer.dispose();
     super.dispose();
   }
 
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  // --- Product & Data Loading ---
+  Future<void> _loadProducts() async {
+    final raw = await DatabaseHelper().getAll("Product");
+    final allProducts = raw.map((e) => ProductModel.fromMap(e)).toList();
+    final activeProducts = allProducts.where((p) => p.aktif == 1).toList();
 
-  Future<void> playWrong() async {
-    await _audioPlayer.play(AssetSource('wrong.mp3'));
+    activeProducts.sort((a, b) {
+      final nameA = a.urunAdi;
+      final nameB = b.urunAdi;
+      final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameA);
+      final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameB);
+
+      if (startsWithLetterA && !startsWithLetterB) return -1;
+      if (!startsWithLetterA && startsWithLetterB) return 1;
+      return nameA.compareTo(nameB);
+    });
+
+    setState(() {
+      _allProducts = activeProducts;
+      _filteredProducts = activeProducts.take(50).toList();
+      _isLoading = false;
+
+      for (var product in activeProducts) {
+        final key = product.stokKodu;
+        _isBoxMap[key] = product.birimKey2 != 0;
+        _quantityMap[key] = 0;
+      }
+      _generateImageFutures(_filteredProducts);
+    });
   }
 
+  void _syncWithProvider() {
+    final provider = Provider.of<CartProvider>(context, listen: false);
+    setState(() {
+      for (var product in _allProducts) {
+        final key = product.stokKodu;
+        final isBox = _isBoxMap[key] ?? false;
+        final birimTipi = isBox ? 'Box' : 'Unit';
+
+        final miktar = provider.getmiktar(key, birimTipi);
+        final iskonto = provider.getIskonto(key);
+
+        _quantityMap[key] = miktar;
+
+        _quantityControllers[key]?.text = miktar.toString();
+        _discountControllers[key]?.text = iskonto > 0 ? iskonto.toString() : '';
+        if (_priceControllers.containsKey(key) && miktar == 0) {
+          final selectedType = getBirimTipiFromProduct(product);
+          _priceControllers[key]!.text = selectedType == 'Unit'
+              ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
+              : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
+        }
+      }
+    });
+  }
+
+  // --- Image Handling ---
   void _generateImageFutures(List<ProductModel> products, {bool forceUpdate = false}) {
     for (final product in products) {
       final stokKodu = product.stokKodu;
@@ -154,393 +147,41 @@ class _CartViewState extends State<CartView> {
   Future<String?> _loadImage(String? imsrc) async {
     try {
       if (imsrc == null || imsrc.isEmpty) return null;
-
       final uri = Uri.parse(imsrc);
-      final fileName =
-          uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-
+      final fileName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
       if (fileName.isEmpty) return null;
-
       final dir = await getApplicationDocumentsDirectory();
       final filePath = '${dir.path}/$fileName';
       final file = File(filePath);
-
-      if (await file.exists()) {
-        return filePath;
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  Future<void> _loadProducts() async {
-    final raw = await DatabaseHelper().getAll("Product");
-    final allProducts = raw.map((e) => ProductModel.fromMap(e)).toList();
-
-    // Sadece aktif ürünleri filtrele (aktif = 1)
-    final products = allProducts.where((product) => product.aktif == 1).toList();
-
-    // Tüm ürünleri al, sonra sıralayıp ilk 50 tanesini göster
-    final sortedFiltered =
-        products.toList()..sort((a, b) {
-          final nameA = a.urunAdi;
-          final nameB = b.urunAdi;
-
-          final startsWithLetterA = RegExp(
-            r'^[a-zA-ZğüşöçİĞÜŞÖÇ]',
-          ).hasMatch(nameA);
-          final startsWithLetterB = RegExp(
-            r'^[a-zA-ZğüşöçİĞÜŞÖÇ]',
-          ).hasMatch(nameB);
-
-          if (startsWithLetterA && !startsWithLetterB) return -1;
-          if (!startsWithLetterA && startsWithLetterB) return 1;
-
-          return nameA.compareTo(nameB);
-        });
-
-    setState(() {
-      _allProducts = products;
-      _filteredProducts = sortedFiltered.take(50).toList();
-
-      for (var product in products) {
-        final key = product.stokKodu;
-        // Box varsa varsayılan olarak Box seçili gelsin
-        _isBoxMap[key] = product.birimKey2 != 0 ? true : false;
-        _quantityMap[key] = 0;
-        _iskontoMap[key] = 0;
-      }
-      // Gösterilen tüm ürünler için resim yükle
-      _generateImageFutures(_filteredProducts);
-      _isLoading = false;
-    });
-  }
-
-  void _filterProducts2() {
-    print("FİLTER STARTEDDDDDD");
-    final provider = Provider.of<CartProvider>(context, listen: false);
-
-    final query = _searchController2.text.trimRight().toLowerCase();
-    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-
-    final filtered =
-        _allProducts.where((product) {
-          final name = product.urunAdi.toLowerCase();
-          final barcodes =
-              [
-                product.barcode1,
-                product.barcode2,
-                product.barcode3,
-                product.barcode4,
-              ].map((b) => b.toLowerCase()).toList();
-
-          final matchesAllWords = queryWords.every((word) {
-            final inName = name.contains(word);
-            final inBarcodes = barcodes.any((b) => b.contains(word));
-            return inName || inBarcodes;
-          });
-
-          return matchesAllWords;
-        }).toList();
-
-    // 🔤 Alfabetik sırala, özel karakterle başlayanlar en sona
-    filtered.sort((a, b) {
-      final aName = a.urunAdi;
-      final bName = b.urunAdi;
-
-      final aStartsWithLetter = RegExp(
-        r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
-      ).hasMatch(aName);
-      final bStartsWithLetter = RegExp(
-        r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
-      ).hasMatch(bName);
-
-      if (aStartsWithLetter && !bStartsWithLetter) return -1;
-      if (!aStartsWithLetter && bStartsWithLetter) return 1;
-
-      return aName.toLowerCase().compareTo(bName.toLowerCase());
-    });
-
-    setState(() {
-      _filteredProducts = filtered.take(50).toList();
-      _generateImageFutures(_filteredProducts);
-    });
-
-    // Arama sonucundaki ürünlerin resimlerini dinamik olarak indir (debounced)
-    _scheduleImageDownload();
-
-    if (_filteredProducts.length == 1 &&
-        RegExp(r'^\d+$').hasMatch(_searchController2.text)) {
-      final product = _filteredProducts.first;
-      final key = product.stokKodu;
-      final isBox = provider.getBirimTipi(key) == 'Box';
-
-      if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
-              product.birimKey1 != 0) ||
-          (provider.getBirimTipi(product.stokKodu) == 'Box' &&
-              product.birimKey2 != 0)) {
-        provider.addOrUpdateItem(
-          urunAdi: product.urunAdi,
-          adetFiyati: product.adetFiyati,
-          kutuFiyati: product.kutuFiyati,
-          stokKodu: key,
-          vat: product.vat,
-          birimFiyat:
-              isBox
-                  ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-                  : double.tryParse(product.adetFiyati.toString()) ?? 0,
-          imsrc: product.imsrc,
-          urunBarcode: product.barcode1,
-          miktar: 1,
-          iskonto: _iskontoMap[key] ?? 0,
-          birimTipi: provider.getBirimTipi(product.stokKodu),
-          birimKey1: product.birimKey1,
-          birimKey2: product.birimKey2,
-        );
-      } else {}
-
-      _searchController2.clear();
-      FocusScope.of(context).unfocus();
-      Future.delayed(Duration(milliseconds: 500), () {
-        if (mounted) _barcodeFocusNode.requestFocus();
-      });
+      return await file.exists() ? filePath : null;
+    } catch (_) {
+      return null;
     }
+  }
 
-    if (_filteredProducts.length == 0 &&
-        _searchController2.text.length > 10 &&
-        RegExp(r'^\d+$').hasMatch(_searchController2.text)) {
-      playWrong();
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(
-      //     content: Container(
-      //       padding: const EdgeInsets.symmetric(
-      //         vertical: 24,
-      //       ), // yüksekliği artırır
-      //       child: Text(
-      //         "No product found with this barcode.",
-      //         style: TextStyle(fontSize: 16),
-      //       ),
-      //     ),
-      //     behavior: SnackBarBehavior.floating, // ekranın üstüne çıkmasın
-      //     shape: RoundedRectangleBorder(
-      //       borderRadius: BorderRadius.circular(12),
-      //     ),
-      //     backgroundColor: Colors.red.shade600,
-      //     duration: Duration(seconds: 2),
-      //   ),
-      // );
-
-      _searchController.clear();
-
-      if (mounted) {
-        FocusScope.of(context).unfocus();
-        Future.delayed(Duration(milliseconds: 500), () {
-          _searchController.clear();
-
-          if (mounted) _barcodeFocusNode.requestFocus();
+  void _scheduleImageDownload() {
+    _imageDownloadTimer?.cancel();
+    _imageDownloadTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_filteredProducts.isNotEmpty && mounted) {
+        SyncController.downloadSearchResultImages(_filteredProducts, onImagesDownloaded: () {
+          if (mounted) {
+            setState(() {
+              _generateImageFutures(_filteredProducts, forceUpdate: true);
+            });
+          }
         });
       }
-    }
+    });
   }
 
-  bool redscan = false;
-  void _filterProducts({bool isFromBarcodeScan = false}) {
-    print("FİLTER STARTEDDDDDD");
-    final provider = Provider.of<CartProvider>(context, listen: false);
-
-    final query = _searchController.text.trimRight().toLowerCase();
-    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-
-    final filtered =
-        _allProducts.where((product) {
-          final name = product.urunAdi.toLowerCase();
-          final barcodes =
-              [
-                product.barcode1,
-                product.barcode2,
-                product.barcode3,
-                product.barcode4,
-              ].map((b) => b.toLowerCase()).toList();
-
-          final matchesAllWords = queryWords.every((word) {
-            final inName = name.contains(word);
-            final inBarcodes = barcodes.any((b) => b.contains(word));
-            return inName || inBarcodes;
-          });
-
-          return matchesAllWords;
-        }).toList();
-
-    // 🔤 Alfabetik sırala, özel karakterle başlayanlar en sona
-    filtered.sort((a, b) {
-      final aName = a.urunAdi;
-      final bName = b.urunAdi;
-
-      final aStartsWithLetter = RegExp(
-        r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
-      ).hasMatch(aName);
-      final bStartsWithLetter = RegExp(
-        r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]',
-      ).hasMatch(bName);
-
-      if (aStartsWithLetter && !bStartsWithLetter) return -1;
-      if (!aStartsWithLetter && bStartsWithLetter) return 1;
-
-      return aName.toLowerCase().compareTo(bName.toLowerCase());
-    });
-
-    setState(() {
-      _filteredProducts = filtered.take(50).toList();
-      _generateImageFutures(_filteredProducts);
-    });
-
-    // Arama sonucundaki ürünlerin resimlerini dinamik olarak indir (debounced)
-    _scheduleImageDownload();
-
-    if (_filteredProducts.length == 1 &&
-        RegExp(r'^\d+$').hasMatch(_searchController.text)) {
-      final product = _filteredProducts.first;
-      final key = product.stokKodu;
-      final isBox = provider.getBirimTipi(key) == 'Box';
-
-      if ((provider.getBirimTipi(product.stokKodu) == 'Unit' &&
-              product.birimKey1 != 0) ||
-          (provider.getBirimTipi(product.stokKodu) == 'Box' &&
-              product.birimKey2 != 0)) {
-        provider.addOrUpdateItem(
-          urunAdi: product.urunAdi,
-          adetFiyati: product.adetFiyati,
-          kutuFiyati: product.kutuFiyati,
-          stokKodu: key,
-          vat: product.vat,
-          birimFiyat:
-              isBox
-                  ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-                  : double.tryParse(product.adetFiyati.toString()) ?? 0,
-          imsrc: product.imsrc,
-          urunBarcode: product.barcode1,
-          miktar: 1,
-          iskonto: _iskontoMap[key] ?? 0,
-          birimTipi: provider.getBirimTipi(product.stokKodu),
-          birimKey1: product.birimKey1,
-          birimKey2: product.birimKey2,
-        );
-      } else {}
-      
-      //_searchController2.clear(); burayı dene 
-
-      _searchController.clear();
-      FocusScope.of(context).unfocus();
-      Future.delayed(Duration(milliseconds: 500), () {
-        if (mounted) _barcodeFocusNode.requestFocus();
-      });
-    }
-
-    if (_filteredProducts.length == 0 &&
-        _searchController.text.length > 10 &&
-        RegExp(r'^\d+$').hasMatch(_searchController.text)) {
-      playWrong();
-      // ScaffoldMessenger.of(context).showSnackBar(
-      //   SnackBar(
-      //     content: Container(
-      //       padding: const EdgeInsets.symmetric(
-      //         vertical: 24,
-      //       ), // yüksekliği artırır
-      //       child: Text(
-      //         "No product found with this barcode.",
-      //         style: TextStyle(fontSize: 16),
-      //       ),
-      //     ),
-      //     behavior: SnackBarBehavior.floating, // ekranın üstüne çıkmasın
-      //     shape: RoundedRectangleBorder(
-      //       borderRadius: BorderRadius.circular(12),
-      //     ),
-      //     backgroundColor: Colors.red.shade600,
-      //     duration: Duration(seconds: 2),
-      //   ),
-      // );
-
-      _searchController.clear();
-
-      if (mounted) {
-        FocusScope.of(context).unfocus();
-        Future.delayed(Duration(milliseconds: 500), () {
-          _searchController.clear();
-          if (mounted) _barcodeFocusNode.requestFocus();
-        });
-      }
-    }
-  }
-
-  // void _filterProducts() {
-
-  //   final provider = Provider.of<CartProvider>(context, listen: false);
-
-  //   final query = _searchController.text.trimRight().toLowerCase();
-
-  //   final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-
-  //   final filtered =
-  //       _allProducts.where((product) {
-  //         final name = (product.urunAdi ?? "").toLowerCase();
-  //         final barcodes =
-  //             [
-  //               product.barcode1,
-  //               product.barcode2,
-  //               product.barcode3,
-  //               product.barcode4,
-  //             ].where((b) => b != null).map((b) => b!.toLowerCase()).toList();
-
-  //         // Her kelimenin, ürün adı veya barkodlardan en az birinde geçip geçmediğini kontrol et
-  //         final matchesAllWords = queryWords.every((word) {
-  //           final inName = name.contains(word);
-  //           final inBarcodes = barcodes.any((b) => b.contains(word));
-  //           return inName || inBarcodes;
-  //         });
-
-  //         return matchesAllWords;
-  //       }).toList();
-
-  //   setState(() {
-  //     _filteredProducts = filtered.take(50).toList();
-
-  //       // Sadece 1 ürün varsa otomatik sepete ekle
-  // if (_filteredProducts.length == 1) {
-  //   final product = _filteredProducts.first;
-  //   final key = product.stokKodu ?? 'unknown';
-  //   final isBox = provider.getBirimTipi(key) == 'Box';
-
-  //   provider.addOrUpdateItem(
-  //     urunAdi: product.urunAdi,
-  //     adetFiyati: product.adetFiyati,
-  //     kutuFiyati: product.kutuFiyati,
-  //     stokKodu: key,
-  //     vat: product.vat,
-  //     birimFiyat: isBox
-  //         ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-  //         : double.tryParse(product.adetFiyati.toString()) ?? 0,
-  //     imsrc: product.imsrc,
-  //     urunBarcode: product.barcode1,
-  //     miktar: 1,
-  //     iskonto: _iskontoMap[key] ?? 0,
-  //     birimTipi: provider.getBirimTipi(product.stokKodu),
-  //   );
-  // }
-
-  //     _generateImageFutures(_filteredProducts);
-  //   });
-  // }
-
-
-  void _clearSearch2() {
-    _searchController2.clear();
-    _filterProducts2();
+  // --- Sound & Barcode ---
+  Future<void> playWrong() async {
+    await _audioPlayer.play(AssetSource('wrong.mp3'));
   }
 
   void _onBarcodeScanned(String barcode) {
     _searchController.text = barcode;
-    print("buradaki filter");
-    _filterProducts(isFromBarcodeScan: true);
-    // Navigator.of(context).pop(); // Kamera sayfasını kapat
+    _filterProducts();
   }
 
   Future<void> _openBarcodeScanner() async {
@@ -551,1408 +192,118 @@ class _CartViewState extends State<CartView> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<CartProvider>(context, listen: true);
-    final customer =
-        Provider.of<SalesCustomerProvider>(context).selectedCustomer;
-    String musteriId = customer?.kod ?? "";
-
-    final cartItems = provider.items.values.toList();
-
-    final unitCount = cartItems
-        .where((item) => item.birimTipi == 'Unit')
-        .fold<int>(0, (prev, item) => prev + item.miktar);
-
-    final boxCount = cartItems
-        .where((item) => item.birimTipi == 'Box')
-        .fold<int>(0, (prev, item) => prev + item.miktar);
-
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, result) {
-        //   Provider.of<CartProvider>(context, listen: false).clearCart();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          foregroundColor: Colors.white,
-          elevation: 2,
-          centerTitle: true,
-          leading: IconButton(
-            icon: Icon(Icons.menu, size: 25.sp),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder:
-                      (context) =>
-                          CartsuggestionView(musteriId: musteriId),
-                ),
-              );
-            },
-          ),
-          title: Container(
-            height: 40,
-            child: TextField(
-              focusNode: _barcodeFocusNode2,
-              controller: _searchController2,
-              style: TextStyle(
-                fontSize: 14.sp,
-                color: Colors.white,
-              ),
-              decoration: InputDecoration(
-                hintText: 'cart.search_placeholder'.tr(),
-                hintStyle: TextStyle(
-                  fontSize: 14.sp,
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.15),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(25),
-                  borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.3),
-                    width: 1.0,
-                  ),
-                ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                suffixIcon: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_searchController2.text.isNotEmpty)
-                      IconButton(
-                        icon: Icon(
-                          Icons.clear,
-                          color: Colors.white.withValues(alpha: 0.7),
-                          size: 20,
-                        ),
-                        onPressed: _clearSearch2,
-                        padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(
-                          maxWidth: 40,
-                          maxHeight: 40,
-                        ),
-                      ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.qr_code_scanner,
-                        color: Colors.white.withValues(alpha: 0.9),
-                        size: 22,
-                      ),
-                      onPressed: _openBarcodeScanner,
-                      padding: EdgeInsets.zero,
-                      constraints: BoxConstraints(
-                        maxWidth: 40,
-                        maxHeight: 40,
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                  ],
-                ),
-              ),
-              onChanged: (value) {
-                final onlyDigits = RegExp(r'^\d+$');
-
-                if (value.isEmpty) {
-                  setState(() {}); // Sadece buton görünürlüğü için
-                  _filterProducts2();
-                } else if (onlyDigits.hasMatch(value)) {
-                  if (value.length >= 11) {
-                    setState(() {}); // Sadece buton görünürlüğü için
-                    _filterProducts2();
-                  }
-                } else {
-                  setState(() {}); // Sadece buton görünürlüğü için
-                  _filterProducts2();
-                }
-              },
-            ),
-          ),
-          actions: [
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CartView2(),
-                  ),
-                );
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Container(
-                width: 18.w,
-                height: 10.h,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.transparent,
-                ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(Icons.shopping_cart, size: 8.w),
-                    Positioned(
-                      right: 1.w,
-                      top: 0.2.h,
-                      child: Container(
-                        padding: EdgeInsets.all(0.4.w),
-                        decoration: const BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: BoxConstraints(
-                          minWidth: 6.w,
-                          minHeight: 6.w,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${cartItems.length}',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 1.w,
-                      bottom: 0.2.h,
-                      child: Container(
-                        padding: EdgeInsets.all(0.4.w),
-                        decoration: const BoxDecoration(
-                          color: Colors.orange,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: BoxConstraints(
-                          minWidth: 6.w,
-                          minHeight: 6.w,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${unitCount + boxCount}',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        body: Focus(
-          autofocus: true,
-          onKeyEvent: (FocusNode node, KeyEvent event) {
-            if (event is KeyDownEvent) {
-              final keyId = event.logicalKey.keyId;
-              
-              // print('KEY debug: ${event.logicalKey.debugName}');
-              // print('KEY id: $keyId');
-
-              if (keyId == 0x01100000209 ||
-                  keyId == 0x01100000208 ||
-                  keyId == 4294967556 ||
-                  keyId == 73014445159|| // barkod okumuyor
-                  keyId==4294967309       //
-                  ) {
-                    _searchController.clear();
-                    _searchController2.clear();
-_barcodeFocusNode.requestFocus();
-      //           _searchController.clear();
-
-      //           print('Özel tuş yakalandı: ${event.logicalKey.debugName}');
-      //           _searchController2.clear();
-      //            FocusScope.of(context).unfocus();
-      // Future.delayed(Duration(milliseconds: 500), () {
-      //   if (mounted) _barcodeFocusNode.requestFocus();
-      // });
-                return KeyEventResult.handled; // İstersen işlem yap
-              }
-            }
-
-            return KeyEventResult.ignored; // Diğer tuşlar serbest
-          },
-          child: Column(
-            children: [
-                  Opacity(
-                    opacity: 0.0,
-                    child: SizedBox(
-                      width: 1.w,
-                      height: 1.h,
-                      child: TextField(
-                        focusNode: _barcodeFocusNode,
-                        controller: _searchController,
-                        style: TextStyle(fontSize: 1.sp),
-                        decoration: InputDecoration(
-                          border: InputBorder.none,
-                        ),
-                        onChanged: (value) {
-                          final onlyDigits = RegExp(r'^\d+$');
-
-                          if (value.isEmpty) {
-                            _filterProducts();
-                          } else if (onlyDigits.hasMatch(value)) {
-                            if (value.length >= 11) {
-                              _filterProducts();
-                            }
-                          } else {
-                            _filterProducts();
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: _isLoading
-                        ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                              SizedBox(height: 2.h),
-                              Text(
-                                'cart.loading_products'.tr(),
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                        : _filteredProducts.isEmpty
-                            ? Center(
-                              child: Text(
-                                'cart.no_products'.tr(),
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            )
-                            : ListView.builder(
-                          padding: EdgeInsets.only(
-                            left: 1.w,
-                            right: 1.w,
-                            top: 0.w,
-                            bottom: 1.h,
-                          ),
-                          addAutomaticKeepAlives: false, // Performans için false
-                          addRepaintBoundaries: true, // Repaint boundary ekle
-                          cacheExtent: 50, // Cache extent azalt
-                          itemCount: _filteredProducts.length,
-                          itemBuilder: (context, index) {
-                            final product = _filteredProducts[index];
-                            final selectedType = provider.getBirimTipi(
-                              product.stokKodu,
-                            );
-
-                            // String? initialPrice = selectedType == 'Unit'
-                            //     ? product.adetFiyati
-                            //     : selectedType == 'Box'
-                            //         ? product.kutuFiyati
-                            //         : '';
-
-                            // _priceController = TextEditingController(text: initialPrice ?? '');
-
-                            final key2 = product.stokKodu;
-
-                            // Sepette ürün var mı kontrol et
-                            final cartItem =
-                                context.read<CartProvider>().items[key2];
-
-                            // Eğer cart'tan gelen varsa onu yaz, yoksa adet/kutu fiyatı
-                            final initialPrice =
-                                cartItem != null
-                                    ? cartItem.birimFiyat.toString()
-                                    : selectedType == 'Unit'
-                                    ? product.adetFiyati
-                                    : selectedType == 'Box'
-                                    ? product.kutuFiyati
-                                    : '';
-
-                            // Sadece ilk kez oluşturuluyorsa controller'a fiyat yaz
-                            if (!_priceControllers.containsKey(key2)) {
-                              // Fiyatı ondalıklı formata çevir
-                              final formattedPrice = initialPrice.isNotEmpty
-                                  ? double.tryParse(initialPrice)?.toStringAsFixed(2) ?? '0.00'
-                                  : '0.00';
-                              _priceControllers[key2] = TextEditingController(
-                                text: formattedPrice,
-                              );
-                            }
-
-                            final _priceController = _priceControllers[key2]!;
-
-
-
-                            final key = product.stokKodu;
-                            final providersafdas = Provider.of<CartProvider>(
-                              context,
-                              listen: true,
-                            );
-
-                            // Mevcut seçili birim tipine göre miktarı al
-                            final isBox = _isBoxMap[key] ?? false;
-                            final birimTipi = isBox ? 'Box' : 'Unit';
-                            final currentMiktar = providersafdas.getmiktar(key, birimTipi);
-                            _quantityMap[key] = currentMiktar;
-
-                            // Quantity controller başlatma ve güncelleme
-                            if (!_quantityControllers.containsKey(key)) {
-                              _quantityControllers[key] = TextEditingController(
-                                text: currentMiktar.toString(),
-                              );
-                            } else {
-                              // Controller zaten var - değeri güncelle
-                              if (_quantityControllers[key]!.text != currentMiktar.toString()) {
-                                _quantityControllers[key]!.text = currentMiktar.toString();
-                              }
-                            }
-
-                            // final isBox = _isBoxMap[key] ?? false;
-                            final quantity = _quantityMap[key] ?? 0;
-                            // final iskonto = _iskontoMap[key] ?? 0;
-                            final future = _imageFutures[product.stokKodu];
-
-                            return Column(
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.all(2.w),
-                                  child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisAlignment: MainAxisAlignment.start,
-                                      children: [
-                                    GestureDetector(
-                                      onDoubleTap: () {
-                                        showDialog(
-  context: context,
-  builder: (context) => AlertDialog(
-    title: Text(
-      product.urunAdi,
-    ),
-    content: Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start, // 🡐 sadece bu satır eklendi
-      children: [
-        product.imsrc == null
-            ? Icon(
-                Icons.shopping_bag,
-                size: 40.w,
-              )
-            : FutureBuilder<String?>(
-                future: () async {
-                  try {
-                    final imsrc = product.imsrc;
-                    if (imsrc == null || imsrc.isEmpty) return null;
-
-                    final uri = Uri.parse(imsrc);
-                    final fileName = uri.pathSegments.isNotEmpty
-                        ? uri.pathSegments.last
-                        : null;
-                    if (fileName == null) return null;
-
-                    final dir = await getApplicationDocumentsDirectory();
-                    final filePath = '${dir.path}/$fileName';
-
-                    final file = File(filePath);
-                    if (await file.exists()) {
-                      return filePath;
-                    } else {
-                      return null;
-                    }
-                  } catch (e) {
-                    return null;
-                  }
-                }(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return SizedBox(
-                      width: 40.w,
-                      height: 40.w,
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    );
-                  }
-                  if (!snapshot.hasData || snapshot.data == null) {
-                    return Icon(
-                      Icons.shopping_bag,
-                      size: 40.w,
-                    );
-                  }
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      File(snapshot.data!),
-                      width: 40.w,
-                      height: 40.w,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.shopping_bag,
-                          size: 40.w,
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-        SizedBox(height: 2.h),
-        GestureDetector(
-          onTap: () {
-            final firstBarcode = product.barcode1.trim();
-            if (firstBarcode.isNotEmpty) {
-              Clipboard.setData(ClipboardData(text: firstBarcode));
-            }
-          },
-          child: Text(
-            "${'cart.barcodes'.tr()}: ${[
-              product.barcode1,
-              product.barcode2,
-              product.barcode3,
-              product.barcode4
-            ].where((b) => b.trim().isNotEmpty).join(', ')}",
-            style: TextStyle(
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ),
-        Text(
-          "${'cart.code'.tr()}= ${product.stokKodu}",
-        ),
-        Text(
-          "${'cart.unit_price'.tr()}= ${product.adetFiyati}",
-        ),
-        Text(
-          "${'cart.box_price'.tr()}= ${product.kutuFiyati}",
-        ),
-        Text(
-          "${'cart.vat'.tr()}= ${product.vat}",
-        ),
-        Text(
-          "${'cart.code'.tr()}= ${product.imsrc ?? '-'}",
-        ),
-      ],
-    ),
-    actions: [
-      TextButton(
-        child: Text('cart.close'.tr()),
-        onPressed: () => Navigator.of(context).pop(),
-      ),
-    ],
-  ),
-);
-
-                                      },
-                                      child: Row( //// RESİMLER BURASI
-                                        children: [
-                                          product.imsrc == null
-                                              ? Column(
-                                                children: [
-                                                  Icon(
-                                                    Icons.shopping_bag_sharp,
-                                                    size: 25.w,
-                                                  ),
-                                                  Text("${tr('cart.stock')}: 0/0"),
-                                                ],
-                                              )
-                                              : FutureBuilder<String?>(
-                                                future: future,
-                                                builder: (context, snapshot) {
-                                                  if (snapshot.connectionState != ConnectionState.done) {
-                                                    return Column(
-                                                      children: [
-                                                        SizedBox(
-                                                          width: 30.w,
-                                                          height: 30.w,
-                                                          child: Center(
-                                                            child: Icon(
-                                                              Icons.image_outlined,
-                                                              size: 20.w,
-                                                              color: Colors.grey,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        Text("${tr('cart.stock')}: 0/0"),
-                                                      ],
-                                                    );
-                                                  }
-                                                  if (!snapshot.hasData || snapshot.data == null) {
-                                                    return Column(
-                                                      children: [
-                                                        Icon(
-                                                          Icons.shopping_bag,
-                                                          size: 25.w,
-                                                        ),
-                                                        Text("${tr('cart.stock')}: 0/0"),
-                                                      ],
-                                                    );
-                                                  }
-                                                  return Column(
-                                                    children: [
-                                                      ClipRRect(
-                                                        borderRadius: BorderRadius.circular(4),
-                                                        child: Image.file(
-                                                          File(snapshot.data!),
-                                                          width: 30.w,
-                                                          height: 30.w,
-                                                          fit: BoxFit.cover,
-                                                          errorBuilder: (context, error, stackTrace) {
-                                                            return Icon(
-                                                              Icons.shopping_bag,
-                                                              size: 20.w,
-                                                            );
-                                                          },
-                                                        ),
-                                                      ),
-                                                      Text("${tr('cart.stock')}: 0/0"),
-                                                    ],
-                                                  );
-                                                },
-                                              ),
-
-                                          SizedBox(width: 5.w),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  maxLines: 4,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-
-                                                  product.urunAdi,
-                                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                    fontWeight: FontWeight.w600,
-                                                    color: () {
-                                                      final urunAdi =
-                                                          product.urunAdi;
-                                                      final isInRefundList = widget
-                                                          .refundProductNames
-                                                          .any(
-                                                            (e) =>
-                                                                e
-                                                                    .toLowerCase() ==
-                                                                urunAdi
-                                                                    .toLowerCase(),
-                                                          );
-
-                                                      final isPassive =
-                                                          product.aktif == 0;
-
-                                                      if (isPassive &&
-                                                          isInRefundList) {
-                                                        return Colors.blue;
-                                                      } else if (isInRefundList) {
-                                                        return Colors.green;
-                                                      } else if (isPassive) {
-                                                        return Colors.red;
-                                                      } else {
-                                                        return Theme.of(context).colorScheme.onSurface;
-                                                      }
-                                                    }(),
-                                                  ),
-                                                ),
-
-                                                SizedBox(height: 0.5.h),
-
-                                                // Text(
-                                                //   "Barcodes: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}",
-                                                //   style: TextStyle(fontSize: 11.sp),
-                                                // ),
-                                                // İki satır + Miktar kontrolleri sütunu (cart_view2 benzeri)
-                                                Row(
-                                                  children: [
-                                                    // Sol taraf: İki satırlık alan
-                                                    Expanded(
-                                                      child: Column(
-                                                        children: [
-                                                          // İlk satır: Dropdown | Fiyat
-                                                          Row(
-                                                            children: [
-                                                              // Birim kontrolü - tek birim varsa text, birden fazla varsa dropdown
-                                                              () {
-                                                                // Mevcut birimleri say
-                                                                final hasUnit = product.birimKey1 != 0;
-                                                                final hasBox = product.birimKey2 != 0;
-                                                                final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
-
-                                                                if (availableUnits == 1) {
-                                                                  // Tek birim varsa sadece text göster
-                                                                  final unitText = hasUnit ? 'cart.unit'.tr() : 'cart.box'.tr();
-                                                                  return Container(
-                                                                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
-                                                                    decoration: BoxDecoration(
-                                                                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                    ),
-                                                                    child: Text(
-                                                                      unitText,
-                                                                      style: TextStyle(
-                                                                        fontSize: 14.sp,
-                                                                        color: Theme.of(context).colorScheme.primary,
-                                                                        fontWeight: FontWeight.w600,
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                } else {
-                                                                  // Birden fazla birim varsa dropdown göster
-                                                                  return Container(
-                                                                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
-                                                                    decoration: BoxDecoration(
-                                                                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                    ),
-                                                                    child: DropdownButton<String>(
-                                                                      value: getBirimTipiFromProduct(product),
-                                                                      isDense: true,
-                                                                      underline: Container(),
-                                                                      style: TextStyle(
-                                                                        fontSize: 14.sp,
-                                                                        color: Theme.of(context).colorScheme.primary,
-                                                                        fontWeight: FontWeight.w600,
-                                                                      ),
-                                                                      items: [
-                                                                        if (product.birimKey1 != 0)
-                                                                          DropdownMenuItem(
-                                                                            value: 'Unit',
-                                                                            child: Text('cart.unit'.tr()),
-                                                                          ),
-                                                                        if (product.birimKey2 != 0)
-                                                                          DropdownMenuItem(
-                                                                            value: 'Box',
-                                                                            child: Text('cart.box'.tr()),
-                                                                          ),
-                                                                      ],
-                                                                      onChanged: (val) {
-                                                                        if ((val == 'Unit' && product.birimKey1 != 0) ||
-                                                                            (val == 'Box' && product.birimKey2 != 0)) {
-                                                                          final provider = Provider.of<CartProvider>(
-                                                                            context,
-                                                                            listen: false,
-                                                                          );
-
-                                                                          final bool newValue = (val == 'Box');
-                                                                          final newBirimTipi = val!;
-
-                                                                          setState(() {
-                                                                            _isBoxMap[key] = newValue;
-                                                                          });
-
-                                                                          final productFiyat = newValue
-                                                                              ? double.parse(product.kutuFiyati.toString())
-                                                                              : double.parse(product.adetFiyati.toString());
-
-                                                                          // Fiyat controller'ını güncelle
-                                                                          _priceController.text = productFiyat.toStringAsFixed(2);
-
-                                                                          // Yeni birim tipinde ne kadar ürün var kontrol et
-                                                                          final newMiktar = provider.getmiktar(key, newBirimTipi);
-
-                                                                          // UI'daki miktarı güncelle - yeni birim tipindeki gerçek miktarı göster
-                                                                          setState(() {
-                                                                            _quantityMap[key] = newMiktar;
-                                                                          });
-                                                                          _quantityControllers[key]?.text = newMiktar.toString();
-                                                                        }
-                                                                      },
-                                                                    ),
-                                                                  );
-                                                                }
-                                                              }(),
-
-                                                              SizedBox(width: 2.w),
-
-                                                              Expanded(
-                                                                child: TextField(
-                                                                  controller:
-                                                                      _priceController,
-                                                                  keyboardType:
-                                                                      TextInputType.numberWithOptions(
-                                                                        decimal: true,
-                                                                      ),
-                                                                  style: TextStyle(
-                                                                    fontSize: 16.sp,
-                                                                    fontWeight: FontWeight.w500,
-                                                                  ),
-                                                                  decoration: InputDecoration(
-                                                                    enabled: quantity > 0,
-                                                                    filled: true,
-                                                                    fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                                    hintText: selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati,
-                                                                    hintStyle: TextStyle(
-                                                                      fontSize: 16.sp,
-                                                                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
-                                                                      fontWeight: FontWeight.w500,
-                                                                    ),
-                                                                    border: OutlineInputBorder(
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                      borderSide: BorderSide.none,
-                                                                    ),
-                                                                    enabledBorder: OutlineInputBorder(
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                      borderSide: BorderSide.none,
-                                                                    ),
-                                                                    focusedBorder: OutlineInputBorder(
-                                                                      borderRadius: BorderRadius.circular(8),
-                                                                      borderSide: BorderSide.none,
-                                                                    ),
-                                                                    isDense: true,
-                                                                    contentPadding:
-                                                                        const EdgeInsets.symmetric(
-                                                                          vertical: 8,
-                                                                          horizontal: 8,
-                                                                        ),
-                                                                  ),
-                                                                  onChanged: (value) {
-                                                                    // Fiyatı ayrıştır
-                                                                    final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
-
-                                                                    // Orjinal fiyatı al (eğer varsa, yoksa ürünün kendi fiyatını kullan)
-                                                                    var orjinalFiyat = selectedType == 'Unit'
-                                                                        ? (double.tryParse(product.adetFiyati.toString().replaceAll(',', '.')) ?? 0)
-                                                                        : (double.tryParse(product.kutuFiyati.toString().replaceAll(',', '.')) ?? 0);
-
-                                                                    // Eğer orjinal fiyat 0 ise, yeni girilen fiyatı orjinal kabul et
-                                                                    if (orjinalFiyat <= 0) {
-                                                                      orjinalFiyat = yeniFiyat;
-                                                                    }
-
-                                                                    // İndirim yüzdesini hesapla
-                                                                    final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-                                                                        ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-                                                                        : 0;
-
-                                                                    // İndirim controller'ını güncelle
-                                                                    _discountControllers[key2]!.text = indirimOrani > 0 ? indirimOrani.toString() : '';
-
-
-                                                                    // Provider'ı güncelle
-                                                                    final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
-                                                                    provider.customerName = customerProvider.selectedCustomer!.kod!;
-                                                                    provider.addOrUpdateItem(
-                                                                      stokKodu: key,
-                                                                      urunAdi: product.urunAdi,
-                                                                      birimFiyat: orjinalFiyat, // Gerçek orjinal fiyatı kullan
-                                                                      urunBarcode: product.barcode1,
-                                                                      miktar: 0, // Miktarı değiştirmeden sadece fiyat ve indirimi güncelle
-                                                                      iskonto: indirimOrani,
-                                                                      birimTipi: selectedType,
-                                                                      vat: product.vat,
-                                                                      imsrc: product.imsrc,
-                                                                      adetFiyati: product.adetFiyati,
-                                                                      kutuFiyati: product.kutuFiyati,
-                                                                      birimKey1: product.birimKey1,
-                                                                      birimKey2: product.birimKey2,
-                                                                    );
-
-                                                                    setState(() {}); // UI'ı güncelle
-                                                                  },
-                                                                  onEditingComplete: () {
-                                                                    _formatPriceField(_priceController);
-                                                                  },
-                                                                  onSubmitted: (value) {
-                                                                    _formatPriceField(_priceController);
-                                                                  },
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-
-                                                          SizedBox(height: 1.h),
-
-                                                          // İkinci satır: İndirim ve Hand kısmı
-                                                          Row(
-                                                            children: [
-                                                              // İndirim alanı - FocusNode ile
-                                                              Expanded(
-                                                                child: Builder(
-                                                                  builder: (context) {
-                                                                    // Controller ve FocusNode yönetimi
-                                                                    final discountValue = context.watch<CartProvider>().getIskonto(key2);
-
-                                                                    if (!_discountControllers.containsKey(key2)) {
-                                                                      _discountControllers[key2] = TextEditingController(text: discountValue.toString());
-                                                                    }
-                                                                    if (!_discountFocusNodes.containsKey(key2)) {
-                                                                      _discountFocusNodes[key2] = FocusNode();
-                                                                    }
-
-                                                                    final _discountController = _discountControllers[key2]!;
-                                                                    final _discountFocusNode = _discountFocusNodes[key2]!;
-
-                                                                    // Alan odakta değilken ve değerler farklıysa senkronize et
-                                                                    if (!_discountFocusNode.hasFocus && _discountController.text != discountValue.toString()) {
-                                                                      _discountController.text = discountValue.toString();
-                                                                    }
-
-                                                                    return Row(
-                                                                      mainAxisSize: MainAxisSize.min,
-                                                                      children: [
-                                                                        Icon(
-                                                                          Icons.local_offer,
-                                                                          size: 18.sp,
-                                                                          color: Theme.of(context).colorScheme.error,
-                                                                        ),
-                                                                        SizedBox(width: 1.w),
-                                                                        Expanded(
-                                                                          child: TextField(
-                                                                            keyboardType: TextInputType.number,
-                                                                            controller: _discountController,
-                                                                            focusNode: _discountFocusNode,
-                                                                            decoration: InputDecoration(
-                                                                              prefixText: '%',
-                                                                              prefixStyle: TextStyle(
-                                                                                fontSize: 14.sp,
-                                                                                fontWeight: FontWeight.bold,
-                                                                                color: Theme.of(context).colorScheme.error,
-                                                                              ),
-                                                                              isDense: true,
-                                                                              contentPadding: EdgeInsets.symmetric(
-                                                                                vertical: 8,
-                                                                                horizontal: 8,
-                                                                              ),
-                                                                              filled: true,
-                                                                              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                                                                              border: OutlineInputBorder(
-                                                                                borderRadius: BorderRadius.circular(8),
-                                                                                borderSide: BorderSide.none,
-                                                                              ),
-                                                                              enabledBorder: OutlineInputBorder(
-                                                                                borderRadius: BorderRadius.circular(8),
-                                                                                borderSide: BorderSide.none,
-                                                                              ),
-                                                                              focusedBorder: OutlineInputBorder(
-                                                                                borderRadius: BorderRadius.circular(8),
-                                                                                borderSide: BorderSide.none,
-                                                                              ),
-                                                                            ),
-                                                                            style: TextStyle(
-                                                                              fontSize: 16.sp,
-                                                                              fontWeight: FontWeight.w500,
-                                                                            ),
-                                                                            onChanged: (val) {
-                                                                              // Eğer kullanıcı alanı boşaltmak istiyorsa, indirimi sıfırla
-                                                                              if (val.isEmpty) {
-                                                                                // Fiyatı orjinal fiyata döndür
-                                                                                final originalPrice = selectedType == 'Unit'
-                                                                                    ? double.tryParse(product.adetFiyati.toString().replaceAll(',', '.')) ?? 0
-                                                                                    : double.tryParse(product.kutuFiyati.toString().replaceAll(',', '.')) ?? 0;
-                                                                                _priceController.text = originalPrice.toStringAsFixed(2);
-                                                                                
-                                                                                // Provider'ı 0 indirim ile güncelle
-                                                                                provider.addOrUpdateItem(
-                                                                                  urunAdi: product.urunAdi,
-                                                                                  stokKodu: key,
-                                                                                  birimFiyat: originalPrice,
-                                                                                  miktar: 0,
-                                                                                  iskonto: 0, // İndirimi sıfırla
-                                                                                  birimTipi: selectedType,
-                                                                                  adetFiyati: product.adetFiyati,
-                                                                                  kutuFiyati: product.kutuFiyati,
-                                                                                  vat: product.vat,
-                                                                                  urunBarcode: product.barcode1,
-                                                                                  imsrc: product.imsrc,
-                                                                                  birimKey1: product.birimKey1,
-                                                                                  birimKey2: product.birimKey2,
-                                                                                );
-                                                                                return;
-                                                                              }
-                                                                              
-                                                                              int discountPercent = int.tryParse(val) ?? 0;
-                                                                              
-                                                                              if (discountPercent > 100) {
-                                                                                  discountPercent = 100;
-                                                                              }
-
-                                                                              // Orjinal fiyatı al
-                                                                              final originalPrice = selectedType == 'Unit'
-                                                                                  ? double.tryParse(product.adetFiyati.toString().replaceAll(',', '.')) ?? 0
-                                                                                  : double.tryParse(product.kutuFiyati.toString().replaceAll(',', '.')) ?? 0;
-
-                                                                              final discountAmount = (originalPrice * discountPercent) / 100;
-                                                                              final discountedPrice = originalPrice - discountAmount;
-
-                                                                              _priceController.text = discountedPrice.toStringAsFixed(2);
-
-                                                                              provider.addOrUpdateItem(
-                                                                                urunAdi: product.urunAdi,
-                                                                                stokKodu: key,
-                                                                                birimFiyat: originalPrice,
-                                                                                miktar: 0,
-                                                                                iskonto: discountPercent,
-                                                                                birimTipi: selectedType,
-                                                                                adetFiyati: product.adetFiyati,
-                                                                                kutuFiyati: product.kutuFiyati,
-                                                                                vat: product.vat,
-                                                                                urunBarcode: product.barcode1,
-                                                                                imsrc: product.imsrc,
-                                                                                birimKey1: product.birimKey1,
-                                                                                birimKey2: product.birimKey2,
-                                                                              );
-
-                                                                              // Controller'ı sadece gerekirse güncelle (döngüyü önle)
-                                                                              if (val != discountPercent.toString()) {
-                                                                                _discountController.text = discountPercent.toString();
-                                                                                _discountController.selection = TextSelection.fromPosition(
-                                                                                  TextPosition(offset: _discountController.text.length),
-                                                                                );
-                                                                              }
-                                                                            },
-                                                                          ),
-                                                                        ),
-                                                                      ],
-                                                                    );
-                                                                  },
-                                                                ),
-                                                              ),
-
-                                                              SizedBox(width: 2.w),
-
-                                                              // Hand kısmı - sağ tarafa
-                                                              Flexible(
-                                                                child: Stack(
-                                                                clipBehavior: Clip.none,
-                                                                children: [
-                                                                  GestureDetector(
-                                                                    behavior: HitTestBehavior.translucent,
-                                                                    child: Container(
-                                                                      padding: EdgeInsets.all(1.w),
-                                                                      width: 15.w,
-                                                                      height: 12.w,
-                                                                      child: Image.asset(
-                                                                        'assets/hand.png',
-                                                                        width: 10.w,
-                                                                        height: 10.w,
-                                                                      ),
-                                                                    ),
-                                                                    onTap: () async {
-                                                                      String selectedBirimTipi = 'Box';
-                                                                      final TextEditingController miktarController = TextEditingController(text: '1');
-
-                                                                      final result = await showDialog<Map<String, dynamic>>(
-                                                                        context: context,
-                                                                        builder: (BuildContext context) {
-                                                                          return AlertDialog(
-                                                                            title: Text('cart.add_free_product'.tr()),
-                                                                            content: Column(
-                                                                              mainAxisSize: MainAxisSize.min,
-                                                                              children: [
-                                                                                DropdownButtonFormField<String>(
-                                                                                  value: selectedBirimTipi,
-                                                                                  items: ['Unit', 'Box'].map((String value) {
-                                                                                    return DropdownMenuItem<String>(
-                                                                                      value: value,
-                                                                                      child: Text(value),
-                                                                                    );
-                                                                                  }).toList(),
-                                                                                  onChanged: (value) {
-                                                                                    if (value != null) {
-                                                                                      selectedBirimTipi = value;
-                                                                                    }
-                                                                                  },
-                                                                                  decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
-                                                                                ),
-                                                                                const SizedBox(height: 10),
-                                                                                TextField(
-                                                                                  controller: miktarController,
-                                                                                  keyboardType: TextInputType.number,
-                                                                                  decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
-                                                                                ),
-                                                                              ],
-                                                                            ),
-                                                                            actions: [
-                                                                              TextButton(
-                                                                                onPressed: () => Navigator.pop(context),
-                                                                                child: Text('cart.cancel'.tr()),
-                                                                              ),
-                                                                              ElevatedButton(
-                                                                                onPressed: () {
-                                                                                  final miktar = int.tryParse(miktarController.text);
-                                                                                  if (miktar != null && miktar > 0) {
-                                                                                    Navigator.pop(context, {
-                                                                                      'birimTipi': selectedBirimTipi,
-                                                                                      'miktar': miktar,
-                                                                                    });
-                                                                                  }
-                                                                                },
-                                                                                child: Text('cart.add'.tr()),
-                                                                              ),
-                                                                            ],
-                                                                          );
-                                                                        },
-                                                                      );
-
-                                                                      if (result == null) return;
-
-                                                                      final provider = Provider.of<CartProvider>(context, listen: false);
-                                                                      provider.customerName = customer!.kod!;
-
-                                                                      double freeFiyat = 0.0;
-                                                                      if (result['birimTipi'] == 'Unit' && product.birimKey1 != 0) {
-                                                                        freeFiyat = double.tryParse(product.adetFiyati.toString()) ?? 0.0;
-                                                                      } else if (result['birimTipi'] == 'Box' && product.birimKey2 != 0) {
-                                                                        freeFiyat = double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
-                                                                      }
-
-                                                                      final freeKey = "${product.stokKodu} (FREE${result['birimTipi']})";
-                                                                      if ((result['birimTipi'] == 'Unit' && product.birimKey1 != 0) ||
-                                                                          (result['birimTipi'] == 'Box' && product.birimKey2 != 0)) {
-                                                                        provider.addOrUpdateItem(
-                                                                          stokKodu: freeKey,
-                                                                          urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
-                                                                          birimFiyat: freeFiyat,
-                                                                          miktar: result['miktar'],
-                                                                          urunBarcode: product.barcode1,
-                                                                          iskonto: 100,
-                                                                          birimTipi: result['birimTipi'],
-                                                                          imsrc: product.imsrc,
-                                                                          vat: product.vat,
-                                                                          adetFiyati: '0',
-                                                                          kutuFiyati: '0',
-                                                                          birimKey1: product.birimKey1,
-                                                                          birimKey2: product.birimKey2,
-                                                                        );
-                                                                      } else {
-                                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                                          SnackBar(
-                                                                            content: Text('cart.unit_not_available'.tr()),
-                                                                            behavior: SnackBarBehavior.floating,
-                                                                            backgroundColor: Colors.orange.shade700,
-                                                                            duration: const Duration(seconds: 3),
-                                                                          ),
-                                                                        );
-                                                                      }
-                                                                    },
-                                                                  ),
-                                                                  // Box Badge (mavi)
-                                                                  Positioned(
-                                                                    right: -2.w,
-                                                                    top: -1.w,
-                                                                    child: Container(
-                                                                      padding: EdgeInsets.all(1.w),
-                                                                      decoration: BoxDecoration(
-                                                                        color: Theme.of(context).colorScheme.secondary,
-                                                                        shape: BoxShape.circle,
-                                                                      ),
-                                                                      constraints: BoxConstraints(
-                                                                        minWidth: 6.w,
-                                                                        minHeight: 6.w,
-                                                                      ),
-                                                                      child: Center(
-                                                                        child: Text(
-                                                                          () {
-                                                                            final matches = provider.items.values.where(
-                                                                              (item) =>
-                                                                                  item.urunAdi ==
-                                                                                      '${product.urunAdi}_(FREEBox)' &&
-                                                                                  item.birimTipi ==
-                                                                                      'Box',
-                                                                            );
-
-                                                                            if (matches.isNotEmpty) {
-                                                                              return '${matches.first.miktar}';
-                                                                            } else {
-                                                                              return '0';
-                                                                            }
-                                                                          }(),
-                                                                          style: TextStyle(
-                                                                            color: Colors.white,
-                                                                            fontSize: 12.sp,
-                                                                            fontWeight: FontWeight.bold,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                  // Unit Badge (turuncu)
-                                                                  Positioned(
-                                                                    right: -2.w,
-                                                                    bottom: -1.w,
-                                                                    child: Container(
-                                                                      padding: EdgeInsets.all(1.w),
-                                                                      decoration: BoxDecoration(
-                                                                        color: Colors.orange,
-                                                                        shape: BoxShape.circle,
-                                                                      ),
-                                                                      constraints: BoxConstraints(
-                                                                        minWidth: 6.w,
-                                                                        minHeight: 6.w,
-                                                                      ),
-                                                                      child: Center(
-                                                                        child: Text(
-                                                                          () {
-                                                                            final matches = provider.items.values.where(
-                                                                              (item) =>
-                                                                                  item.urunAdi ==
-                                                                                      '${product.urunAdi}_(FREEUnit)' &&
-                                                                                  item.birimTipi ==
-                                                                                      'Unit',
-                                                                            );
-
-                                                                            if (matches.isNotEmpty) {
-                                                                              return '${matches.first.miktar}';
-                                                                            } else {
-                                                                              return '0';
-                                                                            }
-                                                                          }(),
-                                                                          style: TextStyle(
-                                                                            color: Colors.white,
-                                                                            fontSize: 12.sp,
-                                                                            fontWeight: FontWeight.bold,
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-
-                                                    SizedBox(width: 2.w),
-
-                                                    // Sağ taraf: Miktar kontrolleri sütunu (iki satır yüksekliğinde)
-                                                    Column(
-                                                      mainAxisAlignment: MainAxisAlignment.center,
-                                                      children: [
-                                                        // Miktar artırma butonu (+) - üstte
-                                                        Container(
-                                                          width: 18.w,
-                                                          height: 8.w,
-                                                          decoration: BoxDecoration(
-                                                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                                                            borderRadius: BorderRadius.circular(4),
-                                                          ),
-                                                          child: IconButton(
-                                                            padding: EdgeInsets.zero,
-                                                            onPressed: () {
-                                                              final provider = Provider.of<CartProvider>(context, listen: false);
-                                                              final iskonto = _iskontoMap[key] ?? 0;
-                                                              final isBox = _isBoxMap[key] ?? false;
-
-                                                              final birimTipi = isBox ? 'Box' : 'Unit';
-                                                              final fiyat = isBox
-                                                                  ? double.parse(product.kutuFiyati.toString())
-                                                                  : double.parse(product.adetFiyati.toString());
-
-                                                              final newQuantity = (_quantityMap[key] ?? 0) + 1;
-
-                                                              provider.addOrUpdateItem(
-                                                                urunAdi: product.urunAdi,
-                                                                stokKodu: key,
-                                                                birimFiyat: fiyat,
-                                                                adetFiyati: product.adetFiyati,
-                                                                kutuFiyati: product.kutuFiyati,
-                                                                vat: product.vat,
-                                                                urunBarcode: product.barcode1,
-                                                                miktar: 1,
-                                                                iskonto: iskonto,
-                                                                birimTipi: birimTipi,
-                                                                imsrc: product.imsrc,
-                                                                birimKey1: product.birimKey1,
-                                                                birimKey2: product.birimKey2,
-                                                              );
-
-                                                              setState(() {
-                                                                _quantityMap[key] = newQuantity;
-                                                              });
-                                                              _quantityControllers[key]?.text = '$newQuantity';
-                                                            },
-                                                            icon: Icon(
-                                                              Icons.add,
-                                                              size: 6.w,
-                                                              color: Theme.of(context).colorScheme.primary,
-                                                            ),
-                                                          ),
-                                                        ),
-
-                                                        SizedBox(height: 0.5.h),
-
-                                                        // Miktar gösterimi - TextField olarak - ortada
-                                                        Container(
-                                                          width: 18.w,
-                                                          height: 6.w,
-                                                          child: TextField(
-                                                            key: ValueKey('quantity_$key'), // Unique key for debugging
-                                                            controller: _quantityControllers[key],
-                                                            keyboardType: TextInputType.number,
-                                                            textInputAction: TextInputAction.done,
-                                                            textAlign: TextAlign.center,
-                                                            style: TextStyle(
-                                                              fontSize: 14.sp,
-                                                              fontWeight: FontWeight.bold,
-                                                            ),
-                                                            decoration: InputDecoration(
-                                                              border: OutlineInputBorder(
-                                                                borderRadius: BorderRadius.circular(4),
-                                                                borderSide: BorderSide(width: 1),
-                                                              ),
-                                                              contentPadding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.w),
-                                                              isDense: true,
-                                                            ),
-                                                            onSubmitted: (value) {
-                                                              _updateQuantityFromTextField(key, value, product);
-                                                            },
-                                                            onEditingComplete: () {
-                                                              final value = _quantityControllers[key]?.text ?? '0';
-                                                              _updateQuantityFromTextField(key, value, product);
-                                                            },
-                                                            onChanged: (value) {
-                                                              // 2 saniye sonra otomatik olarak güncelle
-                                                              Timer(Duration(seconds: 2), () {
-                                                                if (_quantityControllers[key]?.text == value) {
-                                                                  _updateQuantityFromTextField(key, value, product);
-                                                                }
-                                                              });
-                                                            },
-                                                          ),
-                                                        ),
-
-                                                        SizedBox(height: 0.5.h),
-
-                                                        // Miktar azaltma butonu (-) - altta
-                                                        Container(
-                                                          width: 18.w,
-                                                          height: 8.w,
-                                                          decoration: BoxDecoration(
-                                                            color: quantity > 0
-                                                                ? Theme.of(context).colorScheme.error.withValues(alpha: 0.1)
-                                                                : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                                                            borderRadius: BorderRadius.circular(4),
-                                                          ),
-                                                          child: IconButton(
-                                                            padding: EdgeInsets.zero,
-                                                            onPressed: quantity > 0
-                                                                ? () {
-                                                                    final provider = Provider.of<CartProvider>(context, listen: false);
-                                                                    final key = product.stokKodu;
-                                                                    final iskonto = _iskontoMap[key] ?? 0;
-                                                                    final isBox = _isBoxMap[key] ?? false;
-
-                                                                    final birimTipi = isBox ? 'Box' : 'Unit';
-                                                                    final fiyat = isBox
-                                                                        ? double.parse(product.kutuFiyati.toString())
-                                                                        : double.parse(product.adetFiyati.toString());
-
-                                                                    final currentQuantity = _quantityMap[key] ?? 0;
-                                                                    final newQuantity = currentQuantity - 1;
-
-                                                                    // Önce mevcut item'ı sil
-                                                                    provider.removeItem(key, birimTipi);
-
-                                                                    if (newQuantity > 0) {
-                                                                      provider.addOrUpdateItem(
-                                                                        urunAdi: product.urunAdi,
-                                                                        stokKodu: key,
-                                                                        birimFiyat: fiyat,
-                                                                        adetFiyati: product.adetFiyati,
-                                                                        kutuFiyati: product.kutuFiyati,
-                                                                        vat: product.vat,
-                                                                        urunBarcode: product.barcode1,
-                                                                        miktar: newQuantity,
-                                                                        iskonto: iskonto,
-                                                                        birimTipi: birimTipi,
-                                                                        imsrc: product.imsrc,
-                                                                        birimKey1: product.birimKey1,
-                                                                        birimKey2: product.birimKey2,
-                                                                      );
-                                                                    }
-
-                                                                    setState(() {
-                                                                      _quantityMap[key] = newQuantity;
-                                                                    });
-                                                                    _quantityControllers[key]?.text = '$newQuantity';
-                                                                  }
-                                                                : null,
-                                                            icon: Icon(
-                                                              Icons.remove,
-                                                              size: 6.w,
-                                                              color: quantity > 0
-                                                                  ? Theme.of(context).colorScheme.error
-                                                                  : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                ),
-
-                                // Divider ekliyoruz - son item değilse göster
-                                if (index < _filteredProducts.length - 1)
-                                  Divider(
-                                    color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
-                                    thickness: 1,
-                                    height: 1,
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
-                  ),
-            ],
-          ),
-        ),
-      ),
-    );
+  // --- Filtering & Searching ---
+  void _filterProducts({String? queryOverride}) {
+    final provider = Provider.of<CartProvider>(context, listen: false);
+    final query = (queryOverride ?? _searchController.text).trimRight().toLowerCase();
+    final fromUI = queryOverride != null;
+
+    if (query.isEmpty) {
+      setState(() {
+        _filteredProducts = _allProducts.take(50).toList();
+        _generateImageFutures(_filteredProducts);
+      });
+      return;
+    }
+
+    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+    final filtered = _allProducts.where((product) {
+      final name = product.urunAdi.toLowerCase();
+      final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
+          .map((b) => b.toLowerCase())
+          .toList();
+      return queryWords.every((word) => name.contains(word) || barcodes.any((b) => b.contains(word)));
+    }).toList();
+
+    filtered.sort((a, b) {
+      final aName = a.urunAdi;
+      final bName = b.urunAdi;
+      final aStartsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(aName);
+      final bStartsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(bName);
+      if (aStartsWithLetter && !bStartsWithLetter) return -1;
+      if (!aStartsWithLetter && bStartsWithLetter) return 1;
+      return aName.toLowerCase().compareTo(bName.toLowerCase());
+    });
+
+    setState(() {
+      _filteredProducts = filtered.take(50).toList();
+      _generateImageFutures(_filteredProducts);
+    });
+
+    _scheduleImageDownload();
+
+    if (!fromUI) {
+      if (_filteredProducts.length == 1 && RegExp(r'^\d+$').hasMatch(query)) {
+        final product = _filteredProducts.first;
+        final key = product.stokKodu;
+        final isBox = _isBoxMap[key] ?? (product.birimKey2 != 0);
+        final birimTipi = isBox ? 'Box' : 'Unit';
+
+        if ((birimTipi == 'Unit' && product.birimKey1 != 0) || (birimTipi == 'Box' && product.birimKey2 != 0)) {
+          final cartItem = provider.items[key];
+          final iskonto = cartItem?.iskonto ?? 0;
+          provider.addOrUpdateItem(
+            urunAdi: product.urunAdi,
+            adetFiyati: product.adetFiyati,
+            kutuFiyati: product.kutuFiyati,
+            stokKodu: key,
+            vat: product.vat,
+            birimFiyat: isBox
+                ? double.tryParse(product.kutuFiyati.toString()) ?? 0
+                : double.tryParse(product.adetFiyati.toString()) ?? 0,
+            imsrc: product.imsrc,
+            urunBarcode: product.barcode1,
+            miktar: 1,
+            iskonto: iskonto,
+            birimTipi: birimTipi,
+            birimKey1: product.birimKey1,
+            birimKey2: product.birimKey2,
+          );
+        }
+        _clearAndFocusBarcode();
+      } else if (_filteredProducts.isEmpty && query.length > 10 && RegExp(r'^\d+$').hasMatch(query)) {
+        playWrong();
+        _clearAndFocusBarcode();
+      }
+    }
   }
 
+  void _clearAndFocusBarcode() {
+    _searchController.clear();
+    _searchController2.clear();
+    FocusScope.of(context).unfocus();
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) _barcodeFocusNode.requestFocus();
+    });
+  }
+
+  // --- UI Helper Methods ---
+  void _clearSearch2() {
+    _searchController2.clear();
+    _filterProducts(queryOverride: "");
+  }
 
   void _updateQuantityFromTextField(String key, String value, ProductModel product) {
     final provider = Provider.of<CartProvider>(context, listen: false);
     final newQuantity = int.tryParse(value) ?? 0;
-    final iskonto = _iskontoMap[key] ?? 0;
     final isBox = _isBoxMap[key] ?? false;
-
-    // Önce mevcut item'ı sil
     final birimTipi = isBox ? 'Box' : 'Unit';
-    provider.removeItem(key, birimTipi);
 
-    if (newQuantity > 0) {
-      final birimTipi = isBox ? 'Box' : 'Unit';
+    final currentQuantity = provider.getmiktar(key, birimTipi);
+    final difference = newQuantity - currentQuantity;
+
+    if (difference == 0) return;
+
+    if (newQuantity <= 0) {
+      provider.removeItem(key, birimTipi);
+    } else {
       final fiyat = isBox
-          ? double.parse(product.kutuFiyati.toString())
-          : double.parse(product.adetFiyati.toString());
+          ? double.tryParse(product.kutuFiyati.toString()) ?? 0
+          : double.tryParse(product.adetFiyati.toString()) ?? 0;
 
-      // addOrUpdateItem mevcut miktara ekler, bu yüzden direk newQuantity'yi veriyoruz
-      // çünkü removeItem ile önceden sildik
+      final cartItem = provider.items[key];
+      final iskonto = cartItem?.iskonto ?? provider.getIskonto(key);
+
       provider.addOrUpdateItem(
         urunAdi: product.urunAdi,
         stokKodu: key,
@@ -1961,7 +312,7 @@ _barcodeFocusNode.requestFocus();
         kutuFiyati: product.kutuFiyati,
         vat: product.vat,
         urunBarcode: product.barcode1,
-        miktar: newQuantity, // Bu doğru, çünkü removeItem ile sildik
+        miktar: difference, // Send the difference
         iskonto: iskonto,
         birimTipi: birimTipi,
         imsrc: product.imsrc,
@@ -1969,54 +320,983 @@ _barcodeFocusNode.requestFocus();
         birimKey2: product.birimKey2,
       );
     }
-
     setState(() {
       _quantityMap[key] = newQuantity;
     });
   }
 
   void _formatPriceField(TextEditingController controller) {
-    final value = controller.text;
+    final value = controller.text.replaceAll(',', '.');
     final parsed = double.tryParse(value);
     if (parsed != null) {
-      final formattedValue = parsed.toStringAsFixed(2);
-      if (controller.text != formattedValue) {
-        controller.text = formattedValue;
-        controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: formattedValue.length),
-        );
-      }
+      controller.text = parsed.toStringAsFixed(2);
+      controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: controller.text.length),
+      );
     }
   }
 
   String? getBirimTipiFromProduct(ProductModel product) {
     final key = product.stokKodu;
-    final isBox = _isBoxMap[key] ?? false;
-
-    // Eğer Box seçili ve Box mevcut ise
-    if (isBox && product.birimKey2 != 0) {
-      return 'Box';
-    }
-    // Eğer Unit seçili (Box değil) ve Unit mevcut ise
-    else if (!isBox && product.birimKey1 != 0) {
-      return 'Unit';
-    }
-
-    // Varsayılan olarak önce Box'ı kontrol et
-    if (product.birimKey2 != 0) {
-      return 'Box';
-    } else if (product.birimKey1 != 0) {
-      return 'Unit';
-    }
-
+    final isBox = _isBoxMap[key] ?? (product.birimKey2 != 0); // Default to box if available
+    if (isBox && product.birimKey2 != 0) return 'Box';
+    if (!isBox && product.birimKey1 != 0) return 'Unit';
+    if (product.birimKey2 != 0) return 'Box';
+    if (product.birimKey1 != 0) return 'Unit';
     return null;
+  }
+
+  // --- Build Method ---
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<CartProvider>(context);
+    final customer = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
+    String musteriId = customer?.kod ?? "";
+    final cartItems = provider.items.values.toList();
+    final unitCount = cartItems.where((i) => i.birimTipi == 'Unit').fold<int>(0, (p, i) => p + i.miktar);
+    final boxCount = cartItems.where((i) => i.birimTipi == 'Box').fold<int>(0, (p, i) => p + i.miktar);
+
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 2,
+        centerTitle: true,
+        leading: IconButton(
+          icon: Icon(Icons.menu, size: 25.sp),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => CartsuggestionView(musteriId: musteriId)),
+          ),
+        ),
+        title: SizedBox(
+          height: 40,
+          child: TextField(
+            focusNode: _barcodeFocusNode2,
+            controller: _searchController2,
+            style: TextStyle(fontSize: 14.sp, color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'cart.search_placeholder'.tr(),
+              hintStyle: TextStyle(fontSize: 14.sp, color: Colors.white.withOpacity(0.7)),
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.15),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_searchController2.text.isNotEmpty)
+                    IconButton(
+                      icon: Icon(Icons.clear, color: Colors.white.withOpacity(0.7), size: 20),
+                      onPressed: _clearSearch2,
+                    ),
+                  IconButton(
+                    icon: Icon(Icons.qr_code_scanner, color: Colors.white.withOpacity(0.9), size: 22),
+                    onPressed: _openBarcodeScanner,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+            onChanged: (value) => _filterProducts(queryOverride: value),
+          ),
+        ),
+        actions: [
+          _buildShoppingCartIcon(cartItems.length, unitCount + boxCount),
+        ],
+      ),
+      body: Focus(
+        autofocus: true,
+        onKeyEvent: (FocusNode node, KeyEvent event) {
+          if (event is KeyDownEvent) {
+            final sunmiScanKeyIds = {
+              0x01100000209, 0x01100000208, 4294967556, 73014445159, 4294967309
+            };
+            if (sunmiScanKeyIds.contains(event.logicalKey.keyId)) {
+              _clearAndFocusBarcode();
+              return KeyEventResult.handled;
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Column(
+          children: [
+            Opacity(
+              opacity: 0.0,
+              child: SizedBox(
+                width: 1,
+                height: 1,
+                child: TextField(
+                  focusNode: _barcodeFocusNode,
+                  controller: _searchController,
+                  onChanged: (value) => _filterProducts(),
+                ),
+              ),
+            ),
+            Expanded(
+              child: _isLoading
+                  ? _buildLoadingIndicator()
+                  : _filteredProducts.isEmpty
+                  ? _buildNoProductsFound()
+                  : _buildProductList(provider),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShoppingCartIcon(int itemCount, int totalQuantity) {
+    return GestureDetector(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2())),
+      behavior: HitTestBehavior.translucent,
+      child: Container(
+        width: 18.w,
+        height: 10.h,
+        color: Colors.transparent,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(Icons.shopping_cart, size: 8.w),
+            _buildBadge(itemCount.toString(), Colors.blue, isTop: true),
+            _buildBadge(totalQuantity.toString(), Colors.orange, isTop: false),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadge(String text, Color color, {required bool isTop}) {
+    return Positioned(
+      right: 1.w,
+      top: isTop ? 0.2.h : null,
+      bottom: isTop ? null : 0.2.h,
+      child: Container(
+        padding: EdgeInsets.all(0.4.w),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        constraints: BoxConstraints(minWidth: 6.w, minHeight: 6.w),
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(color: Colors.white, fontSize: 13.sp, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingIndicator() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary)),
+          SizedBox(height: 2.h),
+          Text('cart.loading_products'.tr()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoProductsFound() {
+    return Center(child: Text('cart.no_products'.tr()));
+  }
+
+  Widget _buildProductList(CartProvider provider) {
+    return ListView.separated(
+      padding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.h),
+      itemCount: _filteredProducts.length,
+      itemBuilder: (context, index) {
+        final product = _filteredProducts[index];
+        final key = product.stokKodu;
+
+        if (!_priceControllers.containsKey(key)) {
+          final cartItem = provider.items[key];
+          final selectedType = getBirimTipiFromProduct(product);
+          final initialPrice = cartItem != null
+              ? cartItem.birimFiyat.toStringAsFixed(2)
+              : selectedType == 'Unit'
+              ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
+              : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
+          _priceControllers[key] = TextEditingController(text: initialPrice);
+        }
+        if (!_discountControllers.containsKey(key)) {
+          _discountControllers[key] = TextEditingController(text: provider.getIskonto(key).toString());
+        }
+        if (!_discountFocusNodes.containsKey(key)) {
+          _discountFocusNodes[key] = FocusNode();
+        }
+        if (!_quantityControllers.containsKey(key)) {
+          final isBox = _isBoxMap[key] ?? false;
+          final birimTipi = isBox ? 'Box' : 'Unit';
+          _quantityControllers[key] = TextEditingController(text: provider.getmiktar(key, birimTipi).toString());
+        }
+
+        return ProductListItem(
+          key: ValueKey(product.stokKodu),
+          product: product,
+          provider: provider,
+          imageFuture: _imageFutures[key],
+          refundProductNames: widget.refundProductNames,
+          priceController: _priceControllers[key]!,
+          discountController: _discountControllers[key]!,
+          quantityController: _quantityControllers[key]!,
+          discountFocusNode: _discountFocusNodes[key]!,
+          isBox: _isBoxMap[key] ?? false,
+          quantity: context.watch<CartProvider>().getmiktar(key, (_isBoxMap[key] ?? false) ? 'Box' : 'Unit'),
+          onBirimTipiChanged: (isNowBox) {
+            setState(() {
+              _isBoxMap[key] = isNowBox;
+              final newBirimTipi = isNowBox ? 'Box' : 'Unit';
+              final newMiktar = provider.getmiktar(key, newBirimTipi);
+              _quantityMap[key] = newMiktar;
+              _quantityControllers[key]?.text = newMiktar.toString();
+
+              final productFiyat = isNowBox
+                  ? (double.tryParse(product.kutuFiyati.toString()) ?? 0)
+                  : (double.tryParse(product.adetFiyati.toString()) ?? 0);
+              _priceControllers[key]?.text = productFiyat.toStringAsFixed(2);
+              _discountControllers[key]?.text = provider.getIskonto(key).toString();
+            });
+          },
+          onQuantityChanged: (newQuantity) {
+            setState(() {
+              _quantityMap[key] = newQuantity;
+            });
+          },
+          updateQuantityFromTextField: (value) => _updateQuantityFromTextField(key, value, product),
+          formatPriceField: () => _formatPriceField(_priceControllers[key]!),
+          getBirimTipi: () => getBirimTipiFromProduct(product),
+        );
+      },
+      separatorBuilder: (context, index) => Divider(
+        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        thickness: 1,
+        height: 1,
+      ),
+    );
   }
 }
 
+
+// --- WIDGETS ---
+
+class ProductListItem extends StatefulWidget {
+  final ProductModel product;
+  final CartProvider provider;
+  final Future<String?>? imageFuture;
+  final List<String> refundProductNames;
+  final TextEditingController priceController;
+  final TextEditingController discountController;
+  final TextEditingController quantityController;
+  final FocusNode discountFocusNode;
+  final bool isBox;
+  final int quantity;
+  final ValueChanged<bool> onBirimTipiChanged;
+  final ValueChanged<int> onQuantityChanged;
+  final ValueChanged<String> updateQuantityFromTextField;
+  final VoidCallback formatPriceField;
+  final String? Function() getBirimTipi;
+
+  const ProductListItem({
+    super.key,
+    required this.product,
+    required this.provider,
+    this.imageFuture,
+    required this.refundProductNames,
+    required this.priceController,
+    required this.discountController,
+    required this.quantityController,
+    required this.discountFocusNode,
+    required this.isBox,
+    required this.quantity,
+    required this.onBirimTipiChanged,
+    required this.onQuantityChanged,
+    required this.updateQuantityFromTextField,
+    required this.formatPriceField,
+    required this.getBirimTipi,
+  });
+
+  @override
+  State<ProductListItem> createState() => _ProductListItemState();
+}
+
+class _ProductListItemState extends State<ProductListItem> {
+  final FocusNode _quantityFocusNode = FocusNode();
+  String _oldQuantityValue = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityFocusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _quantityFocusNode.removeListener(_onFocusChange);
+    _quantityFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_quantityFocusNode.hasFocus) {
+      _oldQuantityValue = widget.quantityController.text;
+      // Clear the field on tap for easier input.
+      widget.quantityController.clear();
+    } else {
+      if (widget.quantityController.text.isEmpty) {
+        if (mounted) {
+          setState(() {
+            widget.quantityController.text = _oldQuantityValue;
+          });
+        }
+      }
+      // Trigger update when focus is lost to finalize any changes.
+      widget.updateQuantityFromTextField(widget.quantityController.text);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final birimTipi = widget.getBirimTipi() ?? 'Unit';
+    final anlikMiktar = context.watch<CartProvider>().getmiktar(widget.product.stokKodu, birimTipi);
+    if (widget.quantityController.text != anlikMiktar.toString()) {
+      widget.quantityController.text = anlikMiktar.toString();
+    }
+
+    return Padding(
+      padding: EdgeInsets.all(2.w),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ProductImage(
+            imageFuture: widget.imageFuture,
+            product: widget.product,
+          ),
+          SizedBox(width: 5.w),
+          Expanded(
+            child: ProductDetails(
+              product: widget.product,
+              provider: widget.provider,
+              refundProductNames: widget.refundProductNames,
+              priceController: widget.priceController,
+              discountController: widget.discountController,
+              quantityController: widget.quantityController,
+              discountFocusNode: widget.discountFocusNode,
+              quantityFocusNode: _quantityFocusNode, // Pass focus node down
+              isBox: widget.isBox,
+              quantity: anlikMiktar,
+              onBirimTipiChanged: widget.onBirimTipiChanged,
+              onQuantityChanged: widget.onQuantityChanged,
+              updateQuantityFromTextField: widget.updateQuantityFromTextField,
+              formatPriceField: widget.formatPriceField,
+              getBirimTipi: widget.getBirimTipi,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ProductImage extends StatelessWidget {
+  final Future<String?>? imageFuture;
+  final ProductModel product;
+
+  const ProductImage({
+    super.key,
+    this.imageFuture,
+    required this.product,
+  });
+
+  void _showProductInfoDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(product.urunAdi),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (product.imsrc != null)
+              FutureBuilder<String?>(
+                future: _getLocalImagePath(product.imsrc!),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return SizedBox(width: 40.w, height: 40.w, child: const Center(child: CircularProgressIndicator()));
+                  }
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(File(snapshot.data!), width: 40.w, height: 40.w, fit: BoxFit.contain),
+                    );
+                  }
+                  return Icon(Icons.shopping_bag, size: 40.w);
+                },
+              )
+            else
+              Icon(Icons.shopping_bag, size: 40.w),
+            SizedBox(height: 2.h),
+            SelectableText("${'cart.barcodes'.tr()}: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}"),
+            Text("${'cart.code'.tr()}= ${product.stokKodu}"),
+            Text("${'cart.unit_price'.tr()}= ${product.adetFiyati}"),
+            Text("${'cart.box_price'.tr()}= ${product.kutuFiyati}"),
+            Text("${'cart.vat'.tr()}= ${product.vat}"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('cart.close'.tr()),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String?> _getLocalImagePath(String imsrc) async {
+    try {
+      final uri = Uri.parse(imsrc);
+      final fileName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : null;
+      if (fileName == null) return null;
+      final dir = await getApplicationDocumentsDirectory();
+      final filePath = '${dir.path}/$fileName';
+      final file = File(filePath);
+      return await file.exists() ? filePath : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onDoubleTap: () => _showProductInfoDialog(context),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 30.w,
+            height: 30.w,
+            child: product.imsrc == null
+                ? Icon(Icons.shopping_bag_sharp, size: 25.w, color: Colors.grey)
+                : FutureBuilder<String?>(
+              future: imageFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: Icon(Icons.image_outlined, size: 20, color: Colors.grey));
+                }
+                if (snapshot.hasData && snapshot.data != null) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Image.file(
+                      File(snapshot.data!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => Icon(Icons.broken_image, size: 20.w, color: Colors.grey),
+                    ),
+                  );
+                }
+                return Icon(Icons.shopping_bag, size: 25.w, color: Colors.grey);
+              },
+            ),
+          ),
+          Text("${'cart.stock'.tr()}: 0/0"),
+        ],
+      ),
+    );
+  }
+}
+
+
+class ProductDetails extends StatelessWidget {
+  final ProductModel product;
+  final CartProvider provider;
+  final List<String> refundProductNames;
+  final TextEditingController priceController;
+  final TextEditingController discountController;
+  final TextEditingController quantityController;
+  final FocusNode discountFocusNode;
+  final FocusNode quantityFocusNode; // Add this
+  final bool isBox;
+  final int quantity;
+  final ValueChanged<bool> onBirimTipiChanged;
+  final ValueChanged<int> onQuantityChanged;
+  final ValueChanged<String> updateQuantityFromTextField;
+  final VoidCallback formatPriceField;
+  final String? Function() getBirimTipi;
+
+  const ProductDetails({
+    super.key,
+    required this.product,
+    required this.provider,
+    required this.refundProductNames,
+    required this.priceController,
+    required this.discountController,
+    required this.quantityController,
+    required this.discountFocusNode,
+    required this.quantityFocusNode, // Add this
+    required this.isBox,
+    required this.quantity,
+    required this.onBirimTipiChanged,
+    required this.onQuantityChanged,
+    required this.updateQuantityFromTextField,
+    required this.formatPriceField,
+    required this.getBirimTipi,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final customer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
+    final selectedType = getBirimTipi() ?? 'Unit';
+
+    // Senkronizasyon
+    final anlikIskonto = context.watch<CartProvider>().getIskonto(product.stokKodu);
+    if (!discountFocusNode.hasFocus && discountController.text != anlikIskonto.toString()) {
+      discountController.text = anlikIskonto > 0 ? anlikIskonto.toString() : '';
+    }
+    final anlikFiyat = context.watch<CartProvider>().getBirimFiyat(product.stokKodu, selectedType);
+    if(anlikFiyat > 0 && priceController.text != anlikFiyat.toStringAsFixed(2)) {
+      priceController.text = anlikFiyat.toStringAsFixed(2);
+    }
+
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          product.urunAdi,
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: _getProductNameColor(context),
+          ),
+        ),
+        SizedBox(height: 0.5.h),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      _buildUnitSelector(context),
+                      SizedBox(width: 2.w),
+                      Expanded(child: _buildPriceTextField(context, selectedType)),
+                    ],
+                  ),
+                  SizedBox(height: 1.h),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDiscountTextField(context, selectedType)),
+                      SizedBox(width: 2.w),
+                      Flexible(child: _buildFreeItemControl(context, customer)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 2.w),
+            _buildQuantityControl(context, selectedType),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnitSelector(BuildContext context) {
+    final hasUnit = product.birimKey1 != 0;
+    final hasBox = product.birimKey2 != 0;
+    final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
+
+    if (availableUnits <= 1) {
+      final unitText = hasUnit ? 'cart.unit'.tr() : (hasBox ? 'cart.box'.tr() : '-');
+      return Container(
+        height: 8.w, // Match button height
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: 2.w),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          unitText,
+          style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    return Container(
+      height: 8.w, // Match button height
+      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(horizontal: 2.w),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButton<String>(
+        value: getBirimTipi(),
+        isDense: true,
+        underline: Container(),
+        style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+        items: [
+          if (hasUnit) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
+          if (hasBox) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
+        ],
+        onChanged: (val) {
+          if (val != null) {
+            onBirimTipiChanged(val == 'Box');
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildPriceTextField(BuildContext context, String selectedType) {
+    return Container(
+      height: 8.w,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.center,
+      child: TextField(
+        controller: priceController,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+        enabled: quantity > 0,
+        textAlign: TextAlign.center,
+        decoration: const InputDecoration(
+          filled: false,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onChanged: (value) {
+          final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
+          var orjinalFiyat = selectedType == 'Unit'
+              ? (double.tryParse(product.adetFiyati.toString()) ?? 0)
+              : (double.tryParse(product.kutuFiyati.toString()) ?? 0);
+          if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+
+          final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+              ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+              : 0;
+
+          discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+
+          provider.addOrUpdateItem(
+            stokKodu: product.stokKodu,
+            urunAdi: product.urunAdi,
+            birimFiyat: yeniFiyat,
+            urunBarcode: product.barcode1,
+            miktar: 0,
+            iskonto: indirimOrani,
+            birimTipi: selectedType,
+            vat: product.vat,
+            imsrc: product.imsrc,
+            adetFiyati: product.adetFiyati,
+            kutuFiyati: product.kutuFiyati,
+            birimKey1: product.birimKey1,
+            birimKey2: product.birimKey2,
+          );
+        },
+        onEditingComplete: formatPriceField,
+        onSubmitted: (value) => formatPriceField(),
+      ),
+    );
+  }
+
+  Widget _buildDiscountTextField(BuildContext context, String selectedType) {
+    return Row(
+      children: [
+        Icon(Icons.local_offer, size: 18.sp, color: Theme.of(context).colorScheme.error),
+        SizedBox(width: 1.w),
+        Expanded(
+          child: TextField(
+            keyboardType: TextInputType.number,
+            controller: discountController,
+            focusNode: discountFocusNode,
+            decoration: InputDecoration(
+              prefixText: '%',
+              prefixStyle: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.error),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+              filled: true,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            ),
+            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+            onChanged: (val) {
+              if (val.isEmpty) {
+                final originalPrice = selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati;
+                priceController.text = (double.tryParse(originalPrice.toString()) ?? 0).toStringAsFixed(2);
+                provider.addOrUpdateItem(stokKodu: product.stokKodu, miktar: 0, iskonto: 0, birimTipi: selectedType, urunAdi: product.urunAdi, birimFiyat: double.tryParse(originalPrice) ?? 0, vat: product.vat, imsrc: product.imsrc, adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, urunBarcode: product.barcode1, birimKey1: product.birimKey1, birimKey2: product.birimKey2);
+                return;
+              }
+
+              int discountPercent = int.tryParse(val) ?? 0;
+              if (discountPercent > 100) discountPercent = 100;
+
+              final originalPrice = selectedType == 'Unit'
+                  ? (double.tryParse(product.adetFiyati.toString()) ?? 0)
+                  : (double.tryParse(product.kutuFiyati.toString()) ?? 0);
+
+              final discountedPrice = originalPrice * (1 - (discountPercent / 100));
+              priceController.text = discountedPrice.toStringAsFixed(2);
+
+              provider.addOrUpdateItem(
+                  stokKodu: product.stokKodu,
+                  miktar: 0,
+                  iskonto: discountPercent,
+                  birimTipi: selectedType,
+                  urunAdi: product.urunAdi,
+                  birimFiyat: discountedPrice,
+                  vat: product.vat,
+                  imsrc: product.imsrc,
+                  adetFiyati: product.adetFiyati,
+                  kutuFiyati: product.kutuFiyati,
+                  urunBarcode: product.barcode1,
+                  birimKey1: product.birimKey1,
+                  birimKey2: product.birimKey2
+              );
+
+              if (val != discountPercent.toString()) {
+                discountController.text = discountPercent.toString();
+                discountController.selection = TextSelection.fromPosition(TextPosition(offset: discountController.text.length));
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFreeItemControl(BuildContext context, dynamic customer) {
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        GestureDetector(
+          onTap: () async => _showFreeItemDialog(context, customer),
+          child: Container(
+            padding: EdgeInsets.all(1.w),
+            width: 15.w,
+            height: 12.w,
+            child: Image.asset('assets/hand.png', width: 10.w, height: 10.w),
+          ),
+        ),
+        _buildFreeItemBadge(context, isBox: true),
+        _buildFreeItemBadge(context, isBox: false),
+      ],
+    );
+  }
+
+  Widget _buildFreeItemBadge(BuildContext context, {required bool isBox}) {
+    final type = isBox ? 'Box' : 'Unit';
+    final count = provider.items.values
+        .where((item) => item.urunAdi == '${product.urunAdi}_(FREE$type)' && item.birimTipi == type)
+        .fold(0, (sum, item) => sum + item.miktar);
+
+    return Positioned(
+      right: -2.w,
+      top: isBox ? -1.w : null,
+      bottom: isBox ? null : -1.w,
+      child: Container(
+        padding: EdgeInsets.all(1.w),
+        decoration: BoxDecoration(
+          color: isBox ? Theme.of(context).colorScheme.secondary : Colors.orange,
+          shape: BoxShape.circle,
+        ),
+        constraints: BoxConstraints(minWidth: 6.w, minHeight: 6.w),
+        child: Center(
+          child: Text(
+            '$count',
+            style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showFreeItemDialog(BuildContext context, dynamic customer) async {
+    String selectedBirimTipi = product.birimKey2 != 0 ? 'Box' : 'Unit';
+    final miktarController = TextEditingController(text: '1');
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('cart.add_free_product'.tr()),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedBirimTipi,
+                items: [
+                  if(product.birimKey1 != 0) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
+                  if(product.birimKey2 != 0) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
+                ],
+                onChanged: (value) {
+                  if (value != null) selectedBirimTipi = value;
+                },
+                decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: miktarController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text('cart.cancel'.tr())),
+            ElevatedButton(
+              onPressed: () {
+                final miktar = int.tryParse(miktarController.text);
+                if (miktar != null && miktar > 0) {
+                  Navigator.pop(context, {'birimTipi': selectedBirimTipi, 'miktar': miktar});
+                }
+              },
+              child: Text('cart.add'.tr()),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    provider.customerName = customer!.kod!;
+    final freeKey = "${product.stokKodu}_(FREE${result['birimTipi']})";
+
+    provider.addOrUpdateItem(
+      stokKodu: freeKey,
+      urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
+      birimFiyat: 0,
+      miktar: result['miktar'],
+      urunBarcode: product.barcode1,
+      iskonto: 100,
+      birimTipi: result['birimTipi'],
+      imsrc: product.imsrc,
+      vat: product.vat,
+      adetFiyati: '0',
+      kutuFiyati: '0',
+      birimKey1: product.birimKey1,
+      birimKey2: product.birimKey2,
+    );
+  }
+
+  Widget _buildQuantityControl(BuildContext context, String selectedType) {
+    return SizedBox(
+      height: 25.w,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _buildQuantityButton(context, isIncrement: true, selectedType: selectedType),
+          Container(
+            width: 18.w,
+            height: 8.w,
+            margin: EdgeInsets.zero,
+            padding: EdgeInsets.zero,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.5), width: 1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: TextField(
+                key: ValueKey('quantity_${product.stokKodu}'),
+                controller: quantityController,
+                focusNode: quantityFocusNode,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                ),
+                onSubmitted: (value) => updateQuantityFromTextField(value),
+              ),
+            ),
+          ),
+          _buildQuantityButton(context, isIncrement: false, selectedType: selectedType),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityButton(BuildContext context, {required bool isIncrement, required String selectedType}) {
+    final bool isEnabled = isIncrement || quantity > 0;
+    return Container(
+      width: 18.w,
+      height: 8.w,
+      decoration: BoxDecoration(
+        color: isEnabled
+            ? (isIncrement ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : Theme.of(context).colorScheme.error.withOpacity(0.1))
+            : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Center(
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: isEnabled
+              ? () {
+            final newQuantity = quantity + (isIncrement ? 1 : -1);
+
+            final fiyat = selectedType == 'Box'
+                ? (double.tryParse(product.kutuFiyati.toString()) ?? 0)
+                : (double.tryParse(product.adetFiyati.toString()) ?? 0);
+
+            final cartItem = provider.items[product.stokKodu];
+            final iskonto = cartItem?.iskonto ?? provider.getIskonto(product.stokKodu);
+
+            provider.addOrUpdateItem(
+              urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, vat: product.vat, urunBarcode: product.barcode1, miktar: isIncrement ? 1 : -1, // Decrement by 1
+              iskonto: iskonto, birimTipi: selectedType, imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2,
+            );
+
+            onQuantityChanged(newQuantity);
+            quantityController.text = '$newQuantity';
+          }
+              : null,
+          icon: Icon(
+            isIncrement ? Icons.add : Icons.remove,
+            size: 6.w,
+            color: isEnabled
+                ? (isIncrement ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error)
+                : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.38),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getProductNameColor(BuildContext context) {
+    final isInRefundList = refundProductNames.any((e) => e.toLowerCase() == product.urunAdi.toLowerCase());
+    final isPassive = product.aktif == 0;
+    if (isPassive && isInRefundList) return Colors.blue;
+    if (isInRefundList) return Colors.green;
+    if (isPassive) return Colors.red;
+    return Theme.of(context).colorScheme.onSurface;
+  }
+}
+
+
 class BarcodeScannerPage extends StatefulWidget {
   final void Function(String barcode) onScanned;
-
-  const BarcodeScannerPage({Key? key, required this.onScanned}) : super(key: key);
+  const BarcodeScannerPage({super.key, required this.onScanned});
 
   @override
   State<BarcodeScannerPage> createState() => _BarcodeScannerPageState();
@@ -2026,21 +1306,17 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('cart.scan'.tr()),
-      ),
+      appBar: AppBar(title: Text('cart.scan'.tr())),
       body: MobileScanner(
         onDetect: (capture) {
-          final List<Barcode> barcodes = capture.barcodes;
-          for (final barcode in barcodes) {
-            if (barcode.rawValue != null) {
-              widget.onScanned(barcode.rawValue!);
-              Navigator.of(context).pop();
-              break;
-            }
+          final barcode = capture.barcodes.firstOrNull?.rawValue;
+          if (barcode != null) {
+            widget.onScanned(barcode);
+            Navigator.of(context).pop();
           }
         },
       ),
     );
   }
 }
+

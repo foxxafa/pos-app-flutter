@@ -442,6 +442,7 @@ class _CartView2State extends State<CartView2> {
                                                         controller: priceController,
                                                         focusNode: priceFocusNode,
                                                         keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                                        textAlign: TextAlign.center,
                                                         decoration: InputDecoration(
                                                           filled: true,
                                                           fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
@@ -679,37 +680,40 @@ class _CartView2State extends State<CartView2> {
                                                     color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
-                                                  child: IconButton(
-                                                    padding: EdgeInsets.zero,
-                                                    onPressed: () {
-                                                      int newMiktar = item.miktar - 1;
-                                                      if (newMiktar <= 0) {
-                                                        cartProvider.removeItem(stokKodu, item.birimTipi);
-                                                      } else {
-                                                        final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
-                                                        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-                                                        cartProvider.addOrUpdateItem(
-                                                          urunAdi: item.urunAdi,
-                                                          stokKodu: stokKodu,
-                                                          birimFiyat: item.birimFiyat,
-                                                          urunBarcode: item.urunBarcode,
-                                                          miktar: -1,
-                                                          iskonto: item.iskonto,
-                                                          birimTipi: item.birimTipi,
-                                                          durum: item.durum,
-                                                          vat: item.vat,
-                                                          imsrc: item.imsrc,
-                                                          adetFiyati: item.adetFiyati,
-                                                          kutuFiyati: item.kutuFiyati,
-                                                          birimKey1: item.birimKey1,
-                                                          birimKey2: item.birimKey2,
-                                                        );
-                                                      }
-                                                    },
-                                                    icon: Icon(
-                                                      Icons.remove,
-                                                      size: 6.w,
-                                                      color: Theme.of(context).colorScheme.error,
+                                                  child: Center(
+                                                    child: IconButton(
+                                                      padding: EdgeInsets.zero,
+                                                      constraints: const BoxConstraints(),
+                                                      onPressed: () {
+                                                        int newMiktar = item.miktar - 1;
+                                                        if (newMiktar <= 0) {
+                                                          cartProvider.removeItem(stokKodu, item.birimTipi);
+                                                        } else {
+                                                          final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                          cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                          cartProvider.addOrUpdateItem(
+                                                            urunAdi: item.urunAdi,
+                                                            stokKodu: stokKodu,
+                                                            birimFiyat: item.birimFiyat,
+                                                            urunBarcode: item.urunBarcode,
+                                                            miktar: -1,
+                                                            iskonto: item.iskonto,
+                                                            birimTipi: item.birimTipi,
+                                                            durum: item.durum,
+                                                            vat: item.vat,
+                                                            imsrc: item.imsrc,
+                                                            adetFiyati: item.adetFiyati,
+                                                            kutuFiyati: item.kutuFiyati,
+                                                            birimKey1: item.birimKey1,
+                                                            birimKey2: item.birimKey2,
+                                                          );
+                                                        }
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.remove,
+                                                        size: 6.w,
+                                                        color: Theme.of(context).colorScheme.error,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
@@ -776,32 +780,35 @@ class _CartView2State extends State<CartView2> {
                                                     color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
-                                                  child: IconButton(
-                                                    padding: EdgeInsets.zero,
-                                                    onPressed: () {
-                                                      final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
-                                                      cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-                                                      cartProvider.addOrUpdateItem(
-                                                        urunAdi: item.urunAdi,
-                                                        stokKodu: stokKodu,
-                                                        birimFiyat: item.birimFiyat,
-                                                        urunBarcode: item.urunBarcode,
-                                                        miktar: 1,
-                                                        iskonto: item.iskonto,
-                                                        birimTipi: item.birimTipi,
-                                                        durum: item.durum,
-                                                        vat: item.vat,
-                                                        imsrc: item.imsrc,
-                                                        adetFiyati: item.adetFiyati,
-                                                        kutuFiyati: item.kutuFiyati,
-                                                        birimKey1: item.birimKey1,
-                                                        birimKey2: item.birimKey2,
-                                                      );
-                                                    },
-                                                    icon: Icon(
-                                                      Icons.add,
-                                                      size: 6.w,
-                                                      color: Theme.of(context).colorScheme.primary,
+                                                  child: Center(
+                                                    child: IconButton(
+                                                      padding: EdgeInsets.zero,
+                                                      constraints: const BoxConstraints(),
+                                                      onPressed: () {
+                                                        final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+                                                        cartProvider.addOrUpdateItem(
+                                                          urunAdi: item.urunAdi,
+                                                          stokKodu: stokKodu,
+                                                          birimFiyat: item.birimFiyat,
+                                                          urunBarcode: item.urunBarcode,
+                                                          miktar: 1,
+                                                          iskonto: item.iskonto,
+                                                          birimTipi: item.birimTipi,
+                                                          durum: item.durum,
+                                                          vat: item.vat,
+                                                          imsrc: item.imsrc,
+                                                          adetFiyati: item.adetFiyati,
+                                                          kutuFiyati: item.kutuFiyati,
+                                                          birimKey1: item.birimKey1,
+                                                          birimKey2: item.birimKey2,
+                                                        );
+                                                      },
+                                                      icon: Icon(
+                                                        Icons.add,
+                                                        size: 6.w,
+                                                        color: Theme.of(context).colorScheme.primary,
+                                                      ),
                                                     ),
                                                   ),
                                                 ),
