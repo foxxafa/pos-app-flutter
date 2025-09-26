@@ -967,7 +967,7 @@ class ProductDetails extends StatelessWidget {
       child: TextField(
         controller: priceController,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+        style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
         enabled: quantity > 0,
         textAlign: TextAlign.center,
         decoration: const InputDecoration(
@@ -1194,43 +1194,63 @@ class ProductDetails extends StatelessWidget {
   }
 
   Widget _buildQuantityControl(BuildContext context, String selectedType) {
-    return SizedBox(
-      height: 25.w,
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.12,
+        minHeight: 60,
+      ),
+      width: 22.w,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          _buildQuantityButton(context, isIncrement: true, selectedType: selectedType),
-          Container(
-            width: 18.w,
-            height: 8.w,
-            margin: EdgeInsets.zero,
-            padding: EdgeInsets.zero,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Theme.of(context).colorScheme.outline.withOpacity(0.5), width: 1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: TextField(
-                key: ValueKey('quantity_${product.stokKodu}'),
-                controller: quantityController,
-                focusNode: quantityFocusNode,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  isDense: true,
+          Flexible(
+            flex: 4,
+            child: _buildQuantityButton(context, isIncrement: true, selectedType: selectedType),
+          ),
+          SizedBox(height: 2),
+          Flexible(
+            flex: 4,
+            child: Container(
+              width: double.infinity,
+              margin: EdgeInsets.zero,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Align(
+                alignment: Alignment.center,
+                child: Container(
+                  height: double.infinity,
+                  child: Center(
+                    child: TextField(
+                      key: ValueKey('quantity_${product.stokKodu}'),
+                      controller: quantityController,
+                      focusNode: quantityFocusNode,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      textAlign: TextAlign.center,
+                      textAlignVertical: TextAlignVertical.center,
+                      maxLines: 1,
+                      style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                        isDense: true,
+                      ),
+                      onSubmitted: (value) => updateQuantityFromTextField(value),
+                    ),
+                  ),
                 ),
-                onSubmitted: (value) => updateQuantityFromTextField(value),
               ),
             ),
           ),
-          _buildQuantityButton(context, isIncrement: false, selectedType: selectedType),
+          SizedBox(height: 2),
+          Flexible(
+            flex: 4,
+            child: _buildQuantityButton(context, isIncrement: false, selectedType: selectedType),
+          ),
         ],
       ),
     );
@@ -1239,19 +1259,17 @@ class ProductDetails extends StatelessWidget {
   Widget _buildQuantityButton(BuildContext context, {required bool isIncrement, required String selectedType}) {
     final bool isEnabled = isIncrement || quantity > 0;
     return Container(
-      width: 18.w,
-      height: 8.w,
+      width: double.infinity,
       decoration: BoxDecoration(
         color: isEnabled
             ? (isIncrement ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : Theme.of(context).colorScheme.error.withOpacity(0.1))
             : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Center(
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: isEnabled
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isEnabled
               ? () {
             final newQuantity = quantity + (isIncrement ? 1 : -1);
 
@@ -1271,12 +1289,17 @@ class ProductDetails extends StatelessWidget {
             quantityController.text = '$newQuantity';
           }
               : null,
-          icon: Icon(
-            isIncrement ? Icons.add : Icons.remove,
-            size: 6.w,
-            color: isEnabled
-                ? (isIncrement ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error)
-                : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.38),
+          borderRadius: BorderRadius.circular(4),
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            child: Icon(
+              isIncrement ? Icons.add : Icons.remove,
+              size: 5.w,
+              color: isEnabled
+                  ? (isIncrement ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error)
+                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.38),
+            ),
           ),
         ),
       ),
