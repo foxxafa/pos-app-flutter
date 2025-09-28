@@ -57,10 +57,15 @@ class _CartViewState extends State<CartView> {
   void initState() {
     super.initState();
     _loadProducts();
+    _setupAudioPlayer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _barcodeFocusNode.requestFocus();
       _syncWithProvider();
     });
+  }
+
+  void _setupAudioPlayer() {
+    _audioPlayer.setVolume(0.8); // %80 sabit ses seviyesi
   }
 
   @override
@@ -179,9 +184,36 @@ class _CartViewState extends State<CartView> {
     await _audioPlayer.play(AssetSource('wrong.mp3'));
   }
 
+  Future<void> playBeep() async {
+    await _audioPlayer.play(AssetSource('beep.mp3'));
+  }
+
   void _onBarcodeScanned(String barcode) {
+    if (!mounted) return; // Widget dispose edilmişse çık
+    
     _searchController.text = barcode;
-    _filterProducts();
+    _filterProducts(queryOverride: barcode);
+    
+    // Barkod sonucuna göre ses çal
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return; // Widget hala mevcut mu kontrol et
+      
+      final query = barcode.trimRight().toLowerCase();
+      final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+      final filtered = _allProducts.where((product) {
+        final name = product.urunAdi.toLowerCase();
+        final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
+            .map((b) => b.toLowerCase())
+            .toList();
+        return queryWords.every((word) => name.contains(word) || barcodes.any((b) => b.contains(word)));
+      }).toList();
+
+      if (filtered.isNotEmpty) {
+        playBeep(); // Ürün bulundu - beep sesi
+      } else {
+        playWrong(); // Ürün bulunamadı - wrong sesi
+      }
+    });
   }
 
   Future<void> _openBarcodeScanner() async {
@@ -1326,16 +1358,26 @@ class BarcodeScannerPage extends StatefulWidget {
 }
 
 class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
+  bool _isProcessing = false;
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('cart.scan'.tr())),
       body: MobileScanner(
         onDetect: (capture) {
+          if (_isProcessing) return; // Zaten işlem yapılıyorsa çık
+          
           final barcode = capture.barcodes.firstOrNull?.rawValue;
-          if (barcode != null) {
+          if (barcode != null && barcode.isNotEmpty) {
+            _isProcessing = true; // İşlem başladı
+            
             widget.onScanned(barcode);
-            Navigator.of(context).pop();
+            
+            // Güvenli navigation
+            if (mounted && Navigator.canPop(context)) {
+              Navigator.of(context).pop();
+            }
           }
         },
       ),
