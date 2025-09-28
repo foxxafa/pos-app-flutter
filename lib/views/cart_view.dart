@@ -190,22 +190,28 @@ class _CartViewState extends State<CartView> {
 
   void _onBarcodeScanned(String barcode) {
     if (!mounted) return; // Widget dispose edilmişse çık
-    
+
     _searchController.text = barcode;
+    _searchController2.text = barcode; // Her iki controller'a da yaz
     _filterProducts(queryOverride: barcode);
-    
+
     // Barkod sonucuna göre ses çal
     Future.delayed(const Duration(milliseconds: 200), () {
       if (!mounted) return; // Widget hala mevcut mu kontrol et
-      
+
       final query = barcode.trimRight().toLowerCase();
       final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
       final filtered = _allProducts.where((product) {
         final name = product.urunAdi.toLowerCase();
+        final stokKodu = product.stokKodu.toLowerCase(); // Stok kodu araması ekle
         final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
             .map((b) => b.toLowerCase())
             .toList();
-        return queryWords.every((word) => name.contains(word) || barcodes.any((b) => b.contains(word)));
+        return queryWords.every((word) =>
+          name.contains(word) ||
+          stokKodu.contains(word) || // Stok kodunda ara
+          barcodes.any((b) => b.contains(word))
+        );
       }).toList();
 
       if (filtered.isNotEmpty) {
@@ -241,10 +247,15 @@ class _CartViewState extends State<CartView> {
     final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
     final filtered = _allProducts.where((product) {
       final name = product.urunAdi.toLowerCase();
+      final stokKodu = product.stokKodu.toLowerCase(); // Stok kodu araması ekle
       final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
           .map((b) => b.toLowerCase())
           .toList();
-      return queryWords.every((word) => name.contains(word) || barcodes.any((b) => b.contains(word)));
+      return queryWords.every((word) =>
+        name.contains(word) ||
+        stokKodu.contains(word) || // Stok kodunda ara
+        barcodes.any((b) => b.contains(word))
+      );
     }).toList();
 
     filtered.sort((a, b) {
@@ -291,6 +302,8 @@ class _CartViewState extends State<CartView> {
             birimKey1: product.birimKey1,
             birimKey2: product.birimKey2,
           );
+          // Başarılı ekleme sonrası temizle ve fokusla
+          playBeep();
         }
         _clearAndFocusBarcode();
       } else if (_filteredProducts.isEmpty && query.length > 10 && RegExp(r'^\d+$').hasMatch(query)) {
@@ -301,12 +314,13 @@ class _CartViewState extends State<CartView> {
   }
 
   void _clearAndFocusBarcode() {
+    // El terminali için sadece controller'ları temizle, focus'u koru
     _searchController.clear();
     _searchController2.clear();
-    FocusScope.of(context).unfocus();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) _barcodeFocusNode.requestFocus();
-    });
+    // Focus'u hemen geri ver, delay olmadan
+    if (mounted) {
+      _barcodeFocusNode.requestFocus();
+    }
   }
 
   // --- UI Helper Methods ---
@@ -410,9 +424,9 @@ class _CartViewState extends State<CartView> {
             style: TextStyle(fontSize: 14.sp, color: Colors.white),
             decoration: InputDecoration(
               hintText: 'cart.search_placeholder'.tr(),
-              hintStyle: TextStyle(fontSize: 14.sp, color: Colors.white.withOpacity(0.7)),
+              hintStyle: TextStyle(fontSize: 14.sp, color: Colors.white.withValues(alpha: 0.7)),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.15),
+              fillColor: Colors.white.withValues(alpha: 0.15),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
               focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
@@ -422,11 +436,11 @@ class _CartViewState extends State<CartView> {
                 children: [
                   if (_searchController2.text.isNotEmpty)
                     IconButton(
-                      icon: Icon(Icons.clear, color: Colors.white.withOpacity(0.7), size: 20),
+                      icon: Icon(Icons.clear, color: Colors.white.withValues(alpha: 0.7), size: 20),
                       onPressed: _clearSearch2,
                     ),
                   IconButton(
-                    icon: Icon(Icons.qr_code_scanner, color: Colors.white.withOpacity(0.9), size: 22),
+                    icon: Icon(Icons.qr_code_scanner, color: Colors.white.withValues(alpha: 0.9), size: 22),
                     onPressed: _openBarcodeScanner,
                   ),
                   const SizedBox(width: 8),
@@ -464,7 +478,17 @@ class _CartViewState extends State<CartView> {
                 child: TextField(
                   focusNode: _barcodeFocusNode,
                   controller: _searchController,
-                  onChanged: (value) => _filterProducts(),
+                  onChanged: (value) {
+                    // El terminali için her değişiklikte filtrele
+                    _searchController2.text = value; // Üst search'e de yansıt
+                    _filterProducts();
+                  },
+                  onSubmitted: (value) {
+                    // Enter tuşuna basıldığında da işle
+                    if (value.isNotEmpty) {
+                      _filterProducts();
+                    }
+                  },
                 ),
               ),
             ),
@@ -605,7 +629,7 @@ class _CartViewState extends State<CartView> {
         );
       },
       separatorBuilder: (context, index) => Divider(
-        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
         thickness: 1,
         height: 1,
       ),
@@ -772,7 +796,7 @@ class ProductImage extends StatelessWidget {
             else
               Icon(Icons.shopping_bag, size: 40.w),
             SizedBox(height: 2.h),
-            SelectableText("${'cart.barcodes'.tr()}: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}"),
+            SelectableText("${'cart.barcodes'.tr()}: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b.trim().isNotEmpty).join(', ')}"),
             Text("${'cart.code'.tr()}= ${product.stokKodu}"),
             Text("${'cart.unit_price'.tr()}= ${product.adetFiyati}"),
             Text("${'cart.box_price'.tr()}= ${product.kutuFiyati}"),
@@ -952,7 +976,7 @@ class ProductDetails extends StatelessWidget {
         alignment: Alignment.center,
         padding: EdgeInsets.symmetric(horizontal: 2.w),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
@@ -967,7 +991,7 @@ class ProductDetails extends StatelessWidget {
       alignment: Alignment.center,
       padding: EdgeInsets.symmetric(horizontal: 2.w),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButton<String>(
@@ -992,7 +1016,7 @@ class ProductDetails extends StatelessWidget {
     return Container(
       height: 8.w,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.center,
@@ -1061,7 +1085,7 @@ class ProductDetails extends StatelessWidget {
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
+              fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
             ),
             style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
@@ -1294,8 +1318,8 @@ class ProductDetails extends StatelessWidget {
       width: double.infinity,
       decoration: BoxDecoration(
         color: isEnabled
-            ? (isIncrement ? Theme.of(context).colorScheme.primary.withOpacity(0.1) : Theme.of(context).colorScheme.error.withOpacity(0.1))
-            : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.3),
+            ? (isIncrement ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1) : Theme.of(context).colorScheme.error.withValues(alpha: 0.1))
+            : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Material(
@@ -1330,7 +1354,7 @@ class ProductDetails extends StatelessWidget {
               size: 5.w,
               color: isEnabled
                   ? (isIncrement ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.error)
-                  : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.38),
+                  : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
             ),
           ),
         ),
