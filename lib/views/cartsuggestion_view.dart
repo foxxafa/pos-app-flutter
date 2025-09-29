@@ -9,7 +9,9 @@ import 'package:sizer/sizer.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/product_model.dart';
 import '../providers/cartcustomer_provider.dart';
+import '../controllers/sync_controller.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
 
 /// Müşterinin daha önce aldığı ürünlere göre ürün önerileri sunan sayfa.
@@ -36,6 +38,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   Map<String, Future<String?>> _imageFutures = {};
   bool _isLoading = true;
 
+  // cart_view2.dart'tan eklenen image download timer
+  Timer? _imageDownloadTimer;
+
   // --- Lifecycle Methods ---
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
     _quantityControllers.values.forEach((c) => c.dispose());
     _discountFocusNodes.values.forEach((f) => f.dispose());
     _quantityFocusNodes.values.forEach((f) => f.dispose());
+    _imageDownloadTimer?.cancel(); // Timer'ı iptal et
     super.dispose();
   }
 
@@ -77,17 +83,34 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
       _filteredProducts = suggestedProducts;
       _isLoading = false;
       _generateImageFutures(suggestedProducts);
+      _downloadMissingImages(suggestedProducts); // Resimleri indir
     });
   }
 
   // --- Image Handling ---
-  void _generateImageFutures(List<ProductModel> products) {
+  void _generateImageFutures(List<ProductModel> products, {bool forceUpdate = false}) {
     for (final product in products) {
       final stokKodu = product.stokKodu;
-      if (!_imageFutures.containsKey(stokKodu)) {
+      if (!_imageFutures.containsKey(stokKodu) || forceUpdate) {
         _imageFutures[stokKodu] = _loadImage(product.imsrc);
       }
     }
+  }
+
+  // cart_view2.dart'tan eklenen resim indirme metodu
+  void _downloadMissingImages(List<ProductModel> products) {
+    _imageDownloadTimer?.cancel();
+    _imageDownloadTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        SyncController.downloadSearchResultImages(products, onImagesDownloaded: () {
+          if (mounted) {
+            setState(() {
+              _generateImageFutures(products, forceUpdate: true);
+            });
+          }
+        });
+      }
+    });
   }
 
   Future<String?> _loadImage(String? imsrc) async {
@@ -131,6 +154,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
     setState(() {
       _filteredProducts = filtered;
       _generateImageFutures(filtered);
+      _downloadMissingImages(filtered); // Filtrelenmiş ürünler için resimleri indir
     });
   }
 
@@ -324,14 +348,23 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         final quantityController = _quantityControllers[quantityControllerKey]!;
         final quantityFocusNode = _quantityFocusNodes[quantityControllerKey]!;
 
-        // Sync controllers with provider data
-        final indirimliFiyat = cartItem?.indirimliTutar ?? (birimTipi == 'Unit'
-            ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-            : double.tryParse(product.kutuFiyati.toString()) ?? 0.0);
+        // cart_view2.dart mantığı: Controller'ları sadece ilk kez doldur
+        // İlk kez oluşturuluyorsa controller'a değer ata
+        if (priceController.text.isEmpty) {
+          if (cartItem != null) {
+            final discountAmount = (cartItem.birimFiyat * cartItem.iskonto) / 100;
+            final discountedPrice = cartItem.birimFiyat - discountAmount;
+            priceController.text = discountedPrice.toStringAsFixed(2);
+          } else {
+            final orjinalFiyat = birimTipi == 'Unit'
+                ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
+                : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
+            priceController.text = orjinalFiyat.toStringAsFixed(2);
+          }
+        }
 
-        priceController.text = indirimliFiyat.toStringAsFixed(2);
-
-        if (!discountFocusNode.hasFocus) {
+        // İndirim controller'ını sadece ilk kez doldur, sonra kullanıcıya bırak
+        if (discountController.text.isEmpty && !discountFocusNode.hasFocus) {
           discountController.text = cartItem?.iskonto != null && cartItem!.iskonto > 0
               ? cartItem.iskonto.toString()
               : '';
@@ -493,8 +526,12 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   }
 
   Widget _buildPriceField(ProductModel product, CartItem? cartItem, TextEditingController priceController, TextEditingController discountController, FocusNode discountFocusNode, CartProvider cartProvider, SalesCustomerProvider customerProvider) {
+    final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
+
+    // cart_view2.dart mantığı: Controller zaten üstte dolduruldu, burada tekrar güncelleme
+    // Build method'da oluyor, burada sadece TextField widget'ını döndürüyoruz
+
     return TextField(
-      enabled: cartItem != null,
       controller: priceController,
       keyboardType: TextInputType.numberWithOptions(decimal: true),
       textAlign: TextAlign.center,
@@ -507,16 +544,25 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
       ),
       style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
       onChanged: (value) {
-        final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
-        final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
-        var orjinalFiyat = birimTipi == 'Unit'
+        // Eğer alan boşsa, kullanıcının yazmaya devam etmesine izin ver
+        if (value.isEmpty) {
+          return; // Hiçbir şey yapma, kullanıcı yazmaya devam edecek
+        }
+
+        final yeniFiyat = double.tryParse(value.replaceAll(',', '.'));
+        if (yeniFiyat == null || yeniFiyat < 0) {
+          return; // Geçersiz değer, işlem yapma
+        }
+
+        // cart_view2.dart mantığı: orjinal fiyat her zaman ürünün kendi fiyatı
+        var orjinalFiyatHesap = birimTipi == 'Unit'
             ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
             : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
 
-        if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+        if (orjinalFiyatHesap <= 0) orjinalFiyatHesap = yeniFiyat;
 
-        final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-            ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+        final indirimOrani = (orjinalFiyatHesap > 0 && yeniFiyat < orjinalFiyatHesap)
+            ? ((orjinalFiyatHesap - yeniFiyat) / orjinalFiyatHesap * 100).round()
             : 0;
 
         if (!discountFocusNode.hasFocus) {
@@ -525,10 +571,41 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
         cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
         cartProvider.addOrUpdateItem(
-          stokKodu: product.stokKodu, urunAdi: product.urunAdi, birimFiyat: orjinalFiyat, urunBarcode: product.barcode1,
-          miktar: 0, iskonto: indirimOrani, birimTipi: birimTipi, vat: product.vat, imsrc: product.imsrc,
-          adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, birimKey1: product.birimKey1, birimKey2: product.birimKey2,
+          stokKodu: product.stokKodu,
+          urunAdi: product.urunAdi,
+          birimFiyat: orjinalFiyatHesap, // Orijinal fiyatı gönder
+          urunBarcode: product.barcode1,
+          miktar: 0,
+          iskonto: indirimOrani,
+          birimTipi: birimTipi,
+          vat: product.vat,
+          imsrc: product.imsrc,
+          adetFiyati: product.adetFiyati,
+          kutuFiyati: product.kutuFiyati,
+          birimKey1: product.birimKey1,
+          birimKey2: product.birimKey2,
         );
+      },
+      onEditingComplete: () {
+        // Formatlama işlemi
+        final value = priceController.text;
+        final parsed = double.tryParse(value.replaceAll(',', '.'));
+        if (parsed != null) {
+          final formattedValue = parsed.toStringAsFixed(2);
+          if (priceController.text != formattedValue) {
+            priceController.text = formattedValue;
+            priceController.selection = TextSelection.fromPosition(
+              TextPosition(offset: formattedValue.length),
+            );
+          }
+        }
+      },
+      onSubmitted: (value) {
+        // Submit edildiğinde formatlama
+        final parsed = double.tryParse(value.replaceAll(',', '.'));
+        if (parsed != null) {
+          priceController.text = parsed.toStringAsFixed(2);
+        }
       },
     );
   }
@@ -540,7 +617,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         SizedBox(width: 1.w),
         Expanded(
           child: TextField(
-            enabled: cartItem != null,
             keyboardType: TextInputType.number,
             controller: discountController,
             focusNode: discountFocusNode,
@@ -555,29 +631,65 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
             ),
             onChanged: (value) {
               final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
+
+              // cart_view2.dart mantığı: orjinal fiyat her zaman ürünün birim fiyatı
               final originalPrice = birimTipi == 'Unit'
                   ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
                   : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
 
               if (value.isEmpty) {
                 priceController.text = originalPrice.toStringAsFixed(2);
-                cartProvider.addOrUpdateItem(stokKodu: product.stokKodu, miktar: 0, iskonto: 0, birimTipi: birimTipi, urunAdi: product.urunAdi, birimFiyat: originalPrice, vat: product.vat, imsrc: product.imsrc, adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, urunBarcode: product.barcode1, birimKey1: product.birimKey1, birimKey2: product.birimKey2);
+                cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+                cartProvider.addOrUpdateItem(
+                  stokKodu: product.stokKodu,
+                  miktar: 0,
+                  iskonto: 0,
+                  birimTipi: birimTipi,
+                  urunAdi: product.urunAdi,
+                  birimFiyat: originalPrice,
+                  vat: product.vat,
+                  imsrc: product.imsrc,
+                  adetFiyati: product.adetFiyati,
+                  kutuFiyati: product.kutuFiyati,
+                  urunBarcode: product.barcode1,
+                  birimKey1: product.birimKey1,
+                  birimKey2: product.birimKey2
+                );
                 return;
               }
 
               int discountPercent = int.tryParse(value) ?? 0;
               discountPercent = discountPercent.clamp(0, 100);
 
-              final discountedPrice = originalPrice * (1 - (discountPercent / 100));
+              // İndirimli fiyatı hesapla
+              final discountAmount = (originalPrice * discountPercent) / 100;
+              final discountedPrice = originalPrice - discountAmount;
               priceController.text = discountedPrice.toStringAsFixed(2);
 
               cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
               cartProvider.addOrUpdateItem(
-                stokKodu: product.stokKodu, miktar: 0, iskonto: discountPercent, birimTipi: birimTipi,
-                urunAdi: product.urunAdi, birimFiyat: originalPrice, vat: product.vat, imsrc: product.imsrc,
-                adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, urunBarcode: product.barcode1,
-                birimKey1: product.birimKey1, birimKey2: product.birimKey2,
+                stokKodu: product.stokKodu,
+                miktar: 0,
+                iskonto: discountPercent,
+                birimTipi: birimTipi,
+                urunAdi: product.urunAdi,
+                birimFiyat: originalPrice, // Her zaman orijinal fiyatı gönder
+                vat: product.vat,
+                imsrc: product.imsrc,
+                adetFiyati: product.adetFiyati,
+                kutuFiyati: product.kutuFiyati,
+                urunBarcode: product.barcode1,
+                birimKey1: product.birimKey1,
+                birimKey2: product.birimKey2,
               );
+
+              // İmleç pozisyonunu koru
+              final cursorPos = discountController.selection.baseOffset;
+              if (cursorPos >= 0 && cursorPos <= discountController.text.length) {
+                discountController.selection = TextSelection.fromPosition(
+                  TextPosition(offset: cursorPos),
+                );
+              }
             },
           ),
         ),
