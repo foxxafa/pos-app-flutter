@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
@@ -394,6 +395,12 @@ class SyncController {
 
   // Arka planda resim indirme - sync'i bloklamaz ve uygulama kapansa bile devam eder
   void _downloadImagesInBackground() async {
+    // Debug modunda arka plan resim indirme özelliğini kapat
+    if (kDebugMode) {
+      print('🔧 Debug modunda arka plan resim indirme devre dışı');
+      return;
+    }
+
     try {
       // Resim indirme durumunu kaydet
       await _saveImageDownloadState('started');

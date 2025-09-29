@@ -480,47 +480,53 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
     if (availableUnits <= 1) {
       return Container(
+        height: 40, // Fiyat alanının gerçek yüksekliği (isDense + contentPadding)
         padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 8),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(
-          birimTipi,
-          style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+        child: Center(
+          child: Text(
+            birimTipi,
+            style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+          ),
         ),
       );
     }
 
     return Container(
+      height: 40, // Fiyat alanının gerçek yüksekliği (isDense + contentPadding)
       padding: EdgeInsets.symmetric(horizontal: 2.w),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.7),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: DropdownButton<String>(
-        value: birimTipi,
-        isDense: true,
-        underline: Container(),
-        style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
-        items: [
-          if (hasUnit) DropdownMenuItem(value: 'Unit', child: Text('Unit')),
-          if (hasBox) DropdownMenuItem(value: 'Box', child: Text('Box')),
-        ],
-        onChanged: (newValue) {
-          if (newValue != null && cartItem != null) {
-            final fiyat = (newValue == 'Unit')
-                ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
+      child: Center(
+        child: DropdownButton<String>(
+          value: birimTipi,
+          isDense: true,
+          underline: Container(),
+          style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+          items: [
+            if (hasUnit) DropdownMenuItem(value: 'Unit', child: Text('Unit')),
+            if (hasBox) DropdownMenuItem(value: 'Box', child: Text('Box')),
+          ],
+          onChanged: (newValue) {
+            if (newValue != null && cartItem != null) {
+              final fiyat = (newValue == 'Unit')
+                  ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
+                  : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
 
-            cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
-            cartProvider.addOrUpdateItem(
-              urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, urunBarcode: product.barcode1,
-              adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, miktar: 0, iskonto: cartItem.iskonto,
-              birimTipi: newValue, vat: product.vat, imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2,
-            );
-          }
-        },
+              cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+              cartProvider.addOrUpdateItem(
+                urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, urunBarcode: product.barcode1,
+                adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, miktar: 0, iskonto: cartItem.iskonto,
+                birimTipi: newValue, vat: product.vat, imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2,
+              );
+            }
+          },
+        ),
       ),
     );
   }
