@@ -5,6 +5,7 @@ import 'package:pos_app/core/network/network_info.dart';
 import 'package:pos_app/core/network/api_config.dart';
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
+import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 
 class OrderRepositoryImpl implements OrderRepository {
   final DatabaseHelper dbHelper;
@@ -715,7 +716,9 @@ class OrderRepositoryImpl implements OrderRepository {
 
       // Clean stokKodu and urunAdi from FREE markers
       final cleanedItems = orderItems.map((item) {
-        final itemJson = (item as dynamic).toJson() as Map<String, dynamic>;
+        // Cast to CartItem to access the toJson extension
+        final cartItem = item as CartItem;
+        final itemJson = cartItem.toJson();
 
         final cleanedStokKodu = (itemJson['StokKodu'] as String)
             .replaceAll('_(FREEUnit)', '')

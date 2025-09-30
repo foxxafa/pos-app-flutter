@@ -261,7 +261,7 @@ class ApimobilController extends Controller
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
                UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc
-            FROM urunler WHERE created_at > :time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
+            FROM urunler WHERE aktif=1 and created_at > :time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
             foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
                 $stok['KutuFiyati'] = (string) $stok['KutuFiyati'];
@@ -286,7 +286,7 @@ class ApimobilController extends Controller
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
                UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc
-            FROM urunler WHERE updated_at > :time and created_at<:time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
+            FROM urunler WHERE aktif=1 and updated_at > :time and created_at<:time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
               foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
                 $stok['KutuFiyati'] = (string) $stok['KutuFiyati'];
