@@ -1,6 +1,5 @@
 // lib/features/auth/data/repositories/auth_repository_impl.dart
 import 'package:dio/dio.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/network/network_info.dart';
 import 'package:pos_app/core/network/api_config.dart';
@@ -36,44 +35,63 @@ class AuthRepositoryImpl implements AuthRepository {
 
   Future<LoginResponse?> _loginOnline(String username, String password) async {
     try {
+      // Rowhub API uses form-data, not JSON
       final response = await dio.post(
         ApiConfig.auth + '/login',
-        data: {
+        data: FormData.fromMap({
           'username': username,
           'password': password,
-        },
+        }),
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+        ),
       );
 
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final userData = response.data['user'];
-        final apiKey = response.data['api_key'];
+      print('🔑 Online login response: ${response.data}');
 
-        final user = UserModel(
-          username: userData['username'],
-          password: password, // Store for offline access
-          apikey: apiKey,
-          day: userData['day'] ?? 0,
-        );
+      // Rowhub API response format: {status: "success", message: "...", apikey: "..."}
+      if (response.statusCode == 200) {
+        final responseData = response.data;
 
-        final loginResponse = LoginResponse(
-          success: true,
-          message: response.data['message'] ?? 'Login successful',
-          user: user,
-          apiKey: apiKey,
-        );
+        if (responseData['status'] == 'success') {
+          final apiKey = responseData['apikey'] ?? '';
+          final int day = DateTime.now().day;
 
-        // Save to local database for offline access
-        await _saveUserToDatabase(user);
-        await saveUserSession(user, apiKey);
+          final user = UserModel(
+            username: username,
+            password: password, // Store for offline access
+            apikey: apiKey,
+            day: day,
+          );
 
-        return loginResponse;
+          final loginResponse = LoginResponse(
+            success: true,
+            message: responseData['message'] ?? 'Login successful',
+            user: user,
+            apiKey: apiKey,
+          );
+
+          // Save to local database for offline access
+          await _saveUserToDatabase(user);
+          await saveUserSession(user, apiKey);
+
+          print('🔑 ✅ Online login successful');
+          return loginResponse;
+        } else {
+          print('🔑 ❌ Login failed: ${responseData['message']}');
+          return LoginResponse(
+            success: false,
+            message: responseData['message'] ?? 'Login failed',
+          );
+        }
       } else {
         return LoginResponse(
           success: false,
-          message: response.data['message'] ?? 'Login failed',
+          message: 'Server error: ${response.statusCode}',
         );
       }
     } catch (e) {
+      print('🔑 ❌ Online login exception: $e');
       throw Exception('Online login failed: $e');
     }
   }
@@ -81,8 +99,9 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<LoginResponse?> _loginOffline(String username, String password) async {
     try {
       final db = await dbHelper.database;
+      // Use 'Login' table (same as LoginController used)
       final result = await db.query(
-        'users',
+        'Login',
         where: 'username = ? AND password = ?',
         whereArgs: [username, password],
       );
@@ -120,16 +139,20 @@ class AuthRepositoryImpl implements AuthRepository {
 
   Future<void> _saveUserToDatabase(UserModel user) async {
     final db = await dbHelper.database;
-    await db.insert(
-      'users',
-      {
-        'username': user.username,
-        'password': user.password,
-        'apikey': user.apikey,
-        'day': user.day,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    // Use 'Login' table (same as LoginController used)
+    // Delete old records first, then insert new one
+    await db.transaction((txn) async {
+      await txn.delete('Login');
+      await txn.insert(
+        'Login',
+        {
+          'username': user.username,
+          'password': user.password,
+          'apikey': user.apikey,
+          'day': user.day,
+        },
+      );
+    });
   }
 
   @override

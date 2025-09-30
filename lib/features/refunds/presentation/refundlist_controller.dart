@@ -4,9 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/network/api_config.dart';
 
 class RefundListController {
-  final String baseUrl = 'https://test.rowhub.net/index.php?r=apimobil/musteriurunleri';
 
   Future<Database> _getDatabase() async {
     DatabaseHelper dbHelper = DatabaseHelper();
@@ -15,7 +15,7 @@ class RefundListController {
 
   Future<List<Refund>> fetchRefunds(String cariKod) async {
     try {
-      final url = Uri.parse('$baseUrl&carikod=$cariKod');
+      final url = Uri.parse('${ApiConfig.musteriUrunleriUrl}&carikod=$cariKod');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {

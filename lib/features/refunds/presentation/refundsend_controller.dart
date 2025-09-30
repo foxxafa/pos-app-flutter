@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/network/api_config.dart';
 
 class RefundSendController {
   Database? _db;
@@ -23,7 +24,7 @@ class RefundSendController {
 
   /// Refund gönderimi - internet varsa gönder, yoksa sqflite'a kaydet
   Future<bool> sendRefund(RefundSendModel refund) async {
-    const String url = 'https://test.rowhub.net/index.php?r=apimobil/iade';
+    final String url = ApiConfig.iadeUrl;
 
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity == ConnectivityResult.none) {

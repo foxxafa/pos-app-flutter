@@ -5,8 +5,8 @@ import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
 import 'package:pos_app/features/refunds/presentation/providers/cart_provider_refund.dart';
 import 'package:pos_app/features/refunds/presentation/screens/refundcart_view2.dart';
+import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
 import 'package:provider/provider.dart';
-import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
@@ -84,8 +84,9 @@ Future<String?> _loadImage(String? imsrc) async {
 
 
   Future<void> _loadProducts() async {
-    final raw = await DatabaseHelper().getAll("Product");
-    final allProducts = raw.map((e) => ProductModel.fromMap(e)).toList();
+    // ✅ Repository kullan (DatabaseHelper yerine)
+    final productRepository = Provider.of<ProductRepository>(context, listen: false);
+    final allProducts = await productRepository.getAllProducts();
 
     // Sadece aktif ürünleri filtrele (aktif = 1)
     final products = allProducts.where((product) => product.aktif == 1).toList();

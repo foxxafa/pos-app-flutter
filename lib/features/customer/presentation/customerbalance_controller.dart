@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:pos_app/core/network/api_config.dart';
 
 class CustomerBalanceController {
   static Database? _db;
@@ -120,7 +121,7 @@ Future<void> fetchAndStoreCustomers() async {
   }
 
   final response = await http.get(
-    Uri.parse('https://test.rowhub.net/index.php?r=apimobil/musterilistesi'),
+    Uri.parse(ApiConfig.musteriListesiUrl),
     headers: {
       'Authorization': 'Bearer $savedApiKey',
     },

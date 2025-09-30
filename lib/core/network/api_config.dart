@@ -18,13 +18,42 @@ class ApiConfig {
   static bool get isStaging => currentEnvironment == ApiEnvironment.staging;
   static bool get isLocal => currentEnvironment == ApiEnvironment.local;
 
-  // POS API endpoints
-  static String get auth => '/api/auth';
-  static String get products => '/api/products';
-  static String get customers => '/api/customers';
-  static String get orders => '/api/orders';
-  static String get transactions => '/api/transactions';
-  static String get sync => '/api/sync';
+  // POS API endpoints - Base paths
+  static String get auth => '/index.php?r=apimobil';
+  static String get products => '/index.php?r=apimobil';
+  static String get customers => '/index.php?r=apimobil';
+  static String get orders => '/index.php?r=apimobil';
+  static String get transactions => '/index.php?r=apimobil';
+  static String get sync => '/index.php?r=apimobil';
+
+  // Helper method - construct full URL
+  static String getFullUrl(String endpoint) {
+    return baseUrl + endpoint;
+  }
+
+  // Specific endpoint URLs
+  // Auth endpoints
+  static String get loginUrl => getFullUrl('/index.php?r=apimobil/login');
+
+  // Transaction endpoints
+  static String get nakitTahsilatUrl => getFullUrl('/index.php?r=apimobil/nakittahsilat');
+  static String get cekTahsilatUrl => getFullUrl('/index.php?r=apimobil/cektahsilat');
+  static String get bankaTahsilatUrl => getFullUrl('/index.php?r=apimobil/bankatahsilat');
+  static String get krediKartiTahsilatUrl => getFullUrl('/index.php?r=apimobil/kredikartitahsilat');
+
+  // Order endpoints
+  static String get satisUrl => getFullUrl('/index.php?r=apimobil/satis');
+
+  // Customer endpoints
+  static String get musteriListesiUrl => getFullUrl('/index.php?r=apimobil/musterilistesi');
+
+  // Refund endpoints
+  static String get iadeUrl => getFullUrl('/index.php?r=apimobil/iade');
+  static String get musteriUrunleriUrl => getFullUrl('/index.php?r=apimobil/musteriurunleri');
+  static String get iademusterileriUrl => getFullUrl('/index.php?r=apimobil/iademusterileri');
+
+  // Generic index.php base
+  static String get indexPhpBase => getFullUrl('/index.php');
 
   static final Dio dio = _createDio();
 

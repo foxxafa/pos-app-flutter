@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
-import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
 import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'dart:io';
 
@@ -33,8 +33,9 @@ class _ProductControlViewState extends State<ProductControlView> {
   }
 
   Future<void> _loadProducts() async {
-    final raw = await DatabaseHelper().getAll("Product");
-    final products = raw.map((e) => ProductModel.fromMap(e)).toList();
+    // ✅ Repository kullan (DatabaseHelper yerine)
+    final productRepository = Provider.of<ProductRepository>(context, listen: false);
+    final products = await productRepository.getAllProducts();
     setState(() {
       _allProducts = products;
       _filteredProducts = products.take(1000).toList();

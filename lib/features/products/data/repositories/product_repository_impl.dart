@@ -20,7 +20,8 @@ class ProductRepositoryImpl implements ProductRepository {
   @override
   Future<List<ProductModel>> getAllProducts() async {
     final db = await dbHelper.database;
-    final result = await db.query('products', orderBy: 'urunAdi ASC');
+    // Database table adı 'Product' (büyük P)
+    final result = await db.query('Product', orderBy: 'urunAdi ASC');
 
     return result.map((json) => ProductModel.fromMap(json)).toList();
   }

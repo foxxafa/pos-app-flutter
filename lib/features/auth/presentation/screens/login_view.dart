@@ -1,9 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:pos_app/features/auth/presentation/login_controller.dart';
 import 'package:pos_app/features/auth/presentation/providers/user_provider.dart';
-import 'package:pos_app/features/auth/domain/entities/login_model.dart';
 import 'package:pos_app/core/widgets/menu_view.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:provider/provider.dart';
@@ -79,68 +77,77 @@ Future<Map<String, dynamic>?> getLastLogin() async {
 }
 
 
-  void _login() async{
+  void _login() async {
     try {
-  final username = _usernameController.text;
-  final password = _passwordController.text;
-  
-    final controller = LoginController();
-    LoginModel? loginResult = await controller.postLogin(username, password);
-  
-  if (loginResult!=null) {
-    if (loginResult.status=="success") {
-  
-    //kolay erismek icin provider icine at
-    Provider.of<UserProvider>(context, listen: false).setUser(
-    username: username,
-    password: password,
-    apikey: loginResult.apikey!,
-    day: DateTime.now().day,
-  );
-  
-  //menu sayfaya git
-  Navigator.push(
-  context,
-  MaterialPageRoute(builder: (context) => const MenuView()),
-    );
-  
-    } else {
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text("Login Error#35"),
-      content: Text(loginResult.message),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text("Okay"),
-        )
-      ],
-    ),
-  );
+      final username = _usernameController.text.trim();
+      final password = _passwordController.text.trim();
+
+      // Validate input
+      if (username.isEmpty || password.isEmpty) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Validation Error"),
+            content: const Text("Please enter both username and password"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text("Okay"),
+              )
+            ],
+          ),
+        );
+        return;
+      }
+
+      // ✅ Use UserProvider.login() instead of LoginController
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+      print('🔑 Login attempt - Username: $username');
+
+      // Call repository-based login
+      final success = await userProvider.login(username, password);
+
+      if (success) {
+        print('🔑 ✅ Login successful');
+
+        // Navigate to MenuView
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const MenuView()),
+          );
+        }
+      } else {
+        print('🔑 ❌ Login failed: ${userProvider.errorMessage}');
+
+        // Show error dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text("Login Error"),
+              content: Text(userProvider.errorMessage ?? "Login failed. Please check your credentials."),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text("Okay"),
+                )
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('🔑 ❌ Login View Exception: $e');
+      print('🔑 ❌ Exception type: ${e.runtimeType}');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: Login failed - $e')),
+        );
+      }
     }
-  }else {
-  showDialog(
-    context: context,
-    builder: (_) => AlertDialog(
-      title: const Text("Connection Error#34"),
-      content: const Text("Please connect to the internet"),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text("Okay"),
-        )
-      ],
-    ),
-  );
-    }
-} on Exception catch (e) {
-  print('🔑 ❌ Login View Exception: $e');
-  print('🔑 ❌ Exception type: ${e.runtimeType}');
-  ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error#133: Login failed - $e')),
-    );
-}
   }
 
   @override

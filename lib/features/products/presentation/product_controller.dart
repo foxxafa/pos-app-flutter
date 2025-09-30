@@ -4,9 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/network/api_config.dart';
 
 class ProductController {
-  final String _baseUrl = 'https://test.rowhub.net/index.php';
 
 Future<List<ProductModel>?> getNewProduct(DateTime date) async {
   final formatter = DateFormat('dd.MM.yyyy HH:mm:ss');
@@ -29,7 +29,7 @@ Future<List<ProductModel>?> getNewProduct(DateTime date) async {
   }
 
   final Uri url = Uri.parse(
-    '$_baseUrl?r=apimobil/getnewproducts&time=$formattedDate',
+    '${ApiConfig.indexPhpBase}?r=apimobil/getnewproducts&time=$formattedDate',
   );
 
   // HTTP client with timeout and retry

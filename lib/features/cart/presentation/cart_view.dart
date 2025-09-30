@@ -4,8 +4,8 @@ import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/features/cart/presentation/cart_view2.dart';
 import 'package:pos_app/features/cart/presentation/cartsuggestion_view.dart';
-import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
+import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
@@ -85,8 +85,9 @@ class _CartViewState extends State<CartView> {
 
   // --- Product & Data Loading ---
   Future<void> _loadProducts() async {
-    final raw = await DatabaseHelper().getAll("Product");
-    final allProducts = raw.map((e) => ProductModel.fromMap(e)).toList();
+    // ✅ Repository kullan (DatabaseHelper yerine)
+    final productRepository = Provider.of<ProductRepository>(context, listen: false);
+    final allProducts = await productRepository.getAllProducts();
     final activeProducts = allProducts.where((p) => p.aktif == 1).toList();
 
     activeProducts.sort((a, b) {

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
+import 'package:pos_app/core/network/api_config.dart';
 
 class OrderController {
 
@@ -11,7 +12,7 @@ class OrderController {
     required String bearerToken, // Token opsiyonel parametre olarak eklendi
   }) async {
 
-    final url = Uri.parse("https://test.rowhub.net/index.php?r=apimobil/satis"); //eskisi apikasa*
+    final url = Uri.parse(ApiConfig.satisUrl); //eskisi apikasa*
 
 final body = jsonEncode({
   "fis": fisModel.toJson(),

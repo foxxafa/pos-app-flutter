@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
+import 'package:pos_app/core/network/api_config.dart';
 import 'package:provider/provider.dart';
 import 'package:pos_app/features/auth/presentation/providers/user_provider.dart';
 
@@ -12,14 +13,15 @@ class TahsilatController {
 String url;
 final normalizedMethod = method.trim().toLowerCase();
 
+// ✅ Use ApiConfig instead of hardcoded URLs
 if (normalizedMethod == "cash"|| normalizedMethod == "nakit") {
-  url = 'https://test.rowhub.net/index.php?r=apimobil/nakittahsilat';
+  url = ApiConfig.nakitTahsilatUrl;
 } else if (normalizedMethod == "cheque" || normalizedMethod == "cek" || normalizedMethod == "çek") {
-  url = 'https://test.rowhub.net/index.php?r=apimobil/cektahsilat';
+  url = ApiConfig.cekTahsilatUrl;
 } else if (normalizedMethod == "bank" || normalizedMethod == "banka") {
-  url = 'https://test.rowhub.net/index.php?r=apimobil/bankatahsilat';
+  url = ApiConfig.bankaTahsilatUrl;
 } else if (normalizedMethod == "credit card" || normalizedMethod == "kredikarti") {
-  url = 'https://test.rowhub.net/index.php?r=apimobil/kredikartitahsilat';
+  url = ApiConfig.krediKartiTahsilatUrl;
 } else {
   throw Exception("Geçersiz ödeme yöntemi: $method");
 }

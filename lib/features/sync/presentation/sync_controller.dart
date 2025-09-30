@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/network/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
@@ -153,8 +154,9 @@ class SyncController {
     final db = await dbHelper.database;
 
     // 1. API'den sadece refund yapılabilecek carikod'ları al
+    // ✅ Use ApiConfig instead of hardcoded URL
     final apiResponse = await http.get(
-      Uri.parse('https://test.rowhub.net/index.php?r=apimobil/iademusterileri'),
+      Uri.parse(ApiConfig.iademusterileriUrl),
     );
 
     if (apiResponse.statusCode != 200) {
