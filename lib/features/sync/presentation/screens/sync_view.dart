@@ -4,10 +4,12 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
-import 'package:pos_app/features/transactions/presentation/transaction_controller.dart';
+import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
+import 'package:pos_app/features/auth/presentation/providers/user_provider.dart';
 import 'package:pos_app/core/widgets/menu_view.dart';
+import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/local/database_helper.dart'; // Sizer import
 
@@ -284,6 +286,9 @@ class _SyncViewState extends State<SyncView> {
                         'tahsilatlar',
                       );
 
+                      final transactionRepository = Provider.of<TransactionRepository>(context, listen: false);
+                      final apiKey = Provider.of<UserProvider>(context, listen: false).apikey;
+
                       for (var record in records) {
                         final Map<String, dynamic> data = jsonDecode(
                           record['data'],
@@ -297,30 +302,28 @@ class _SyncViewState extends State<SyncView> {
                           username: data['username'],
                         );
 
-                       
-
-bool success=false;
-                        if (data['cekno']==null) {
-   success = await TahsilatController().sendTahsilat(
-    context,
-    tahsilat,
-    method,
-  );
-}else{
-   final cektahsilat = ChequeModel(
-                          tutar: (data['tutar'] as num).toDouble(),
-                          aciklama: data['aciklama'],
-                          carikod: data['carikod'],
-                          username: data['username'],
-                          cekno: data['cekno'],
-
-                        );
-   success = await TahsilatController().sendTahsilat(
-    context,
-tahsilat,
-    method,cheque_model: cektahsilat
-  );
-}
+                        bool success = false;
+                        if (data['cekno'] == null) {
+                          success = await transactionRepository.sendTahsilat(
+                            model: tahsilat,
+                            method: method,
+                            apiKey: apiKey,
+                          );
+                        } else {
+                          final cektahsilat = ChequeModel(
+                            tutar: (data['tutar'] as num).toDouble(),
+                            aciklama: data['aciklama'],
+                            carikod: data['carikod'],
+                            username: data['username'],
+                            cekno: data['cekno'],
+                          );
+                          success = await transactionRepository.sendTahsilat(
+                            model: tahsilat,
+                            method: method,
+                            apiKey: apiKey,
+                            chequeModel: cektahsilat,
+                          );
+                        }
 
                         if (success) {
                           await db.delete(

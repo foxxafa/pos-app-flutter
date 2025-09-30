@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
 import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
-import 'package:pos_app/features/transactions/presentation/transaction_controller.dart';
+import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
@@ -127,7 +127,14 @@ print("bakişyeee: $bakiye");
         (route) => false,
       );
     } else {
-      final success = await TahsilatController().sendTahsilat(context, tahsilat, method, cheque_model: tahsilatCheque);
+      final transactionRepository = Provider.of<TransactionRepository>(context, listen: false);
+      final apiKey = Provider.of<UserProvider>(context, listen: false).apikey;
+      final success = await transactionRepository.sendTahsilat(
+        model: tahsilat,
+        method: method,
+        apiKey: apiKey,
+        chequeModel: tahsilatCheque,
+      );
 
       if (success) {
         final activityRepository = Provider.of<ActivityRepository>(context, listen: false);

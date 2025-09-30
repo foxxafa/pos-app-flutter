@@ -4,6 +4,7 @@ import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/network/network_info.dart';
 import 'package:pos_app/core/network/api_config.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
+import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 
 class TransactionRepositoryImpl implements TransactionRepository {
@@ -814,6 +815,87 @@ class TransactionRepositoryImpl implements TransactionRepository {
       return -transactionAmount; // If customer not found, return negative transaction amount
     } catch (e) {
       throw Exception('Failed to calculate customer balance after transaction: $e');
+    }
+  }
+
+  @override
+  Future<bool> sendTahsilat({
+    required TahsilatModel model,
+    required String method,
+    required String apiKey,
+    ChequeModel? chequeModel,
+  }) async {
+    try {
+      final normalizedMethod = method.trim().toLowerCase();
+      String url;
+
+      // Determine URL based on payment method
+      if (normalizedMethod == "cash" || normalizedMethod == "nakit") {
+        url = ApiConfig.nakitTahsilatUrl;
+      } else if (normalizedMethod == "cheque" || normalizedMethod == "cek" || normalizedMethod == "çek") {
+        url = ApiConfig.cekTahsilatUrl;
+      } else if (normalizedMethod == "bank" || normalizedMethod == "banka") {
+        url = ApiConfig.bankaTahsilatUrl;
+      } else if (normalizedMethod == "credit card" || normalizedMethod == "kredikarti") {
+        url = ApiConfig.krediKartiTahsilatUrl;
+      } else {
+        throw Exception("Geçersiz ödeme yöntemi: $method");
+      }
+
+      // Use Dio instead of http
+      final response = await dio.post(
+        url,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+        ),
+        data: (method.toLowerCase() == "cheque" && chequeModel != null)
+            ? chequeModel.toJson()
+            : model.toJson(),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ Tahsilat başarılı: ${response.data}");
+        return true;
+      } else {
+        print("❌ Tahsilat başarısız: ${response.data}");
+        return false;
+      }
+    } catch (e) {
+      print("❌ Tahsilat hatası: $e");
+      return false;
+    }
+  }
+
+  @override
+  Future<bool> sendChequeTahsilat({
+    required ChequeModel chequeModel,
+    required String apiKey,
+  }) async {
+    try {
+      final response = await dio.post(
+        ApiConfig.cekTahsilatUrl,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+        ),
+        data: chequeModel.toJson(),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ Çek tahsilatı başarılı: ${response.data}");
+        return true;
+      } else {
+        print("❌ Çek tahsilatı başarısız: ${response.data}");
+        return false;
+      }
+    } catch (e) {
+      print("❌ Çek tahsilatı hatası: $e");
+      return false;
     }
   }
 

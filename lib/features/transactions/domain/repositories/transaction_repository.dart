@@ -1,5 +1,6 @@
 // lib/features/transactions/domain/repositories/transaction_repository.dart
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
+import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 
 abstract class TransactionRepository {
   /// Create new collection transaction
@@ -123,4 +124,19 @@ abstract class TransactionRepository {
 
   /// Calculate customer balance after transaction
   Future<double> calculateCustomerBalanceAfterTransaction(String carikod, double transactionAmount);
+
+  /// Send tahsilat (collection) to server
+  /// Returns true if successful, false otherwise
+  Future<bool> sendTahsilat({
+    required TahsilatModel model,
+    required String method,
+    required String apiKey,
+    ChequeModel? chequeModel,
+  });
+
+  /// Send cheque tahsilat to server
+  Future<bool> sendChequeTahsilat({
+    required ChequeModel chequeModel,
+    required String apiKey,
+  });
 }
