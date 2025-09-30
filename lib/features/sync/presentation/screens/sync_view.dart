@@ -4,6 +4,10 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
+import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
+import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
@@ -19,9 +23,20 @@ class SyncView extends StatefulWidget {
 }
 
 class _SyncViewState extends State<SyncView> {
-  final SyncService _syncService = SyncService();
+  late SyncService _syncService;
   bool _isLoading = false;
   String _message = '';
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncService = SyncService(
+      customerRepository: Provider.of<CustomerRepository>(context, listen: false),
+      orderRepository: Provider.of<OrderRepository>(context, listen: false),
+      productRepository: Provider.of<ProductRepository>(context, listen: false),
+      refundRepository: Provider.of<RefundRepository>(context, listen: false),
+    );
+  }
 
   Future<void> _handleCleanSync() async {
     setState(() {
@@ -333,8 +348,7 @@ class _SyncViewState extends State<SyncView> {
                           );
                         }
                       }
-                      SyncService syncService = SyncService();
-                      syncService.syncPendingSales();
+                      _syncService.syncPendingSales();
 
                       if (connectivityResult[0] == ConnectivityResult.none) {
                         ScaffoldMessenger.of(context).showSnackBar(

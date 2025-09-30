@@ -444,6 +444,16 @@ class SyncService {
       DatabaseHelper dbHelper = DatabaseHelper();
       Database db = await dbHelper.database;
 
+      // Create AppState table if not exists
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS AppState (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      ''');
+
       final result = await db.query(
         'AppState',
         where: 'key = ?',

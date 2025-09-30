@@ -222,6 +222,15 @@ class RefundRepositoryImpl implements RefundRepository {
     }
 
     final db = await _database;
+
+    // Create table if not exists
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS refund_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        data TEXT
+      )
+    ''');
+
     final rawList = await db.query('refund_queue');
 
     for (var row in rawList) {

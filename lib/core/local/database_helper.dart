@@ -203,6 +203,11 @@ class DatabaseHelper {
         method TEXT
       )
     ''');
+
+    // NOTE: AppState and refund_queue tables are created dynamically
+    // at runtime in their respective services (sync_service.dart and
+    // refund_repository_impl.dart) using CREATE TABLE IF NOT EXISTS.
+    // This maintains backward compatibility with existing databases.
   }
 
   // ============= CRUD Operations =============

@@ -7,6 +7,10 @@ import 'package:pos_app/features/reports/presentation/screens/report_view.dart';
 import 'package:pos_app/features/orders/presentation/screens/sales_view.dart';
 import 'package:pos_app/features/sync/presentation/screens/sync_view.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
+import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
+import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -20,11 +24,23 @@ class MenuView extends StatefulWidget {
 
 class _MenuViewState extends State<MenuView> {
   String _userName = '...';
+  late SyncService _syncService;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncService = SyncService(
+      customerRepository: Provider.of<CustomerRepository>(context, listen: false),
+      orderRepository: Provider.of<OrderRepository>(context, listen: false),
+      productRepository: Provider.of<ProductRepository>(context, listen: false),
+      refundRepository: Provider.of<RefundRepository>(context, listen: false),
+    );
     _checkPendingImageDownloads();
   }
 
@@ -40,8 +56,7 @@ class _MenuViewState extends State<MenuView> {
   // Yarım kalan resim indirmelerini kontrol et
   Future<void> _checkPendingImageDownloads() async {
     try {
-      final syncService = SyncService();
-      await syncService.checkAndResumeImageDownload();
+      await _syncService.checkAndResumeImageDownload();
     } catch (e) {
       print('⚠️ Resim indirme kontrol hatası: $e');
     }
