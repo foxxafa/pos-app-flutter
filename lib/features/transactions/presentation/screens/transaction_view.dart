@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/transactions/presentation/transaction_controller.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
@@ -101,7 +101,8 @@ print("fisnooooooooo $_documentNo");
 
       // Database açık kalacak - App Inspector için
 
-      await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
+      final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+      await activityRepository.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -129,7 +130,8 @@ print("bakişyeee: $bakiye");
       final success = await TahsilatController().sendTahsilat(context, tahsilat, method, cheque_model: tahsilatCheque);
 
       if (success) {
-        await RecentActivityController.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
+        final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+      await activityRepository.addActivity("Collected \nCode:${tahsilat.carikod} \nAmount:${tahsilat.tutar} \nDesc:${tahsilat.aciklama} \nPayment:$_selectedPaymentMethod");
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

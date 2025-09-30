@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/sync/presentation/sync_controller.dart';
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
@@ -1040,7 +1040,8 @@ class _CartView2State extends State<CartView2> {
                                 .map((item) => item.toFormattedString())
                                 .join('\n----------------------\n');
 
-                            await RecentActivityController.addActivity(
+                            final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+                            await activityRepository.addActivity(
                               "Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString",
                             );
                             print("Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString");

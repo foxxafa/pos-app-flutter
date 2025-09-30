@@ -31,4 +31,9 @@ abstract class ProductRepository {
 
   /// Get low stock products
   Future<List<ProductModel>> getLowStockProducts({int threshold = 10});
+
+  // ============= Sync Methods =============
+
+  /// Get new products from server since specific date
+  Future<List<ProductModel>?> getNewProduct(DateTime date);
 }

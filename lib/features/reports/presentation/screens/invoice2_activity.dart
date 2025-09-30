@@ -2,7 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:pos_app/features/refunds/presentation/refundlist_controller.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/orders/presentation/providers/orderinfo_provider.dart';
@@ -55,9 +55,9 @@ orderInfoProvider.paymentDate=formattedDate;
   }
 
    _loadRefunds(String cariKod) async {
-    
-    RefundListController refundListController = RefundListController();
-    refunds = await refundListController.fetchRefunds(cariKod);
+    final refundRepository = Provider.of<RefundRepository>(context, listen: false);
+
+    refunds = await refundRepository.fetchRefunds(cariKod);
 
     // refund urunAdi'larını sayfa içinde al
       _refundProductNames =

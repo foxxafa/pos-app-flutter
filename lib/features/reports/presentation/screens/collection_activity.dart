@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/transactions/presentation/screens/transaction_view.dart';
@@ -29,7 +29,8 @@ class _CollectionActivityState extends State<CollectionActivity> {
   Future<void> _loadCollectionActivities() async {
     setState(() => _isLoading = true);
 
-    final allActivities = await RecentActivityController.loadActivities();
+    final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+    final allActivities = await activityRepository.loadActivities();
     final customer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
     final customerCode = customer?.kod;
 

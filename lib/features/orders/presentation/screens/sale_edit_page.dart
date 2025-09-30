@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
+import 'package:provider/provider.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:sizer/sizer.dart';
 
@@ -259,7 +260,8 @@ class _SaleEditPageState extends State<SaleEditPage> {
                 icon: Icon(Icons.save, size: 25.sp),
                 onPressed: () async {
                   await _saveToDb();
-                  await RecentActivityController.updateActivityTotal(
+                  final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+                  await activityRepository.updateActivityTotal(
   fisNo: widget.orderNo,
   newTotal: calculateTotal().toStringAsFixed(2),
 );

@@ -1,8 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:pos_app/features/refunds/presentation/refundlist_controller.dart';
-import 'package:pos_app/features/refunds/presentation/refundsend_controller.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
@@ -58,9 +57,10 @@ List<String> urunAdlariUnique=[];
     loadProducts();
   }
 Future<void> fetchData() async {
+  final refundRepository = Provider.of<RefundRepository>(context, listen: false);
   final musteriProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
   final carikod = musteriProvider.selectedCustomer?.kod ?? '';
-  final fetched = await RefundListController().fetchRefunds(carikod);
+  final fetched = await refundRepository.fetchRefunds(carikod);
   print(fetched);
   setState(() {
     refunds = fetched;
@@ -156,6 +156,7 @@ void updateTotal() {
   }
 
   void sendRefundItems() async {
+    final refundRepository = Provider.of<RefundRepository>(context, listen: false);
     final musteriProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
     String kod = musteriProvider.selectedCustomer?.kod ?? "TURAN";
     final selectedItems = _products.where((product) {
@@ -195,7 +196,7 @@ void updateTotal() {
 
     RefundSendModel refundSendModel = RefundSendModel(fis: fisModel, satirlar: selectedItems);
     if (selectedItems.isNotEmpty) {
-      RefundSendController().sendRefund(refundSendModel);
+      await refundRepository.sendRefund(refundSendModel);
     }
   }
 

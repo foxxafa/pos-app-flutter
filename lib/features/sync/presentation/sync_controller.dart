@@ -9,9 +9,8 @@ import 'package:intl/intl.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
-import 'package:pos_app/features/products/presentation/product_controller.dart';
-import 'package:pos_app/features/refunds/presentation/refundlist_controller.dart';
-import 'package:pos_app/features/refunds/presentation/refundsend_controller.dart';
+import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
@@ -21,11 +20,15 @@ import 'package:path_provider/path_provider.dart';
 class SyncController {
   final CustomerRepository? customerRepository;
   final OrderRepository? orderRepository;
+  final ProductRepository? productRepository;
+  final RefundRepository? refundRepository;
   late final CustomerBalanceController balancecontroller;
 
   SyncController({
     this.customerRepository,
     this.orderRepository,
+    this.productRepository,
+    this.refundRepository,
   }) {
     balancecontroller = CustomerBalanceController(repository: customerRepository);
   }
@@ -195,41 +198,16 @@ class SyncController {
     // 4. Her uygun müşteri için refund senkronizasyonu yap
     for (final customer in filteredCustomers) {
       final cariKod = customer['kod'].toString().trim();
-      final musteriId = customer['id'].toString();
 
       print("🔄 Senkronize ediliyor: $cariKod");
 
       try {
-        final refunds = await RefundListController().fetchRefunds(cariKod);
-
-        // Önce sadece bu müşteriye ait eski refund kayıtlarını sil
-        await db.delete(
-          'Refunds',
-          where: 'musteriId = ?',
-          whereArgs: [musteriId],
-        );
-
-        // Yeni refund verilerini batch olarak ekle
-        if (refunds.isNotEmpty) {
-          final batch = db.batch();
-          for (final refund in refunds) {
-            batch.insert('Refunds', {
-            'fisNo': refund.fisNo,
-            'musteriId': refund.musteriId,
-            'fisTarihi': refund.fisTarihi.toIso8601String(),
-            'unvan': refund.unvan,
-            'stokKodu': refund.stokKodu,
-            'urunAdi': refund.urunAdi,
-            'urunBarcode': refund.urunBarcode,
-            'miktar': refund.miktar,
-            'birim': refund.birim,
-            'birimFiyat': refund.birimFiyat,
-            });
-          }
-          await batch.commit();
+        if (refundRepository != null) {
+          final refunds = await refundRepository!.fetchRefunds(cariKod);
+          print('✅ ${refunds.length} refund senkronize edildi: $cariKod');
+        } else {
+          print('⚠️ RefundRepository not provided');
         }
-
-        print('✅ ${refunds.length} refund senkronize edildi: $cariKod');
       } catch (e) {
         print('⛔ $cariKod refund senkronizasyonu başarısız: $e');
       }
@@ -237,15 +215,26 @@ class SyncController {
   }
 
   Future<void> syncPendingRefunds() async {
-    await RefundSendController().sendPendingRefunds();
+    if (refundRepository != null) {
+      await refundRepository!.sendPendingRefunds();
+    } else {
+      print('⚠️ RefundRepository not provided');
+    }
   }
 
   //SYNC PRODUCTS
   //SYNC PRODUCTS
   //SYNC PRODUCTS
   Future<void> SyncProducts(DateTime lastUpdateDate) async {
-    final controller = ProductController();
-    final products = await controller.getNewProduct(lastUpdateDate);
+    List<ProductModel>? products;
+
+    if (productRepository != null) {
+      products = await productRepository!.getNewProduct(lastUpdateDate);
+    } else {
+      print('⚠️ ProductRepository not provided');
+      return;
+    }
+
     print("✅ ${products?.length ?? 0} ürün alındı");
 
     // Resim indirme kaldırıldı - sync sonrasında yapılacak

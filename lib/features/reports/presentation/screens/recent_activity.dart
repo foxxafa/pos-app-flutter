@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
+import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 
 class RecentActivityView extends StatefulWidget {
@@ -19,7 +20,8 @@ class _RecentActivityViewState extends State<RecentActivityView> {
   }
 
   Future<void> _load() async {
-    final activities = await RecentActivityController.loadActivities();
+    final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+    final activities = await activityRepository.loadActivities();
     setState(() => _activities = activities);
   }
 

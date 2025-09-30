@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/refunds/presentation/screens/refundlist2_view.dart';
 import 'package:provider/provider.dart';
@@ -22,7 +22,8 @@ class _RefundActivityViewState extends State<RefundActivityView> {
   }
 
   Future<void> _loadRefundActivities() async {
-    final allActivities = await RecentActivityController.loadActivities();
+    final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+    final allActivities = await activityRepository.loadActivities();
     final customer =
         Provider.of<SalesCustomerProvider>(
           context,

@@ -17,6 +17,8 @@ import 'package:pos_app/features/customer/domain/repositories/customer_repositor
 import 'package:pos_app/features/cart/domain/repositories/cart_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/sync/domain/repositories/sync_repository.dart';
 
 // Repository implementations
@@ -26,6 +28,8 @@ import 'package:pos_app/features/customer/data/repositories/customer_repository_
 import 'package:pos_app/features/cart/data/repositories/cart_repository_impl.dart';
 import 'package:pos_app/features/orders/data/repositories/order_repository_impl.dart';
 import 'package:pos_app/features/transactions/data/repositories/transaction_repository_impl.dart';
+import 'package:pos_app/features/refunds/data/repositories/refund_repository_impl.dart';
+import 'package:pos_app/features/reports/data/repositories/activity_repository_impl.dart';
 import 'package:pos_app/features/sync/data/repositories/sync_repository_impl.dart';
 
 // State providers
@@ -111,6 +115,16 @@ void main() async {
               networkInfo: context.read<NetworkInfo>(),
               dio: context.read<Dio>(),
             ),
+          ),
+          Provider<RefundRepository>(
+            create: (context) => RefundRepositoryImpl(
+              dbHelper: context.read<DatabaseHelper>(),
+              networkInfo: context.read<NetworkInfo>(),
+              dio: context.read<Dio>(),
+            ),
+          ),
+          Provider<ActivityRepository>(
+            create: (_) => ActivityRepositoryImpl(),
           ),
           Provider<SyncRepository>(
             create: (context) => SyncRepositoryImpl(

@@ -4,8 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
-import 'package:pos_app/features/reports/presentation/recentactivity_controller.dart';
-import 'package:pos_app/features/refunds/presentation/refundsend_controller.dart';
+import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
+import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/features/refunds/presentation/providers/cart_provider_refund.dart';
@@ -26,15 +26,18 @@ class _RefundCartView2State extends State<RefundCartView2> {
   // final TextEditingController _priceController = TextEditingController(); // Kullanılmıyor
 
   void sendRefundItems(
+    BuildContext context,
     RefundFisModel fisModel,
     List<RefundItemModel> selectedItems,
   ) async {
+    final refundRepository = Provider.of<RefundRepository>(context, listen: false);
+
     RefundSendModel refundSendModel = RefundSendModel(
       fis: fisModel,
       satirlar: selectedItems,
     );
 
-    RefundSendController().sendRefund(refundSendModel);
+    await refundRepository.sendRefund(refundSendModel);
   }
 
   List<String> _iadeNedenleri = [
@@ -833,14 +836,15 @@ class _RefundCartView2State extends State<RefundCartView2> {
                           );
                           print('Toplam Tutar: $toplamTutare');
                           fisModelCopy.toplamtutar = toplamTutare;
-                          sendRefundItems(widget.fisModel, refundList);
+                          sendRefundItems(context, widget.fisModel, refundList);
                           cartProvider.items.clear();
 
                           ScaffoldMessenger.of(
                             context,
                           ).showSnackBar(SnackBar(content: Text('Returned')));
 
-                          await RecentActivityController.addActivity(
+                          final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+                          await activityRepository.addActivity(
                             "Return Receipt \n${fisModelCopy.toFormattedString()} \n${cartItems.map((item) => item.toFormattedString()).join('\n-----------------\n')}",
                           );
 
