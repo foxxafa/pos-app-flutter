@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:pos_app/features/sync/presentation/sync_controller.dart';
+import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/features/transactions/presentation/transaction_controller.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
 import 'package:pos_app/features/transactions/domain/entities/transaction_model.dart';
@@ -17,7 +17,7 @@ class SyncView extends StatefulWidget {
 }
 
 class _SyncViewState extends State<SyncView> {
-  final SyncController _syncController = SyncController();
+  final SyncService _syncService = SyncService();
   bool _isLoading = false;
   String _message = '';
 
@@ -31,11 +31,11 @@ class _SyncViewState extends State<SyncView> {
 
       
 
-    await _syncController.cleanSync();
-          await _syncController.SyncAllRefunds();
+    await _syncService.cleanSync();
+          await _syncService.SyncAllRefunds();
 
 
-     // await _syncController.cleanSync();
+     // await _syncService.cleanSync();
       print("refundsssssssssss");
 
     } on SocketException {
@@ -95,9 +95,9 @@ class _SyncViewState extends State<SyncView> {
 
     try {
 
-          await _syncController.updateSync();
-      await _syncController.syncPendingRefunds();
-      await _syncController.SyncAllRefunds();
+          await _syncService.updateSync();
+      await _syncService.syncPendingRefunds();
+      await _syncService.SyncAllRefunds();
  
   
   
@@ -184,14 +184,14 @@ class _SyncViewState extends State<SyncView> {
                 //           ? null
                 //           : () async {
                 //             setState(() => _isLoading = true);
-                //             await _syncController.SyncAllRefunds();
+                //             await _syncService.SyncAllRefunds();
                 //             setState(() => _isLoading = false);
                 //           },
                 //   child: Text("Sync Refunds"),
                 // ),
 //                 ElevatedButton(
 //   onPressed: () async {
-//     await _syncController.syncPendingRefunds();
+//     await _syncService.syncPendingRefunds();
 //   },
 //   child: Text("Send pending refunds"),
 // ),
@@ -253,8 +253,8 @@ class _SyncViewState extends State<SyncView> {
                 //         ),
                 //       );
                 //     } else {
-                //       SyncController syncController = SyncController();
-                //       syncController.syncPendingSales();
+                //       SyncService syncService = SyncService();
+                //       syncService.syncPendingSales();
                 //       ScaffoldMessenger.of(context).showSnackBar(
                 //         const SnackBar(content: Text('Orders sent.')),
                 //       );
@@ -330,8 +330,8 @@ tahsilat,
                           );
                         }
                       }
-                      SyncController syncController = SyncController();
-                      syncController.syncPendingSales();
+                      SyncService syncService = SyncService();
+                      syncService.syncPendingSales();
 
                       if (connectivityResult[0] == ConnectivityResult.none) {
                         ScaffoldMessenger.of(context).showSnackBar(

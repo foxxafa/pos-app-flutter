@@ -6,7 +6,7 @@ import 'package:pos_app/features/cart/presentation/cartsavedview.dart';
 import 'package:pos_app/features/reports/presentation/screens/report_view.dart';
 import 'package:pos_app/features/orders/presentation/screens/sales_view.dart';
 import 'package:pos_app/features/sync/presentation/screens/sync_view.dart';
-import 'package:pos_app/features/sync/presentation/sync_controller.dart';
+import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -40,8 +40,8 @@ class _MenuViewState extends State<MenuView> {
   // Yarım kalan resim indirmelerini kontrol et
   Future<void> _checkPendingImageDownloads() async {
     try {
-      final syncController = SyncController();
-      await syncController.checkAndResumeImageDownload();
+      final syncService = SyncService();
+      await syncService.checkAndResumeImageDownload();
     } catch (e) {
       print('⚠️ Resim indirme kontrol hatası: $e');
     }

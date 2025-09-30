@@ -8,7 +8,7 @@ import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
-import 'package:pos_app/features/sync/presentation/sync_controller.dart';
+import 'package:pos_app/core/sync/sync_service.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:easy_localization/easy_localization.dart';
@@ -101,7 +101,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
     _imageDownloadTimer?.cancel();
     _imageDownloadTimer = Timer(const Duration(milliseconds: 500), () {
       if (mounted) {
-        SyncController.downloadSearchResultImages(products, onImagesDownloaded: () {
+        SyncService.downloadSearchResultImages(products, onImagesDownloaded: () {
           if (mounted) {
             setState(() {
               _generateImageFutures(products, forceUpdate: true);

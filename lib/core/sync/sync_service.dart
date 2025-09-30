@@ -1,3 +1,4 @@
+// lib/core/sync/sync_service.dart
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,14 +18,16 @@ import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart'
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 
-class SyncController {
+/// Core synchronization service that coordinates multiple repositories
+/// Handles data sync, image downloads, and pending operations
+class SyncService {
   final CustomerRepository? customerRepository;
   final OrderRepository? orderRepository;
   final ProductRepository? productRepository;
   final RefundRepository? refundRepository;
   late final CustomerBalanceController balancecontroller;
 
-  SyncController({
+  SyncService({
     this.customerRepository,
     this.orderRepository,
     this.productRepository,
@@ -33,7 +36,6 @@ class SyncController {
     balancecontroller = CustomerBalanceController(repository: customerRepository);
   }
 
-  // CLEAN SYNC
   // CLEAN SYNC
   cleanSync() async {
     print('🔄 Clean Sync başlatılıyor...');
@@ -99,7 +101,6 @@ class SyncController {
   }
 
   //UPDATE SYNC
-  //UPDATE SYNC
   updateSync() async {
     await balancecontroller.fetchAndStoreCustomers();
     await syncPendingRefunds();
@@ -145,21 +146,11 @@ class SyncController {
 
   //SYNC CUSTOMERS - DEVRE DIŞI (Customer tablosu kaldırıldı)
   //SYNC CUSTOMERS - ARTİK CUSTOMERBALANCE KULLANILIYOR
-  //SYNC CUSTOMERS
   Future<void> SyncCustomers(DateTime lastupdatedate) async {
     // Bu fonksiyon devre dışı - Customer tablosu kaldırıldı
     // Artık sadece CustomerBalance kullanılıyor (balancecontroller.fetchAndStoreCustomers() ile)
     print('SyncCustomers devre dışı - CustomerBalance kullanılıyor');
     return;
-
-    // ESKI KOD - KULLANILMIYOR
-    /*
-    final controller = CustomerController();
-    final customers = await controller.getNewCustomer(lastupdatedate);
-    DatabaseHelper dbHelper = DatabaseHelper();
-    Database db = await dbHelper.database;
-    // ... eski Customer tablo işlemleri ...
-    */
   }
 
   Future<void> SyncAllRefunds() async {
@@ -167,7 +158,6 @@ class SyncController {
     final db = await dbHelper.database;
 
     // 1. API'den sadece refund yapılabilecek carikod'ları al
-    // ✅ Use ApiConfig instead of hardcoded URL
     final apiResponse = await http.get(
       Uri.parse(ApiConfig.iademusterileriUrl),
     );
@@ -222,8 +212,6 @@ class SyncController {
     }
   }
 
-  //SYNC PRODUCTS
-  //SYNC PRODUCTS
   //SYNC PRODUCTS
   Future<void> SyncProducts(DateTime lastUpdateDate) async {
     List<ProductModel>? products;
@@ -292,9 +280,6 @@ class SyncController {
       print('📦 ${products.length} ürün veritabanına yazılıyor...');
       await batch.commit(noResult: true);
       print('✅ Ürün veritabanı yazma tamamlandı');
-
-      //List<Map> list = await db.query('Product');
-      //print('=== Products in database: ${list.length} $list===');
     }
   }
 
@@ -377,7 +362,6 @@ class SyncController {
     }
   }
 
-  // GET LAST UPDATE TIME
   // GET LAST UPDATE TIME
   Future<DateTime?> getLastUpdateTime(Database db) async {
     final List<Map<String, dynamic>> result = await db.query(

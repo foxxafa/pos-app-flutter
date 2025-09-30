@@ -10,7 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
-import 'package:pos_app/features/sync/presentation/sync_controller.dart';
+import 'package:pos_app/core/sync/sync_service.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
@@ -169,7 +169,7 @@ class _CartViewState extends State<CartView> {
     _imageDownloadTimer?.cancel();
     _imageDownloadTimer = Timer(const Duration(milliseconds: 500), () {
       if (_filteredProducts.isNotEmpty && mounted) {
-        SyncController.downloadSearchResultImages(_filteredProducts, onImagesDownloaded: () {
+        SyncService.downloadSearchResultImages(_filteredProducts, onImagesDownloaded: () {
           if (mounted) {
             setState(() {
               _generateImageFutures(_filteredProducts, forceUpdate: true);

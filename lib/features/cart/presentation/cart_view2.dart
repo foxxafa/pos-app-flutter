@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
 import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
-import 'package:pos_app/features/sync/presentation/sync_controller.dart';
+import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
@@ -103,7 +103,7 @@ class _CartView2State extends State<CartView2> {
     _imageDownloadTimer?.cancel();
     _imageDownloadTimer = Timer(Duration(milliseconds: 500), () {
       if (mounted) {
-        SyncController.downloadCartItemImages(items, onImagesDownloaded: () {
+        SyncService.downloadCartItemImages(items, onImagesDownloaded: () {
           if (mounted) {
             setState(() {
               _generateImageFutures(items, forceUpdate: true);
