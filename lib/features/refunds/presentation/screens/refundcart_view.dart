@@ -1404,7 +1404,7 @@ Future<String?> _loadImage(String? imsrc) async {
                                                   _quantityMap[key] =
                                                       _quantityMap[key]! + 1;
                                                 });
-          
+
                                                 final provider =
                                                     Provider.of<RCartProvider>(
                                                       context,
@@ -1418,34 +1418,42 @@ Future<String?> _loadImage(String? imsrc) async {
                                                     customerProvider
                                                         .selectedCustomer!
                                                         .kod!;
+
+                                                // Refund listesinden orijinal fiyatı al
+                                                final matchingRefunds = widget.refunds.where(
+                                                  (r) => r.urunAdi == product.urunAdi,
+                                                ).toList()..sort(
+                                                  (a, b) => b.fisTarihi.compareTo(a.fisTarihi),
+                                                );
+                                                final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
+
+                                                final birimTipi = provider.getBirimTipi(product.stokKodu);
+                                                double birimFiyat;
+                                                int iskonto = _iskontoMap[key] ?? 0;
+
+                                                if (latestRefund != null) {
+                                                  // Refund varsa, orijinal fiyatı kullan
+                                                  birimFiyat = latestRefund.birimFiyat;
+                                                  iskonto = latestRefund.iskonto;
+                                                } else {
+                                                  // Refund yoksa, ürün fiyatını kullan
+                                                  birimFiyat = isBox
+                                                      ? double.tryParse(product.kutuFiyati.toString()) ?? 0
+                                                      : double.tryParse(product.adetFiyati.toString()) ?? 0;
+                                                }
+
                                                 provider.addOrUpdateItem(
                                                   urunAdi: product.urunAdi,
                                                   adetFiyati: product.adetFiyati,
                                                   kutuFiyati: product.kutuFiyati,
                                                   stokKodu: key,
                                                   vat: product.vat,
-          
-                                                  birimFiyat:
-                                                      isBox
-                                                          ? double.tryParse(
-                                                                product.kutuFiyati
-                                                                    .toString(),
-                                                              ) ??
-                                                              0
-                                                          : double.tryParse(
-                                                                product.adetFiyati
-                                                                    .toString(),
-                                                              ) ??
-                                                              0,
+                                                  birimFiyat: birimFiyat,
                                                   imsrc: product.imsrc,
-                                                  urunBarcode:
-                                                      product.barcode1,
+                                                  urunBarcode: product.barcode1,
                                                   miktar: 1,
-                                                  iskonto: _iskontoMap[key] ?? 0,
-                                                  birimTipi: provider
-                                                      .getBirimTipi(
-                                                        product.stokKodu,
-                                                      ),
+                                                  iskonto: iskonto,
+                                                  birimTipi: birimTipi,
                                                 );
                                               },
                                             ),

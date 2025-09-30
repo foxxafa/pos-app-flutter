@@ -244,12 +244,9 @@ class RefundRepositoryImpl implements RefundRepository {
           fistarihi: decoded['fis']['Fistarihi'],
           musteriId: decoded['fis']['MusteriId'],
           toplamtutar: decoded['fis']['Toplamtutar'],
-          odemeTuru: decoded['fis']['OdemeTuru'],
-          nakitOdeme: decoded['fis']['NakitOdeme'],
-          kartOdeme: decoded['fis']['KartOdeme'],
-          aciklama: decoded['fis']['aciklama'],
-          status: decoded['fis']['Status'],
-          iadeNedeni: decoded['fis']['IadeNedeni'],
+          aciklama: decoded['fis']['aciklama'] ?? '',
+          status: decoded['fis']['Status'] ?? 2,
+          iadeNedeni: decoded['fis']['IadeNedeni'] ?? '',
         );
 
         final satirlar = (decoded['satirlar'] as List).map((item) {

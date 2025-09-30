@@ -15,12 +15,9 @@ class RefundFisModel {
   final String fistarihi;
   final String musteriId;
   double toplamtutar;
-  final String odemeTuru;
-  final String nakitOdeme;
-  final String kartOdeme;
   final String aciklama;
   final int status;
-  final String iadeNedeni; // 🆕 Yeni alan
+  final String iadeNedeni;
 
   RefundFisModel({
     required this.fisNo,
@@ -28,11 +25,8 @@ class RefundFisModel {
     required this.musteriId,
     required this.toplamtutar,
     this.aciklama = '',
-    this.odemeTuru = '',
-    this.nakitOdeme = '',
-    this.kartOdeme = '',
     this.status = 2,
-    this.iadeNedeni = '', // 🆕 Varsayılan boş
+    this.iadeNedeni = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -40,12 +34,9 @@ class RefundFisModel {
         "Fistarihi": fistarihi,
         "MusteriId": musteriId,
         "Toplamtutar": toplamtutar,
-        "OdemeTuru": odemeTuru,
-        "NakitOdeme": nakitOdeme,
-        "KartOdeme": kartOdeme,
         "aciklama": aciklama,
         "Status": status,
-        "IadeNedeni": iadeNedeni, // 🆕 JSON çıktısına eklendi
+        "IadeNedeni": iadeNedeni,
       };
 }
 
@@ -56,9 +47,6 @@ No           : $fisNo
 Date         : $fistarihi
 Customer ID  : $musteriId
 Total Amount : $toplamtutar
-Payment Type : $odemeTuru
-Cash Paid    : $nakitOdeme
-Card Paid    : $kartOdeme
 Description  : $aciklama
 Return Reason: $iadeNedeni
 Status       : $status

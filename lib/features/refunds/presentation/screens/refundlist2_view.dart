@@ -188,9 +188,6 @@ void updateTotal() {
       fistarihi: DateFormat('dd.MM.yyyy').format(_selectedDate),
       musteriId: kod,
       toplamtutar: toplam,
-      odemeTuru: "null",
-      nakitOdeme: "null",
-      kartOdeme: "null",
       status: 1,
     );
 
@@ -344,9 +341,6 @@ Divider(),
       fistarihi: DateFormat('dd.MM.yyyy').format(_selectedDate),
       musteriId: musteri!.kod!,
       toplamtutar: toplam,
-      odemeTuru: "null",
-      nakitOdeme: "null",
-      kartOdeme: "null",
       status: 1,
     );
       Navigator.push(
