@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/features/customer/domain/entities/customer_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
@@ -77,11 +77,14 @@ class _SalesViewState extends State<SalesView> {
       listen: false,
     ).setCustomer(selectedCustomer);
 
-    final controller = CustomerBalanceController();
-    final customer = await controller.getCustomerByUnvan(
+    final customerRepository = Provider.of<CustomerRepository>(
+      context,
+      listen: false,
+    );
+    final customer = await customerRepository.getCustomerByUnvan(
       selectedCustomer.unvan ?? "TURAN",
     );
-    final bakiye = customer?.bakiye ?? "0.0";
+    final bakiye = customer?['bakiye']?.toString() ?? "0.0";
 
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final cartRefundProvider = Provider.of<RCartProvider>(

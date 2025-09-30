@@ -7,7 +7,6 @@ import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/network/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
-import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
@@ -25,16 +24,13 @@ class SyncService {
   final OrderRepository? orderRepository;
   final ProductRepository? productRepository;
   final RefundRepository? refundRepository;
-  late final CustomerBalanceController balancecontroller;
 
   SyncService({
     this.customerRepository,
     this.orderRepository,
     this.productRepository,
     this.refundRepository,
-  }) {
-    balancecontroller = CustomerBalanceController(repository: customerRepository);
-  }
+  });
 
   // CLEAN SYNC
   cleanSync() async {
@@ -43,7 +39,9 @@ class SyncService {
     // Önce yarım kalan resim indirme işlemi var mı kontrol et
     await checkAndResumeImageDownload();
 
-    await balancecontroller.fetchAndStoreCustomers();
+    if (customerRepository != null) {
+      await customerRepository!.fetchAndStoreCustomers();
+    }
     await syncPendingRefunds();
     //open database
     DatabaseHelper dbHelper = DatabaseHelper();
@@ -102,7 +100,9 @@ class SyncService {
 
   //UPDATE SYNC
   updateSync() async {
-    await balancecontroller.fetchAndStoreCustomers();
+    if (customerRepository != null) {
+      await customerRepository!.fetchAndStoreCustomers();
+    }
     await syncPendingRefunds();
     //update sonu son update saati güncelleme
     DatabaseHelper dbHelper = DatabaseHelper();

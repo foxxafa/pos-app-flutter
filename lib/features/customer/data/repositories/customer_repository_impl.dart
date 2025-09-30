@@ -1,5 +1,6 @@
 // lib/features/customer/data/repositories/customer_repository_impl.dart
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/network/network_info.dart';
@@ -486,6 +487,60 @@ class CustomerRepositoryImpl implements CustomerRepository {
       print('CustomerBalance tablosu temizlendi.');
     } catch (e) {
       throw Exception('Failed to clear customer balances: $e');
+    }
+  }
+
+  @override
+  Future<List<CustomerModel>?> getNewCustomer(DateTime date) async {
+    if (!await networkInfo.isConnected) {
+      print('❌ No internet connection');
+      return null;
+    }
+
+    try {
+      final formatter = DateFormat('dd.MM.yyyy HH:mm:ss');
+      String formattedDate = formatter.format(date);
+
+      final db = await dbHelper.database;
+      List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
+
+      if (result.isEmpty) {
+        print('❌ No API Key found.');
+        return null;
+      }
+
+      String savedApiKey = result.first['apikey'];
+      final url = '${ApiConfig.indexPhpBase}?r=apimobil/getnewcustomer&time=$formattedDate';
+
+      print('🔄 Fetching new customers from: $url');
+
+      final response = await dio.get(
+        url,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $savedApiKey',
+            'Accept': 'application/json',
+          },
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        print('✅ Response received: $data');
+
+        if (data['status'] == 1) {
+          final List customersJson = data['customers'];
+          final customers = customersJson.map((json) => CustomerModel.fromJson(json)).toList();
+          return customers;
+        }
+        return null;
+      } else {
+        print('❌ Error: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('❌ getNewCustomer error: $e');
+      return null;
     }
   }
 }

@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
@@ -856,11 +856,14 @@ class _RefundCartView2State extends State<RefundCartView2> {
                                 context,
                                 listen: false,
                               ).selectedCustomer;
-                          final controller = CustomerBalanceController();
-                          final customer = await controller.getCustomerByUnvan(
+                          final customerRepository = Provider.of<CustomerRepository>(
+                            context,
+                            listen: false,
+                          );
+                          final customer = await customerRepository.getCustomerByUnvan(
                             selectedCustomer!.kod ?? "TURAN",
                           );
-                          String bakiye = customer?.bakiye ?? "0.0";
+                          String bakiye = customer?['bakiye']?.toString() ?? "0.0";
                           print("bakişyeee: $bakiye");
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(

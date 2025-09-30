@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
@@ -1076,12 +1076,15 @@ class _CartView2State extends State<CartView2> {
                                   context,
                                   listen: false,
                                 ).selectedCustomer;
-                            final controller = CustomerBalanceController();
-                            final customer = await controller
+                            final customerRepository = Provider.of<CustomerRepository>(
+                              context,
+                              listen: false,
+                            );
+                            final customer = await customerRepository
                                 .getCustomerByUnvan(
                                   selectedCustomer!.kod ?? "TURAN",
                                 );
-                            String bakiye = customer?.bakiye ?? "0.0";
+                            String bakiye = customer?['bakiye']?.toString() ?? "0.0";
                             print("bakişyeee: $bakiye");
                             Navigator.of(context).pushAndRemoveUntil(
                               MaterialPageRoute(

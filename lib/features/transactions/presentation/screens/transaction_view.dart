@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
@@ -118,9 +118,9 @@ print("fisnooooooooo $_documentNo");
         ),
       );
     final selectedCustomer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
-      final controller = CustomerBalanceController();
-    final customer = await controller.getCustomerByUnvan(selectedCustomer!.kod??"TURAN");
-      String bakiye = customer?.bakiye??"0.0";
+      final customerRepository = Provider.of<CustomerRepository>(context, listen: false);
+    final customer = await customerRepository.getCustomerByUnvan(selectedCustomer!.kod??"TURAN");
+      String bakiye = customer?['bakiye']?.toString() ?? "0.0";
 print("bakişyeee: $bakiye");
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => CustomerView(bakiye: bakiye,)),
@@ -154,9 +154,9 @@ print("bakişyeee: $bakiye");
           ),
         );
     final selectedCustomer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
-      final controller = CustomerBalanceController();
-    final customer = await controller.getCustomerByUnvan(selectedCustomer!.kod??"TURAN");
-      String bakiye = customer?.bakiye??"0.0";
+      final customerRepository = Provider.of<CustomerRepository>(context, listen: false);
+    final customer = await customerRepository.getCustomerByUnvan(selectedCustomer!.kod??"TURAN");
+      String bakiye = customer?['bakiye']?.toString() ?? "0.0";
 print("bakişyeee: $bakiye");
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => CustomerView(bakiye: bakiye,)),

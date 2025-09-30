@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:path/path.dart';
-import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
-import 'package:pos_app/features/customer/domain/entities/customer_balance.dart';
 import 'package:pos_app/features/reports/presentation/screens/collection_activity.dart';
 import 'package:pos_app/features/customer/presentation/customerdetail_view.dart';
 import 'package:pos_app/features/reports/presentation/screens/invoice_activity.dart';
@@ -28,20 +26,18 @@ class CustomerView extends StatefulWidget {
 
 class _CustomerViewState extends State<CustomerView> {
 
-  final controller = CustomerBalanceController();
-
   @override
   void initState() {
     super.initState();
   }
 
 
-Future<CustomerBalanceModel?> loadCustomerBalanceByName(String customerName) async {
+Future<Map<String, dynamic>?> loadCustomerBalanceByName(String customerName, BuildContext context) async {
   String databasesPath = await getDatabasesPath();
   String path = join(databasesPath, 'pos_database.db');
 
   final db = await openReadOnlyDatabase(path);
-  
+
   final result = await db.query(
     'CustomerBalance',
     where: 'unvan = ?',
@@ -51,11 +47,7 @@ Future<CustomerBalanceModel?> loadCustomerBalanceByName(String customerName) asy
   await db.close();
 
   if (result.isNotEmpty) {
-    return CustomerBalanceModel(
-      kod: result[0]['kod'] as String?,
-      unvan: result[0]['unvan'] as String?,
-      bakiye: result[0]['bakiye'] as String?,
-    );
+    return result[0];
   } else {
     return null; // Belirtilen isimde müşteri yoksa
   }

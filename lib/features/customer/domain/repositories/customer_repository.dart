@@ -63,4 +63,9 @@ abstract class CustomerRepository {
 
   /// Clear all customer balances
   Future<void> clearAllCustomerBalances();
+
+  // ============= Sync Methods =============
+
+  /// Get new customers from server since specific date
+  Future<List<CustomerModel>?> getNewCustomer(DateTime date);
 }
