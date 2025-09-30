@@ -498,4 +498,59 @@ class CartRepositoryImpl implements CartRepository {
       throw Exception('Failed to get cart history: $e');
     }
   }
+
+  // ============= Customer-based Cart Methods (for CartProvider) =============
+
+  @override
+  Future<void> clearCartByCustomer(String customerName) async {
+    try {
+      final db = await dbHelper.database;
+      await db.delete(
+        'cart_items',
+        where: 'customerName = ?',
+        whereArgs: [customerName],
+      );
+    } catch (e) {
+      throw Exception('Failed to clear cart for customer: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerName) async {
+    try {
+      final db = await dbHelper.database;
+      final results = await db.query(
+        'cart_items',
+        where: 'customerName = ?',
+        whereArgs: [customerName],
+      );
+      return results;
+    } catch (e) {
+      throw Exception('Failed to get cart items for customer: $e');
+    }
+  }
+
+  @override
+  Future<void> insertCartItemForCustomer(Map<String, dynamic> itemData, String customerName) async {
+    try {
+      final db = await dbHelper.database;
+      await db.insert('cart_items', {
+        'customerName': customerName,
+        'stokKodu': itemData['stokKodu'],
+        'urunAdi': itemData['urunAdi'],
+        'birimFiyat': itemData['birimFiyat'],
+        'miktar': itemData['miktar'],
+        'urunBarcode': itemData['urunBarcode'],
+        'iskonto': itemData['iskonto'],
+        'birimTipi': itemData['birimTipi'],
+        'durum': itemData['durum'],
+        'imsrc': itemData['imsrc'],
+        'vat': itemData['vat'],
+        'adetFiyati': itemData['adetFiyati'],
+        'kutuFiyati': itemData['kutuFiyati'],
+      });
+    } catch (e) {
+      throw Exception('Failed to insert cart item for customer: $e');
+    }
+  }
 }

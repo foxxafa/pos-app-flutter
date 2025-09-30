@@ -7,7 +7,8 @@ import 'package:pos_app/core/network/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:pos_app/features/customer/presentation/customerbalance_controller.dart';
-import 'package:pos_app/features/orders/presentation/order_controller.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
+import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/products/presentation/product_controller.dart';
 import 'package:pos_app/features/refunds/presentation/refundlist_controller.dart';
 import 'package:pos_app/features/refunds/presentation/refundsend_controller.dart';
@@ -18,7 +19,16 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 
 class SyncController {
-  final balancecontroller = CustomerBalanceController();
+  final CustomerRepository? customerRepository;
+  final OrderRepository? orderRepository;
+  late final CustomerBalanceController balancecontroller;
+
+  SyncController({
+    this.customerRepository,
+    this.orderRepository,
+  }) {
+    balancecontroller = CustomerBalanceController(repository: customerRepository);
+  }
 
   // CLEAN SYNC
   // CLEAN SYNC
@@ -352,13 +362,15 @@ class SyncController {
             }).toList();
 
         // Gönder
-        OrderController orderController = OrderController();
-
-        await orderController.satisGonder(
-          fisModel: fisModel,
-          satirlar: satirlar,
-          bearerToken: savedApiKey,
-        );
+        if (orderRepository != null) {
+          await orderRepository!.submitOrder(
+            fisModel: fisModel,
+            orderItems: satirlar,
+            bearerToken: savedApiKey,
+          );
+        } else {
+          debugPrint('OrderRepository not provided, skipping order submission');
+        }
 
         // Başarılıysa sil
         await db.delete(

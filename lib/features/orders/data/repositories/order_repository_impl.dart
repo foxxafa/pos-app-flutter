@@ -699,4 +699,93 @@ class OrderRepositoryImpl implements OrderRepository {
       comment: map['comment'] as String? ?? '',
     );
   }
+
+  // ============= Order Submission (for OrderController) =============
+
+  @override
+  Future<bool> submitOrder({
+    required FisModel fisModel,
+    required List<dynamic> orderItems,
+    required String bearerToken,
+  }) async {
+    try {
+      if (!await networkInfo.isConnected) {
+        throw Exception('No internet connection');
+      }
+
+      // Clean stokKodu and urunAdi from FREE markers
+      final cleanedItems = orderItems.map((item) {
+        final itemJson = (item as dynamic).toJson() as Map<String, dynamic>;
+
+        final cleanedStokKodu = (itemJson['StokKodu'] as String)
+            .replaceAll('_(FREEUnit)', '')
+            .replaceAll('_(FREEBox)', '')
+            .replaceAll(' (FREEUnit)', '')
+            .replaceAll(' (FREEBox)', '')
+            .trim();
+
+        final cleanedUrunAdi = (itemJson['UrunAdi'] as String)
+            .replaceAll('_(FREEUnit)', '')
+            .replaceAll('_(FREEBox)', '')
+            .replaceAll(' (FREEUnit)', '')
+            .replaceAll(' (FREEBox)', '')
+            .trim();
+
+        final cleanedJson = Map<String, dynamic>.from(itemJson);
+        cleanedJson['StokKodu'] = cleanedStokKodu;
+        cleanedJson['UrunAdi'] = cleanedUrunAdi;
+        return cleanedJson;
+      }).toList();
+
+      final response = await dio.post(
+        ApiConfig.satisUrl,
+        data: {
+          "fis": fisModel.toJson(),
+          "satirlar": cleanedItems,
+        },
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $bearerToken',
+          },
+        ),
+      );
+
+      print("Status Code: ${response.statusCode}");
+      print("Response Body: ${response.data}");
+
+      if (response.statusCode == 200) {
+        try {
+          // Handle double JSON response (rowhub API quirk)
+          String responseBody = response.data.toString();
+          final parts = responseBody.split('}{');
+          String lastJson;
+
+          if (parts.length > 1) {
+            lastJson = '{${parts.last}';
+          } else {
+            lastJson = responseBody;
+          }
+
+          final jsonResponse = response.data as Map<String, dynamic>;
+
+          if (jsonResponse.containsKey('status')) {
+            print("Status: ${jsonResponse['status']}");
+            return true;
+          } else {
+            print("Status alanı bulunamadı. Yanıt: $lastJson");
+            return false;
+          }
+        } catch (e) {
+          print("Yanıt JSON olarak çözümlenemedi: ${response.data}");
+          return false;
+        }
+      } else {
+        print("Hata: ${response.statusCode} - ${response.data}");
+        return false;
+      }
+    } catch (e) {
+      print("submitOrder hatası: $e");
+      return false;
+    }
+  }
 }

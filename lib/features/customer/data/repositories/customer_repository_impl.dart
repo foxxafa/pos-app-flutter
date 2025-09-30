@@ -1,5 +1,6 @@
 // lib/features/customer/data/repositories/customer_repository_impl.dart
 import 'package:dio/dio.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/network/network_info.dart';
 import 'package:pos_app/core/network/api_config.dart';
@@ -363,6 +364,128 @@ class CustomerRepositoryImpl implements CustomerRepository {
       return results;
     } catch (e) {
       throw Exception('Failed to get customer transactions: $e');
+    }
+  }
+
+  // ============= CustomerBalance Methods (for CustomerBalanceController) =============
+
+  @override
+  Future<String> getCustomerBalanceByName(String customerName) async {
+    try {
+      final db = await dbHelper.database;
+      final result = await db.query(
+        'CustomerBalance',
+        columns: ['bakiye'],
+        where: 'LOWER(unvan) = ?',
+        whereArgs: [customerName.toLowerCase()],
+        limit: 1,
+      );
+
+      if (result.isNotEmpty) {
+        return result[0]['bakiye']?.toString() ?? '0.00';
+      } else {
+        return '0.00';
+      }
+    } catch (e) {
+      throw Exception('Failed to get customer balance by name: $e');
+    }
+  }
+
+  @override
+  Future<List<dynamic>> getAllCustomerBalances() async {
+    try {
+      final db = await dbHelper.database;
+      final results = await db.query('CustomerBalance');
+      return results;
+    } catch (e) {
+      throw Exception('Failed to get all customer balances: $e');
+    }
+  }
+
+  @override
+  Future<dynamic> getCustomerByUnvan(String unvan) async {
+    try {
+      final db = await dbHelper.database;
+      final results = await db.query(
+        'CustomerBalance',
+        where: 'unvan = ?',
+        whereArgs: [unvan],
+        limit: 1,
+      );
+
+      if (results.isNotEmpty) {
+        return results.first;
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Failed to get customer by unvan: $e');
+    }
+  }
+
+  @override
+  Future<void> fetchAndStoreCustomers() async {
+    if (await networkInfo.isConnected) {
+      try {
+        // Get API key from database
+        final db = await dbHelper.database;
+        final result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
+
+        if (result.isEmpty) {
+          throw Exception('No API Key found');
+        }
+
+        final savedApiKey = result.first['apikey'] as String;
+
+        // Fetch customers from server
+        final response = await dio.get(
+          ApiConfig.musteriListesiUrl,
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer $savedApiKey',
+            },
+          ),
+        );
+
+        if (response.statusCode == 200) {
+          final List<dynamic> data = response.data is List
+              ? response.data
+              : (response.data['customers'] ?? []);
+
+          print('👥 ${data.length} müşteri alındı');
+
+          // Clear and insert all customers
+          await db.delete('CustomerBalance');
+
+          final batch = db.batch();
+          for (var json in data) {
+            batch.insert(
+              'CustomerBalance',
+              json,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+          await batch.commit(noResult: true);
+
+          print('✅ Müşteri veritabanı güncellendi');
+        } else {
+          throw Exception('Veri alınamadı: ${response.statusCode}');
+        }
+      } catch (e) {
+        throw Exception('Failed to fetch and store customers: $e');
+      }
+    } else {
+      throw Exception('No internet connection');
+    }
+  }
+
+  @override
+  Future<void> clearAllCustomerBalances() async {
+    try {
+      final db = await dbHelper.database;
+      await db.delete('CustomerBalance');
+      print('CustomerBalance tablosu temizlendi.');
+    } catch (e) {
+      throw Exception('Failed to clear customer balances: $e');
     }
   }
 }

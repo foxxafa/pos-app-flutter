@@ -46,4 +46,21 @@ abstract class CustomerRepository {
 
   /// Get customer transaction history
   Future<List<dynamic>> getCustomerTransactions(int customerId);
+
+  // ============= CustomerBalance Methods (for CustomerBalanceController) =============
+
+  /// Get customer balance by name (unvan)
+  Future<String> getCustomerBalanceByName(String customerName);
+
+  /// Get all customer balances
+  Future<List<dynamic>> getAllCustomerBalances();
+
+  /// Get customer by unvan
+  Future<dynamic> getCustomerByUnvan(String unvan);
+
+  /// Fetch and store customers from server
+  Future<void> fetchAndStoreCustomers();
+
+  /// Clear all customer balances
+  Future<void> clearAllCustomerBalances();
 }

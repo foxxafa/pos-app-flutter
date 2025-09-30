@@ -81,4 +81,15 @@ abstract class CartRepository {
 
   /// Get cart history
   Future<List<Map<String, dynamic>>> getCartHistory();
+
+  // ============= Customer-based Cart Methods (for CartProvider) =============
+
+  /// Clear cart items by customer name
+  Future<void> clearCartByCustomer(String customerName);
+
+  /// Get cart items by customer name
+  Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerName);
+
+  /// Insert cart item for specific customer
+  Future<void> insertCartItemForCustomer(Map<String, dynamic> itemData, String customerName);
 }

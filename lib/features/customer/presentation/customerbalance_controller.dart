@@ -1,167 +1,113 @@
 import 'package:pos_app/features/customer/domain/entities/customer_balance.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:pos_app/core/local/database_helper.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:pos_app/core/network/api_config.dart';
+import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 
 class CustomerBalanceController {
-  static Database? _db;
+  final CustomerRepository? _repository;
 
-  Future<Database> get db async {
-    if (_db != null) return _db!;
-    _db = await _initDb();
-    return _db!;
+  CustomerBalanceController({CustomerRepository? repository})
+      : _repository = repository;
+
+  // ============= Repository-based methods (if repository available) =============
+
+  Future<String> getCustomerBalanceByName(String customerName) async {
+    if (_repository != null) {
+      try {
+        return await _repository.getCustomerBalanceByName(customerName);
+      } catch (e) {
+        print('Error getting customer balance: $e');
+        return '0.00';
+      }
+    } else {
+      // Fallback: This shouldn't happen in production but kept for safety
+      throw Exception('CustomerRepository not provided');
+    }
   }
 
-  Future<Database> _initDb() async {
-
-    DatabaseHelper dbHelper = DatabaseHelper();
-    return await dbHelper.database;
+  Future<void> printAllCustomerBalances() async {
+    if (_repository != null) {
+      try {
+        final results = await _repository.getAllCustomerBalances();
+        for (var row in results) {
+          print('--- Müşteri ---');
+          (row as Map).forEach((key, value) {
+            print('$key: $value');
+          });
+          print('----------------\n');
+        }
+      } catch (e) {
+        print('Error printing customer balances: $e');
+      }
+    }
   }
-
-
-
-Future<String> getCustomerBalanceByName(String customerName) async {
-  DatabaseHelper dbHelper = DatabaseHelper();
-  final db = await dbHelper.database;
-
-  final result = await db.query(
-    'CustomerBalance',
-    columns: ['bakiye'],
-    where: 'LOWER(unvan) = ?',
-    whereArgs: [customerName.toLowerCase()],
-    limit: 1,
-  );
-
-  // Database açık kalacak - App Inspector için
-
-  if (result.isNotEmpty) {
-    return result[0]['bakiye']?.toString() ?? '0.00';
-  } else {
-    return '0.00'; // müşteri bulunamazsa varsayılan değer
-  }
-}
 
   Future<void> insertCustomer(CustomerBalanceModel model) async {
-    final dbClient = await db;
-    await dbClient.insert(
-      'CustomerBalance',
-      model.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    // This method is not commonly used, keeping for backward compatibility
+    // In practice, should use repository's methods directly
+    throw UnimplementedError(
+        'Use CustomerRepository.fetchAndStoreCustomers() instead');
   }
-Future<void> printAllCustomerBalances() async {
-  DatabaseHelper dbHelper = DatabaseHelper();
-  final db = await dbHelper.database;
-  final result = await db.query('CustomerBalance');
-  // Database açık kalacak - App Inspector için
-
-  for (var row in result) {
-    print('--- Müşteri ---');
-    row.forEach((key, value) {
-      print('$key: $value');
-    });
-    print('----------------\n');
-  }
-}
 
   Future<void> insertCustomers(List<CustomerBalanceModel> customers) async {
-      DatabaseHelper dbHelper = DatabaseHelper();
-  final dbClient = await dbHelper.database;
-    final batch = dbClient.batch();
-
-    for (var customer in customers) {
-      batch.insert(
-        'CustomerBalance',
-        customer.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-
-    await batch.commit(noResult: true);
+    // This method is not commonly used, keeping for backward compatibility
+    // In practice, should use repository's methods directly
+    throw UnimplementedError(
+        'Use CustomerRepository.fetchAndStoreCustomers() instead');
   }
 
   Future<List<CustomerBalanceModel>> getAllCustomers() async {
-    final dbClient = await db;
-    final List<Map<String, dynamic>> maps =
-        await dbClient.query('CustomerBalance');
-
-    return List.generate(maps.length,
-        (i) => CustomerBalanceModel.fromJson(maps[i]));
+    if (_repository != null) {
+      try {
+        final results = await _repository.getAllCustomerBalances();
+        return results
+            .map((map) => CustomerBalanceModel.fromJson(map as Map<String, dynamic>))
+            .toList();
+      } catch (e) {
+        print('Error getting all customers: $e');
+        return [];
+      }
+    } else {
+      throw Exception('CustomerRepository not provided');
+    }
   }
-
-
 
   Future<void> clearAll() async {
-  DatabaseHelper dbHelper = DatabaseHelper();
-    final db = await dbHelper.database;
-
-  await db.delete('CustomerBalance');
-  print('CustomerBalance tablosu temizlendi.');
+    if (_repository != null) {
+      try {
+        await _repository.clearAllCustomerBalances();
+      } catch (e) {
+        print('Error clearing customer balances: $e');
+      }
+    }
   }
 
-Future<void> fetchAndStoreCustomers() async {
-  String savedApiKey = "";
-
-
-  // Veritabanını aç
-  DatabaseHelper dbHelper = DatabaseHelper();
-  Database db = await dbHelper.database;
-
-  // Apikey'i çek
-  List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
-
-  if (result.isNotEmpty) {
-    savedApiKey = result.first['apikey'];
-    print('Retrieved API Key: $savedApiKey');
-  } else {
-    print('No API Key found.');
-    return; // Apikey yoksa devam etmeye gerek yok
+  Future<void> fetchAndStoreCustomers() async {
+    if (_repository != null) {
+      try {
+        await _repository.fetchAndStoreCustomers();
+      } catch (e) {
+        print('Error fetching and storing customers: $e');
+        rethrow;
+      }
+    } else {
+      throw Exception('CustomerRepository not provided');
+    }
   }
 
-  final response = await http.get(
-    Uri.parse(ApiConfig.musteriListesiUrl),
-    headers: {
-      'Authorization': 'Bearer $savedApiKey',
-    },
-  );
-
-  if (response.statusCode == 200) {
-    final List<dynamic> data = json.decode(response.body);
-    final customers = data
-        .map((json) => CustomerBalanceModel.fromJson(json))
-        .toList();
-
-    print('👥 ${customers.length} müşteri alındı');
-    await clearAll();
-    await insertCustomers(customers);
-    print('✅ Müşteri veritabanı güncellendi');
-  } else {
-    throw Exception('Veri alınamadı: ${response.statusCode}');
+  Future<CustomerBalanceModel?> getCustomerByUnvan(String unvan) async {
+    if (_repository != null) {
+      try {
+        final result = await _repository.getCustomerByUnvan(unvan);
+        if (result != null) {
+          return CustomerBalanceModel.fromJson(result as Map<String, dynamic>);
+        }
+        return null;
+      } catch (e) {
+        print('Error getting customer by unvan: $e');
+        return null;
+      }
+    } else {
+      throw Exception('CustomerRepository not provided');
+    }
   }
-}
-
-
-
-Future<CustomerBalanceModel?> getCustomerByUnvan(String unvan) async {
-
-  DatabaseHelper dbHelper = DatabaseHelper();
-  final dbClient = await dbHelper.database;
-
-  final List<Map<String, dynamic>> maps = await dbClient.query(
-    'CustomerBalance',
-    where: 'unvan = ?',
-    whereArgs: [unvan],
-    limit: 1,
-  );
-
-  // dbClient.close(); // İstersen burada kapatabilirsin ama çoğu zaman gerekmez
-
-  if (maps.isNotEmpty) {
-    return CustomerBalanceModel.fromJson(maps.first);
-  }
-  return null;
-}
 
 }

@@ -83,8 +83,9 @@ extension CartItemExtension on CartItem {
 
 class CartProvider extends ChangeNotifier {
   final Map<String, CartItem> _items = {};
+  final CartRepository? _cartRepository;
 
-  CartProvider({CartRepository? cartRepository});
+  CartProvider({CartRepository? cartRepository}) : _cartRepository = cartRepository;
 
   Map<String, CartItem> get items => {..._items};
 
@@ -251,27 +252,75 @@ class CartProvider extends ChangeNotifier {
   }
 
   Future<void> _saveCartToDatabase() async {
-    // Use actual customer name instead of empty string
-    String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
+    // Use repository if available, otherwise fall back to DatabaseHelper
+    if (_cartRepository != null) {
+      // Use actual customer name instead of empty string
+      String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
 
-    // Debug: Print what we're saving
-    print("DEBUG _saveCartToDatabase: customerName = '$actualCustomerName', items count = ${_items.length}");
+      // Debug: Print what we're saving
+      print("DEBUG _saveCartToDatabase (Repository): customerName = '$actualCustomerName', items count = ${_items.length}");
 
-    final dbHelper = DatabaseHelper();
-    await dbHelper.clearCartItemsByCustomer(actualCustomerName);
-    print("DEBUG _saveCartToDatabase: clearCartItemsByCustomer completed for '$actualCustomerName'");
-    
-    for (final item in _items.values) {
-      await dbHelper.insertCartItem(item, actualCustomerName);
+      try {
+        // Clear existing items for this customer
+        await _cartRepository.clearCartByCustomer(actualCustomerName);
+        print("DEBUG _saveCartToDatabase: clearCartByCustomer completed for '$actualCustomerName'");
+
+        // Insert all current cart items
+        for (final item in _items.values) {
+          await _cartRepository.insertCartItemForCustomer({
+            'stokKodu': item.stokKodu,
+            'urunAdi': item.urunAdi,
+            'birimFiyat': item.birimFiyat,
+            'miktar': item.miktar,
+            'urunBarcode': item.urunBarcode,
+            'iskonto': item.iskonto,
+            'birimTipi': item.birimTipi,
+            'durum': item.durum,
+            'imsrc': item.imsrc,
+            'vat': item.vat,
+            'adetFiyati': item.adetFiyati,
+            'kutuFiyati': item.kutuFiyati,
+          }, actualCustomerName);
+        }
+        print("DEBUG _saveCartToDatabase: ${_items.length} items inserted for '$actualCustomerName'");
+      } catch (e) {
+        print("ERROR _saveCartToDatabase: $e");
+        throw e;
+      }
+    } else {
+      // Fallback to DatabaseHelper for backward compatibility
+      String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
+      print("DEBUG _saveCartToDatabase (DatabaseHelper fallback): customerName = '$actualCustomerName', items count = ${_items.length}");
+
+      final dbHelper = DatabaseHelper();
+      await dbHelper.clearCartItemsByCustomer(actualCustomerName);
+
+      for (final item in _items.values) {
+        await dbHelper.insertCartItem(item, actualCustomerName);
+      }
     }
-    print("DEBUG _saveCartToDatabase: ${_items.length} items inserted for '$actualCustomerName'");
   }
 
   Future<void> loadCartFromDatabase(String customerName) async {
     print("DEBUG loadCartFromDatabase: Loading cart for customer '$customerName'");
-    final dbHelper = DatabaseHelper();
-    final cartData = await dbHelper.getCartItemsByCustomer(customerName);
-    print("DEBUG loadCartFromDatabase: Found ${cartData.length} items in database for '$customerName'");
+
+    List<Map<String, dynamic>> cartData;
+
+    // Use repository if available, otherwise fall back to DatabaseHelper
+    if (_cartRepository != null) {
+      try {
+        cartData = await _cartRepository.getCartItemsByCustomer(customerName);
+        print("DEBUG loadCartFromDatabase (Repository): Found ${cartData.length} items for '$customerName'");
+      } catch (e) {
+        print("ERROR loadCartFromDatabase (Repository): $e");
+        cartData = [];
+      }
+    } else {
+      // Fallback to DatabaseHelper
+      final dbHelper = DatabaseHelper();
+      cartData = await dbHelper.getCartItemsByCustomer(customerName);
+      print("DEBUG loadCartFromDatabase (DatabaseHelper): Found ${cartData.length} items for '$customerName'");
+    }
 
     _items.clear();
     _customerName = customerName;

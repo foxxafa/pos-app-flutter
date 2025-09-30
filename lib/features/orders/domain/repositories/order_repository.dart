@@ -97,4 +97,13 @@ abstract class OrderRepository {
 
   /// Generate order receipt data
   Future<Map<String, dynamic>> generateOrderReceipt(String fisNo);
+
+  // ============= Order Submission (for OrderController) =============
+
+  /// Submit order to server (satisGonder)
+  Future<bool> submitOrder({
+    required FisModel fisModel,
+    required List<dynamic> orderItems, // CartItem list
+    required String bearerToken,
+  });
 }
