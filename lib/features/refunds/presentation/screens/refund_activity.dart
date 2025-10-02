@@ -73,68 +73,173 @@ class _RefundActivityViewState extends State<RefundActivityView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("-Refunds-")),
-      body: Padding(
-  padding: EdgeInsets.all(3.h),
-  child: _refundActivities.isEmpty
-      ? Center(
-          child: Text(
-            "No refunds for this customer.",
-            style: TextStyle(fontSize: 18.sp),
-          ),
-        )
-      : Column(
-          children: [
-            Expanded(
-              child: DataTable(
-                headingRowHeight: 6.h,
-                dataRowMinHeight: 7.h,
-                dataRowMaxHeight: 7.h,
-                columnSpacing: 6.w, // Daha dar aralık
-                headingTextStyle: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 12.sp,
-                ),
-                columns: const [
-                  DataColumn(label: Text('Date')),
-                  DataColumn(label: Text('No')),
-                  DataColumn(label: Text('Total')),
-                  DataColumn(label: Text('Status')),
+      appBar: AppBar(
+        title: const Text("Refunds"),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+      ),
+      body: _refundActivities.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 80,
+                    color: Colors.grey.shade400,
+                  ),
+                  SizedBox(height: 2.h),
+                  Text(
+                    "No refunds for this customer",
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
-                rows: _refundActivities.map((activity) {
-                  final parsed = parseActivity(activity);
-                  return DataRow(
-                    cells: [
-                      DataCell(Text(parsed['Date'] ?? '')),
-                      DataCell(Text(parsed['No'] ?? '')),
-                      DataCell(Text(parsed['Total Amount'] ?? '')),
-                      DataCell(Text(parsed['Status'] ?? '')),
-                    ],
-                  );
-                }).toList(),
               ),
+            )
+          : ListView.separated(
+              padding: EdgeInsets.all(2.h),
+              itemCount: _refundActivities.length,
+              separatorBuilder: (context, index) => SizedBox(height: 1.5.h),
+              itemBuilder: (context, index) {
+                final activity = _refundActivities[index];
+                final parsed = parseActivity(activity);
+                return _buildRefundCard(context, parsed);
+              },
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => RefundList2View()),
+          );
+        },
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        icon: const Icon(Icons.add),
+        label: const Text('New Refund'),
+      ),
+    );
+  }
+
+  Widget _buildRefundCard(BuildContext context, Map<String, String> parsed) {
+    final status = parsed['Status'] ?? '';
+    final isCompleted = status.toLowerCase() == 'completed';
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(2.h),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.receipt_long,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 24,
+                    ),
+                    SizedBox(width: 2.w),
+                    Text(
+                      'Refund #${parsed['No'] ?? 'N/A'}',
+                      style: TextStyle(
+                        fontSize: 16.sp,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.5.h),
+                  decoration: BoxDecoration(
+                    color: isCompleted
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isCompleted ? Colors.green : Colors.orange,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      fontWeight: FontWeight.w600,
+                      color: isCompleted ? Colors.green.shade700 : Colors.orange.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Divider(height: 3.h, thickness: 1),
+            _buildInfoRow(
+              context,
+              icon: Icons.calendar_today,
+              label: 'Date',
+              value: parsed['Date'] ?? 'N/A',
+            ),
+            SizedBox(height: 1.h),
+            _buildInfoRow(
+              context,
+              icon: Icons.account_balance_wallet,
+              label: 'Total Amount',
+              value: parsed['Total Amount'] ?? '0.00',
+              isHighlighted: true,
             ),
           ],
         ),
-),
-
-      floatingActionButton: SizedBox(
-        width: 20.w, // Genişlik
-        height: 20.w, // Yükseklik
-        child: FloatingActionButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => RefundList2View()),
-            );
-          },
-          backgroundColor: Colors.blue,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(100),
-          ),
-          child: Icon(Icons.add, size: 10.w),
-        ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    bool isHighlighted = false,
+  }) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: Colors.grey.shade600,
+        ),
+        SizedBox(width: 2.w),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: 14.sp,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: isHighlighted ? FontWeight.bold : FontWeight.w600,
+              color: isHighlighted
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+            textAlign: TextAlign.end,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,46 +1,38 @@
 import 'dart:io';
-import 'dart:math';
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
 import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
-import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/features/refunds/presentation/providers/cart_provider_refund.dart';
+import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/customer/presentation/customer_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class RefundCartView2 extends StatefulWidget {
   final RefundFisModel fisModel;
-  const RefundCartView2({super.key, required this.fisModel});
+
+  const RefundCartView2({
+    super.key,
+    required this.fisModel,
+  });
 
   @override
   State<RefundCartView2> createState() => _RefundCartView2State();
 }
 
 class _RefundCartView2State extends State<RefundCartView2> {
-  // final TextEditingController _priceController = TextEditingController(); // Kullanılmıyor
+  // --- State Variables ---
+  Map<String, Future<String?>> _imageFutures = {};
+  Timer? _imageDownloadTimer;
+  bool _isSubmitting = false;
 
-  void sendRefundItems(
-    BuildContext context,
-    RefundFisModel fisModel,
-    List<RefundItemModel> selectedItems,
-  ) async {
-    final refundRepository = Provider.of<RefundRepository>(context, listen: false);
-
-    RefundSendModel refundSendModel = RefundSendModel(
-      fis: fisModel,
-      satirlar: selectedItems,
-    );
-
-    await refundRepository.sendRefund(refundSendModel);
-  }
-
-  List<String> _iadeNedenleri = [
+  final List<String> _returnReasons = [
     'Short Item',
     'Misdelivery (Useful)',
     'Refused (Useful)',
@@ -55,11 +47,41 @@ class _RefundCartView2State extends State<RefundCartView2> {
     'Trial Returned (Useless)',
   ];
 
-  void _showIadeNedeniSecimi(
-    BuildContext context,
-    String stokKodu,
-    RCartProvider cartProvider,
-  ) {
+  // --- Lifecycle Methods ---
+  @override
+  void dispose() {
+    _imageDownloadTimer?.cancel();
+    _imageFutures.clear();
+    super.dispose();
+  }
+
+  // --- Image Handling ---
+  Future<String?> _loadImage(String? imsrc) async {
+    try {
+      if (imsrc == null || imsrc.isEmpty) return null;
+      final uri = Uri.parse(imsrc);
+      final fileName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
+      if (fileName.isEmpty) return null;
+      final dir = await getApplicationDocumentsDirectory();
+      final filePath = '${dir.path}/$fileName';
+      final file = File(filePath);
+      return await file.exists() ? filePath : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _generateImageFutures(List<CartItem> items) {
+    for (final item in items) {
+      final stokKodu = item.stokKodu;
+      if (!_imageFutures.containsKey(stokKodu)) {
+        _imageFutures[stokKodu] = _loadImage(item.imsrc);
+      }
+    }
+  }
+
+  // --- Return Reason Dialog ---
+  void _showReturnReasonDialog(BuildContext context, String stokKodu, RCartProvider cartProvider) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -71,19 +93,16 @@ class _RefundCartView2State extends State<RefundCartView2> {
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
           child: ListView.builder(
-            padding: EdgeInsets.only(
-              top: 1.h,
-              bottom: 2.h,
-            ), // ekstra görünürlük için boşluk
-            itemCount: _iadeNedenleri.length,
+            padding: EdgeInsets.only(top: 1.h, bottom: 2.h),
+            itemCount: _returnReasons.length,
             itemBuilder: (context, index) {
-              final neden = _iadeNedenleri[index];
+              final reason = _returnReasons[index];
               return RadioListTile<String>(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 visualDensity: VisualDensity.compact,
-                title: Text(neden, style: TextStyle(fontSize: 15.sp)),
-                value: neden,
+                title: Text(reason, style: TextStyle(fontSize: 15.sp)),
+                value: reason,
                 groupValue: cartProvider.items[stokKodu]?.aciklama,
                 onChanged: (value) {
                   if (value != null) {
@@ -99,19 +118,18 @@ class _RefundCartView2State extends State<RefundCartView2> {
     );
   }
 
-  List<RefundItemModel> convertCartToRefundItems(RCartProvider cartProvider) {
+  // --- Data Conversion ---
+  List<RefundItemModel> _convertCartToRefundItems(RCartProvider cartProvider) {
     return cartProvider.items.values.map((cartItem) {
       return RefundItemModel(
         stokKodu: cartItem.stokKodu,
         urunAdi: cartItem.urunAdi,
         miktar: cartItem.miktar,
         birimFiyat: cartItem.birimFiyat,
-        toplamTutar: cartItem.indirimliTutar, // indirimliTutar var CartItem'da
+        toplamTutar: cartItem.indirimliTutar,
         vat: cartItem.vat,
         birimTipi: cartItem.birimTipi,
-        durum:
-            cartItem.durum
-                .toString(), // RefundItemModel'da durum String, burada int olduğu için toString ile çevirdim
+        durum: cartItem.durum.toString(),
         urunBarcode: cartItem.urunBarcode,
         iskonto: cartItem.iskonto,
         aciklama: cartItem.aciklama,
@@ -119,780 +137,646 @@ class _RefundCartView2State extends State<RefundCartView2> {
     }).toList();
   }
 
-  double toplamTutarFromRefundList(List<RefundItemModel> refundList) {
+  double _calculateTotalAmount(List<RefundItemModel> refundList) {
     return refundList.fold(0.0, (sum, item) => sum + item.toplamTutar);
   }
 
+  // --- Submit Refund ---
+  Future<void> _submitRefund(BuildContext context) async {
+    final cartProvider = Provider.of<RCartProvider>(context, listen: false);
+    final cartItems = cartProvider.items.values.toList();
+
+    // Validate all items have return reasons
+    final itemsWithoutReason = cartItems.where((item) => item.aciklama.isEmpty).toList();
+    if (itemsWithoutReason.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please select return reason for all items'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final refundRepository = Provider.of<RefundRepository>(context, listen: false);
+      final refundItems = _convertCartToRefundItems(cartProvider);
+      final totalAmount = _calculateTotalAmount(refundItems);
+
+      RefundFisModel fisModelCopy = widget.fisModel;
+      fisModelCopy.toplamtutar = totalAmount;
+
+      RefundSendModel refundSendModel = RefundSendModel(
+        fis: fisModelCopy,
+        satirlar: refundItems,
+      );
+
+      await refundRepository.sendRefund(refundSendModel);
+
+      // Log activity
+      final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
+      final selectedCustomer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
+      final customerCode = selectedCustomer?.kod ?? '';
+      final now = DateTime.now();
+      final formattedDate = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+
+      await activityRepository.addActivity(
+        "Return Receipt\n"
+        "Customer: $customerCode\n"
+        "No: ${fisModelCopy.fisNo}\n"
+        "Date: $formattedDate\n"
+        "Total Amount: ${totalAmount.toStringAsFixed(2)}\n"
+        "Status: Completed",
+      );
+
+      // Clear cart
+      await cartProvider.clearCart();
+
+      // Get customer balance
+      final customerRepository = Provider.of<CustomerRepository>(context, listen: false);
+      final customer = await customerRepository.getCustomerByUnvan(selectedCustomer?.kod ?? "TURAN");
+      String bakiye = customer?['bakiye']?.toString() ?? "0.0";
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Return submitted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate back to customer view
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => CustomerView(bakiye: bakiye)),
+              (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error submitting return: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  // --- Build Method ---
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<RCartProvider>(context);
     final cartItems = cartProvider.items.values.toList();
 
-    final unitCount = cartItems
-        .where((item) => item.birimTipi == 'Unit')
-        .fold<int>(0, (prev, item) => prev + item.miktar);
+    _generateImageFutures(cartItems);
 
-    final boxCount = cartItems
-        .where((item) => item.birimTipi == 'Box')
-        .fold<int>(0, (prev, item) => prev + item.miktar);
-
+    final unitCount = cartItems.where((item) => item.birimTipi == 'Unit').fold<int>(0, (prev, item) => prev + item.miktar);
+    final boxCount = cartItems.where((item) => item.birimTipi == 'Box').fold<int>(0, (prev, item) => prev + item.miktar);
     final totalCount = unitCount + boxCount;
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
         centerTitle: true,
-        title: Text("Cart Details", style: TextStyle(fontSize: 20.sp)),
+        title: Text('Return Cart Details', style: TextStyle(fontSize: 20.sp)),
         actions: [
           IconButton(
             icon: const Icon(Icons.delete_forever),
-            onPressed: () {
-              if (cartProvider.items.isNotEmpty) {
-                showDialog(
-                  context: context,
-                  builder:
-                      (ctx) => AlertDialog(
-                        title: const Text("Clear Cart"),
-                        content: const Text(
-                          "Are you sure you want to remove all items?",
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text("Cancel"),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              cartProvider.items.clear();
-                              await cartProvider.clearCart();
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Cart cleared.')),
-                              );
-                            },
-                            child: const Text("Clear All"),
-                          ),
-                        ],
-                      ),
-                );
-              }
-            },
-            tooltip: 'Clear All Items',
+            onPressed: cartItems.isEmpty ? null : () => _showClearCartDialog(context, cartProvider),
+            tooltip: 'Clear All',
           ),
         ],
       ),
-
       body: Padding(
         padding: EdgeInsets.all(3.w),
-        child:
-            cartItems.isEmpty
-                ? Center(
-                  child: Text(
-                    "Your cart is empty.",
-                    style: TextStyle(fontSize: 16.sp),
-                  ),
-                )
-                : Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: cartItems.length,
-                        itemBuilder: (context, index) {
-                          final item = cartItems[index];
-                          final stokKodu = item.stokKodu;
-
-                          return GestureDetector(
-                            onDoubleTap: () {
-                              showDialog(
-                                context: context,
-                                builder:
-                                    ///ALERT DIALOG DİALOG
-                                    (context) => AlertDialog(
-                                      title: Text(item.urunAdi),
-                                      content: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          item.imsrc == null
-                                              ? Icon(
-                                                Icons.shopping_bag,
-                                                size: 40.w,
-                                              )
-                                              : FutureBuilder<String?>(
-                                                future: () async {
-                                                  try {
-  final imsrc = item.imsrc;
-  if (imsrc == null || imsrc.isEmpty) return null;
-
-  final uri = Uri.parse(imsrc);
-  final fileName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : null;
-  if (fileName == null) return null;
-
-  final dir = await getApplicationDocumentsDirectory();
-  final filePath = '${dir.path}/$fileName';
-
-  final file = File(filePath);
-  if (await file.exists()) {
-    return filePath;
-  } else {
-    return null;
-  }
-} catch (e) {
-  return null;
-}
-
-                                                }(),
-                                                builder: (context, snapshot) {
-                                                  if (snapshot
-                                                          .connectionState !=
-                                                      ConnectionState.done) {
-                                                    return SizedBox(
-                                                      width: 20.w,
-                                                      height: 20.w,
-                                                      child: Center(
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
-                                                      ),
-                                                    );
-                                                  }
-                                                  if (!snapshot.hasData ||
-                                                      snapshot.data == null) {
-                                                    return Icon(
-                                                      Icons.shopping_bag,
-                                                      size: 40.w,
-                                                    );
-                                                  }
-                                                  return Column(
-                                                    children: [
-                                                      ClipRRect(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                        child: Image.file(
-                                                          File(snapshot.data!),
-                                                          width: 40.w,
-                                                          height: 40.w,
-                                                          fit: BoxFit.contain,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  );
-                                                },
-                                              ),
-                                          SizedBox(height: 2.h),
-
-                                          // Text("Barcodes: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b != null && b.trim().isNotEmpty).join(', ')}"),
-                                          Consumer<RCartProvider>(
-                                            builder: (
-                                              context,
-                                              cartProvider,
-                                              child,
-                                            ) {
-                                              final item =
-                                                  cartProvider.items[stokKodu];
-                                              final currentAciklama =
-                                                  item?.aciklama ?? '';
-
-                                              return Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(item?.urunAdi ?? ''),
-                                                  SizedBox(height: 4),
-                                                  InkWell(
-                                                    onTap: () {
-                                                      _showIadeNedeniSecimi(
-                                                        context,
-                                                        stokKodu,
-                                                        cartProvider,
-                                                      );
-                                                    },
-                                                    child: InputDecorator(
-                                                      decoration: InputDecoration(
-                                                        labelText:
-                                                            '(Enter Quantity First) Reason for return',
-                                                        border:
-                                                            OutlineInputBorder(),
-                                                      ),
-                                                      child: Text(
-                                                        currentAciklama
-                                                                .isNotEmpty
-                                                            ? currentAciklama
-                                                            : 'Seçiniz...',
-                                                        style: TextStyle(
-                                                          color:
-                                                              currentAciklama
-                                                                      .isNotEmpty
-                                                                  ? Colors.black
-                                                                  : Colors.grey,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          ),
-
-                                          Text(
-                                            "Unit Price: ${item.adetFiyati}",
-                                          ),
-                                          Text(
-                                            "Box Price: ${item.kutuFiyati}",
-                                          ),
-
-                                          // Text("Active: ${product.aktif == 1 ? 'YES' : 'NO'}"),
-                                        ],
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          child: const Text('Close'),
-                                          onPressed:
-                                              () => Navigator.of(context).pop(),
-                                        ),
-                                      ],
-                                    ),
-                              );
-                            },
-                            child: Card(
-                              margin: EdgeInsets.symmetric(vertical: 0.5.h),
-                              child: Padding(
-                                padding: EdgeInsets.all(2.w),
-                                child: Column(
-                                  children: [
-                                    Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Ürün görseli
-                                        item.imsrc == null
-                                            ? Icon(
-                                              Icons.shopping_bag,
-                                              size: 16.w,
-                                            )
-                                            : FutureBuilder<String?>(
-                                              future: () async {
-                                                try {
-  final imsrc = item.imsrc;
-  if (imsrc == null || imsrc.isEmpty) return null;
-
-  final uri = Uri.parse(imsrc);
-  final fileName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : null;
-  if (fileName == null) return null;
-
-  final dir = await getApplicationDocumentsDirectory();
-  final filePath = '${dir.path}/$fileName';
-
-  final file = File(filePath);
-  return await file.exists() ? filePath : null;
-} catch (e) {
-  return null;
-}
-
-                                              }(),
-                                              builder: (context, snapshot) {
-                                                if (snapshot.connectionState !=
-                                                    ConnectionState.done) {
-                                                  return SizedBox(
-                                                    width: 16.w,
-                                                    height: 16.w,
-                                                    child: Center(
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                          ),
-                                                    ),
-                                                  );
-                                                }
-                                                if (!snapshot.hasData ||
-                                                    snapshot.data == null) {
-                                                  return Icon(
-                                                    Icons.shopping_bag,
-                                                    size: 16.w,
-                                                  );
-                                                }
-                                                return ClipRRect(
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                  child: Image.file(
-                                                    File(snapshot.data!),
-                                                    width: 16.w,
-                                                    height: 16.w,
-                                                    fit: BoxFit.cover,
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                        SizedBox(width: 3.w),
-
-                                        // Sağ taraf
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              // Ürün Adı ve Sil Butonu
-                                              Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment
-                                                        .spaceBetween,
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      item.urunAdi,
-                                                      style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 16.sp,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  IconButton(
-                                                    icon: const Icon(
-                                                      Icons.close,
-                                                      color: Colors.red,
-                                                    ),
-                                                    onPressed:
-                                                        () => cartProvider
-                                                            .removeItem(
-                                                              stokKodu,
-                                                            ),
-                                                    constraints:
-                                                        const BoxConstraints(),
-                                                    padding: EdgeInsets.zero,
-                                                    iconSize: 2.2.h,
-                                                  ),
-                                                ],
-                                              ),
-
-                                              SizedBox(height: 0.5.h),
-
-                                              // Fiyat, iskonto, final fiyat
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Text(
-                                                      'Price: ${item.birimFiyat.toStringAsFixed(2)}',
-                                                      style: TextStyle(
-                                                        fontSize: 14.sp,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  SizedBox(width: 2.w),
-                                                  // Icon(Icons.change_circle),
-                                                  // Expanded(
-                                                  //   flex: 3,
-                                                  //   child: TextField(
-                                                  //     keyboardType:
-                                                  //         TextInputType.numberWithOptions(
-                                                  //           decimal: true,
-                                                  //         ),
-                                                  //     decoration: const InputDecoration(
-                                                  //       // labelText:
-                                                  //       //     'Change Price',
-                                                  //       border:
-                                                  //           OutlineInputBorder(),
-                                                  //       isDense: true,
-
-                                                  //       contentPadding:
-                                                  //           EdgeInsets.symmetric(
-                                                  //             vertical: 8,
-                                                  //             horizontal: 8,
-                                                  //           ),
-                                                  //     ),
-                                                  //     onChanged: (value) {
-                                                  //       final parsed =
-                                                  //           double.tryParse(
-                                                  //             value,
-                                                  //           );
-                                                  //       if (parsed != null) {
-                                                  //         final customerProvider =
-                                                  //             Provider.of<
-                                                  //               SalesCustomerProvider
-                                                  //             >(
-                                                  //               context,
-                                                  //               listen: false,
-                                                  //             );
-                                                  //         cartProvider
-                                                  //                 .customerName =
-                                                  //             customerProvider
-                                                  //                 .selectedCustomer!
-                                                  //                 .kod!;
-                                                  //         cartProvider.addOrUpdateItem(
-                                                  //           urunAdi:
-                                                  //               item.urunAdi,
-                                                  //           stokKodu:
-                                                  //               item.stokKodu,
-                                                  //           birimFiyat: parsed,
-
-                                                  //           urunBarcode:
-                                                  //               item.urunBarcode,
-                                                  //           adetFiyati:
-                                                  //               item.adetFiyati,
-                                                  //           kutuFiyati:
-                                                  //               item.kutuFiyati,
-                                                  //           miktar: 0,
-                                                  //           iskonto:
-                                                  //               item.iskonto,
-                                                  //           birimTipi:
-                                                  //               item.birimTipi,
-                                                  //           durum: item.durum,
-                                                  //           vat: item.vat,
-                                                  //           imsrc: item.imsrc,
-                                                  //         );
-                                                  //       }
-                                                  //     },
-                                                  //   ),
-                                                  // ),
-                                                ],
-                                              ),
-
-                                              SizedBox(height: 1.h),
-
-                                              // Alt Satır: Miktar, Birim Tipi Dropdown, İskonto Alanı
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        // Miktar azalt/arttır
-
-                                        // Dropdown (Unit/Box)
-                                        Row(
-                                          children: [
-                                            Text(
-                                              "Type: ",
-                                              style: TextStyle(
-                                                fontSize: 15.sp,
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.black,
-                                              ),
-                                            ),
-                                            DropdownButton<String>(
-                                              value: item.birimTipi,
-                                              items:
-                                                  ['Unit', 'Box'].map((value) {
-                                                    return DropdownMenuItem(
-                                                      value: value,
-                                                      child: Text(value),
-                                                    );
-                                                  }).toList(),
-                                              onChanged: (newValue) {
-                                                if (newValue != null) {
-                                                  final fiyat =
-                                                      (newValue == 'Unit')
-                                                          ? double.parse(
-                                                            item.adetFiyati,
-                                                          )
-                                                          : double.parse(
-                                                            item.kutuFiyati,
-                                                          );
-                                                  final customerProvider =
-                                                      Provider.of<
-                                                        SalesCustomerProvider
-                                                      >(context, listen: false);
-                                                  cartProvider.customerName =
-                                                      customerProvider
-                                                          .selectedCustomer!
-                                                          .kod!;
-                                                  cartProvider.addOrUpdateItem(
-                                                    urunAdi: item.urunAdi,
-                                                    stokKodu: item.stokKodu,
-                                                    birimFiyat: fiyat,
-                                                    urunBarcode:
-                                                        item.urunBarcode,
-                                                    adetFiyati: item.adetFiyati,
-                                                    kutuFiyati: item.kutuFiyati,
-                                                    miktar: 0,
-                                                    iskonto: item.iskonto,
-                                                    birimTipi: newValue,
-                                                    durum: item.durum,
-                                                    vat: item.vat,
-                                                    imsrc: item.imsrc,
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                          ],
-                                        ),
-
-                                        // İskonto TextField
-                                        // Row(
-                                        //   children: [
-                                        //     Icon(
-                                        //       Icons.local_offer,
-                                        //       size: 20.sp,
-                                        //       color: Colors.red,
-                                        //     ),
-                                        //     SizedBox(
-                                        //       width: 70,
-                                        //       child: TextField(
-                                        //         keyboardType:
-                                        //             TextInputType.number,
-                                        //         decoration: InputDecoration(
-                                        //           isDense: true,
-                                        //           border: OutlineInputBorder(),
-                                        //         ),
-                                        //         controller:
-                                        //             TextEditingController(
-                                        //               text:
-                                        //                   item.iskonto
-                                        //                       .toString(),
-                                        //             ),
-                                        //         onSubmitted: (value) {
-                                        //           int parsed = 0;
-                                        //           if (value.isNotEmpty) {
-                                        //             parsed =
-                                        //                 int.tryParse(value) ??
-                                        //                 0;
-                                        //           }
-                                        //           final customerProvider =
-                                        //               Provider.of<
-                                        //                 SalesCustomerProvider
-                                        //               >(context, listen: false);
-                                        //           cartProvider.customerName =
-                                        //               customerProvider
-                                        //                   .selectedCustomer!
-                                        //                   .kod!;
-                                        //           cartProvider.addOrUpdateItem(
-                                        //             urunAdi: item.urunAdi,
-                                        //             stokKodu: item.stokKodu,
-                                        //             birimFiyat: item.birimFiyat,
-                                        //             urunBarcode:
-                                        //                 item.urunBarcode,
-                                        //             miktar: 0,
-                                        //             iskonto: parsed,
-                                        //             birimTipi: item.birimTipi,
-                                        //             durum: item.durum,
-                                        //             vat: item.vat,
-                                        //             imsrc: item.imsrc,
-                                        //           );
-                                        //         },
-                                        //       ),
-                                        //     ),
-                                        //   ],
-                                        // ),
-                                        Row(
-                                          children: [
-                                            IconButton(
-                                              icon: Icon(
-                                                Icons.remove,
-                                                size: 10.w,
-                                              ),
-                                              onPressed: () {
-                                                int newMiktar = item.miktar - 1;
-                                                if (newMiktar <= 0) {
-                                                  cartProvider.removeItem(
-                                                    stokKodu,
-                                                  );
-                                                } else {
-                                                  final customerProvider =
-                                                      Provider.of<
-                                                        SalesCustomerProvider
-                                                      >(context, listen: false);
-                                                  cartProvider.customerName =
-                                                      customerProvider
-                                                          .selectedCustomer!
-                                                          .kod!;
-                                                  cartProvider.addOrUpdateItem(
-                                                    urunAdi: item.urunAdi,
-                                                    stokKodu: stokKodu,
-                                                    birimFiyat: item.birimFiyat,
-                                                    urunBarcode:
-                                                        item.urunBarcode,
-                                                    miktar: -1,
-                                                    iskonto: item.iskonto,
-                                                    birimTipi: item.birimTipi,
-                                                    durum: item.durum,
-                                                    vat: item.vat,
-                                                    imsrc: item.imsrc,
-                                                  );
-                                                }
-                                              },
-                                            ),
-                                            Text(
-                                              item.miktar.toString(),
-                                              style: TextStyle(fontSize: 18.sp),
-                                            ),
-                                            IconButton(
-                                              icon: Icon(Icons.add, size: 10.w),
-                                              onPressed: () {
-                                                final customerProvider =
-                                                    Provider.of<
-                                                      SalesCustomerProvider
-                                                    >(context, listen: false);
-                                                cartProvider.customerName =
-                                                    customerProvider
-                                                        .selectedCustomer!
-                                                        .kod!;
-                                                cartProvider.addOrUpdateItem(
-                                                  urunAdi: item.urunAdi,
-                                                  stokKodu: stokKodu,
-                                                  birimFiyat: item.birimFiyat,
-                                                  urunBarcode: item.urunBarcode,
-                                                  miktar: 1,
-                                                  iskonto: item.iskonto,
-                                                  birimTipi: item.birimTipi,
-                                                  durum: item.durum,
-                                                  vat: item.vat,
-                                                  imsrc: item.imsrc,
-                                                );
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                    Divider(),
-                                    Text(
-                                      'Final Price: ${item.indirimliTutar.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 15.sp,
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const Divider(),
-                    Padding(
-                      padding: EdgeInsets.only(bottom: 1.h),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              Text(
-                                'Units: $unitCount',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15.sp,
-                                ),
-                              ),
-                              Text(
-                                'Boxes: $boxCount',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15.sp,
-                                ),
-                              ),
-                              Text(
-                                'Total Items: $totalCount',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15.sp,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 1.h),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "Total:",
-                                style: TextStyle(
-                                  fontSize: 18.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "${cartProvider.toplamTutar.toStringAsFixed(2)}",
-                                style: TextStyle(
-                                  fontSize: 15.sp,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        child: Text("Return"),
-                        onPressed: () async {
-                          RefundFisModel fisModelCopy =
-                              widget
-                                  .fisModel; // final olmayan bir değişkene atama
-
-                          List<RefundItemModel> refundList =
-                              convertCartToRefundItems(cartProvider);
-                          final toplamTutare = toplamTutarFromRefundList(
-                            refundList,
-                          );
-                          print('Toplam Tutar: $toplamTutare');
-                          fisModelCopy.toplamtutar = toplamTutare;
-                          sendRefundItems(context, widget.fisModel, refundList);
-                          cartProvider.items.clear();
-
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(SnackBar(content: Text('Returned')));
-
-                          final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
-                          await activityRepository.addActivity(
-                            "Return Receipt \n${fisModelCopy.toFormattedString()} \n${cartItems.map((item) => item.toFormattedString()).join('\n-----------------\n')}",
-                          );
-
-                          cartProvider.items.clear();
-                          await cartProvider.clearCart();
-
-                          final selectedCustomer =
-                              Provider.of<SalesCustomerProvider>(
-                                context,
-                                listen: false,
-                              ).selectedCustomer;
-                          final customerRepository = Provider.of<CustomerRepository>(
-                            context,
-                            listen: false,
-                          );
-                          final customer = await customerRepository.getCustomerByUnvan(
-                            selectedCustomer!.kod ?? "TURAN",
-                          );
-                          String bakiye = customer?['bakiye']?.toString() ?? "0.0";
-                          print("bakişyeee: $bakiye");
-                          Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(
-                              builder: (_) => CustomerView(bakiye: bakiye),
-                            ),
-                            (route) => false,
-                          );
-                        },
-                      ),
-                    ),
-                    SizedBox(height: 2.h),
-                    const Divider(),
-                  ],
+        child: cartItems.isEmpty
+            ? _buildEmptyCart()
+            : Column(
+          children: [
+            Expanded(
+              child: ListView.separated(
+                padding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.h),
+                itemCount: cartItems.length,
+                itemBuilder: (context, index) {
+                  final item = cartItems[index];
+                  return RefundCartItemCard(
+                    item: item,
+                    imageFuture: _imageFutures[item.stokKodu],
+                    onRemove: () => cartProvider.removeItem(item.stokKodu),
+                    onQuantityChange: (increment) => _handleQuantityChange(context, item, increment),
+                    onReturnReasonTap: () => _showReturnReasonDialog(context, item.stokKodu, cartProvider),
+                  );
+                },
+                separatorBuilder: (context, index) => Divider(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+                  thickness: 1,
+                  height: 1,
                 ),
+              ),
+            ),
+            const Divider(),
+            _buildSummarySection(unitCount, boxCount, totalCount, cartProvider),
+            SizedBox(height: 2.h),
+            _buildSubmitButton(context),
+          ],
+        ),
       ),
     );
   }
 
-  String generateFisNo(DateTime now) {
-    final yy = now.year % 100; // Yılın son iki hanesi
-    final mm = now.month.toString().padLeft(2, '0');
-    final dd = now.day.toString().padLeft(2, '0');
+  // --- UI Components ---
+  Widget _buildEmptyCart() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.grey),
+          SizedBox(height: 2.h),
+          Text(
+            'Return cart is empty',
+            style: TextStyle(fontSize: 16.sp, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
 
-    final random = Random();
-    final randomNumber = random
-        .nextInt(1000)
-        .toString()
-        .padLeft(4, '0'); // 0000 - 9999
+  Widget _buildSummarySection(int unitCount, int boxCount, int totalCount, RCartProvider cartProvider) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 1.h),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildSummaryItem('Units', unitCount),
+              _buildSummaryItem('Boxes', boxCount),
+              _buildSummaryItem('Total Items', totalCount),
+            ],
+          ),
+          SizedBox(height: 1.h),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Total',
+                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                cartProvider.toplamTutar.toStringAsFixed(2),
+                style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-    return "MO$yy$mm$dd$randomNumber";
+  Widget _buildSummaryItem(String label, int value) {
+    return Text(
+      '$label: $value',
+      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15.sp),
+    );
+  }
+
+  Widget _buildSubmitButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 6.h,
+      child: ElevatedButton(
+        onPressed: _isSubmitting ? null : () => _submitRefund(context),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Theme.of(context).colorScheme.error,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: _isSubmitting
+            ? SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+        )
+            : Text(
+          'Submit Return',
+          style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  void _showClearCartDialog(BuildContext context, RCartProvider cartProvider) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Clear Cart'),
+        content: Text('Are you sure you want to remove all items?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await cartProvider.clearCart();
+              _imageFutures.clear();
+              setState(() {});
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Return cart cleared')),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleQuantityChange(BuildContext context, CartItem item, bool increment) {
+    final cartProvider = Provider.of<RCartProvider>(context, listen: false);
+    final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+
+    if (!increment && item.miktar <= 1) {
+      cartProvider.removeItem(item.stokKodu);
+      return;
+    }
+
+    cartProvider.customerName = customerProvider.selectedCustomer?.kod ?? '';
+    cartProvider.addOrUpdateItem(
+      urunAdi: item.urunAdi,
+      stokKodu: item.stokKodu,
+      birimFiyat: item.birimFiyat,
+      urunBarcode: item.urunBarcode,
+      adetFiyati: item.adetFiyati,
+      kutuFiyati: item.kutuFiyati,
+      miktar: increment ? 1 : -1,
+      iskonto: item.iskonto,
+      birimTipi: item.birimTipi,
+      durum: item.durum,
+      vat: item.vat,
+      imsrc: item.imsrc,
+    );
+  }
+}
+
+
+// --- WIDGETS ---
+
+class RefundCartItemCard extends StatefulWidget {
+  final CartItem item;
+  final Future<String?>? imageFuture;
+  final VoidCallback onRemove;
+  final Function(bool increment) onQuantityChange;
+  final VoidCallback onReturnReasonTap;
+
+  const RefundCartItemCard({
+    super.key,
+    required this.item,
+    this.imageFuture,
+    required this.onRemove,
+    required this.onQuantityChange,
+    required this.onReturnReasonTap,
+  });
+
+  @override
+  State<RefundCartItemCard> createState() => _RefundCartItemCardState();
+}
+
+class _RefundCartItemCardState extends State<RefundCartItemCard> {
+  late TextEditingController _quantityController;
+  final FocusNode _quantityFocusNode = FocusNode();
+  String _oldQuantityValue = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _quantityController = TextEditingController(text: widget.item.miktar.toString());
+    _quantityFocusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _quantityFocusNode.removeListener(_onFocusChange);
+    _quantityFocusNode.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_quantityFocusNode.hasFocus) {
+      _oldQuantityValue = _quantityController.text;
+      _quantityController.clear();
+    } else {
+      if (_quantityController.text.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _quantityController.text = _oldQuantityValue;
+          });
+        }
+      }
+      _updateQuantityFromTextField(_quantityController.text);
+    }
+  }
+
+  void _updateQuantityFromTextField(String value) {
+    final newQuantity = int.tryParse(value) ?? 0;
+    final currentQuantity = widget.item.miktar;
+    final difference = newQuantity - currentQuantity;
+
+    if (difference == 0) return;
+
+    if (difference > 0) {
+      for (int i = 0; i < difference; i++) {
+        widget.onQuantityChange(true);
+      }
+    } else {
+      for (int i = 0; i < difference.abs(); i++) {
+        widget.onQuantityChange(false);
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(RefundCartItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.miktar != widget.item.miktar) {
+      _quantityController.text = widget.item.miktar.toString();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(2.w),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildImage(context),
+          SizedBox(width: 5.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(context),
+                SizedBox(height: 1.h),
+                _buildReturnReasonSection(context),
+                SizedBox(height: 1.h),
+                _buildBottomSection(context),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImage(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _showImageDialog(context),
+      child: Column(
+        children: [
+          Container(
+            width: 30.w,
+            height: 30.w,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey.shade200,
+            ),
+            child: widget.item.imsrc == null
+                ? Icon(Icons.shopping_bag, size: 15.w, color: Colors.grey)
+                : FutureBuilder<String?>(
+              future: widget.imageFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return Center(child: CircularProgressIndicator(strokeWidth: 2));
+                }
+                if (snapshot.hasData && snapshot.data != null) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(snapshot.data!),
+                      fit: BoxFit.cover,
+                      errorBuilder: (c, e, s) => Icon(Icons.broken_image, size: 15.w, color: Colors.grey),
+                    ),
+                  );
+                }
+                return Icon(Icons.shopping_bag, size: 15.w, color: Colors.grey);
+              },
+            ),
+          ),
+          SizedBox(height: 0.5.h),
+          Text(
+            '${widget.item.indirimliTutar.toStringAsFixed(2)}',
+            style: TextStyle(
+              fontSize: 14.sp,
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            widget.item.urunAdi,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15.sp),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.red),
+          onPressed: widget.onRemove,
+          constraints: const BoxConstraints(),
+          padding: EdgeInsets.zero,
+          iconSize: 2.2.h,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReturnReasonSection(BuildContext context) {
+    return InkWell(
+      onTap: widget.onReturnReasonTap,
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 1.h),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: widget.item.aciklama.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.assignment,
+              size: 18.sp,
+              color: widget.item.aciklama.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primary,
+            ),
+            SizedBox(width: 2.w),
+            Expanded(
+              child: Text(
+                widget.item.aciklama.isEmpty ? 'Select return reason' : widget.item.aciklama,
+                style: TextStyle(
+                  fontSize: 13.sp,
+                  color: widget.item.aciklama.isEmpty ? Colors.grey : Colors.black,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomSection(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.8.h),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '${widget.item.birimTipi}',
+            style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+          ),
+        ),
+        _buildQuantityControl(context),
+      ],
+    );
+  }
+
+  Widget _buildQuantityControl(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12.w,
+          height: 8.w,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.error.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.remove, size: 6.w, color: Theme.of(context).colorScheme.error),
+            onPressed: () => widget.onQuantityChange(false),
+            constraints: const BoxConstraints(),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+        SizedBox(width: 1.w),
+        Container(
+          width: 12.w,
+          height: 8.w,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Center(
+            child: TextField(
+              controller: _quantityController,
+              focusNode: _quantityFocusNode,
+              keyboardType: TextInputType.number,
+              textInputAction: TextInputAction.done,
+              textAlign: TextAlign.center,
+              textAlignVertical: TextAlignVertical.center,
+              maxLines: 1,
+              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                isDense: true,
+              ),
+              onSubmitted: (value) => _updateQuantityFromTextField(value),
+            ),
+          ),
+        ),
+        SizedBox(width: 1.w),
+        Container(
+          width: 12.w,
+          height: 8.w,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.add, size: 6.w, color: Theme.of(context).colorScheme.primary),
+            onPressed: () => widget.onQuantityChange(true),
+            constraints: const BoxConstraints(),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showImageDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(widget.item.urunAdi),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.item.imsrc != null)
+              FutureBuilder<String?>(
+                future: widget.imageFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return SizedBox(width: 40.w, height: 40.w, child: Center(child: CircularProgressIndicator()));
+                  }
+                  if (snapshot.hasData && snapshot.data != null) {
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(File(snapshot.data!), width: 40.w, height: 40.w, fit: BoxFit.contain),
+                    );
+                  }
+                  return Icon(Icons.shopping_bag, size: 40.w);
+                },
+              )
+            else
+              Icon(Icons.shopping_bag, size: 40.w),
+            SizedBox(height: 2.h),
+            Text('Unit Price: ${widget.item.adetFiyati}'),
+            Text('Box Price: ${widget.item.kutuFiyati}'),
+            Text('Discount: ${widget.item.iskonto}%'),
+            Text('Return Reason: ${widget.item.aciklama.isEmpty ? 'Not selected' : widget.item.aciklama}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('Close'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
   }
 }
