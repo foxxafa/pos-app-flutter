@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
@@ -26,6 +28,68 @@ class _SyncViewState extends State<SyncView> {
   late SyncService _syncService;
   bool _isLoading = false;
   String _message = '';
+
+  // 🔑 El terminali key tespiti için
+  final ValueNotifier<List<Map<String, dynamic>>> _currentPressKeysNotifier = ValueNotifier([]);
+  Timer? _keyGroupTimer;
+  final List<Map<String, dynamic>> _tempKeyBuffer = [];
+
+  // Hardware keyboard handler
+  @override
+  void initState() {
+    super.initState();
+    // Hardware keyboard event'lerini dinle
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _keyGroupTimer?.cancel();
+    _currentPressKeysNotifier.dispose();
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      // PhysicalKeyboardKey'den bilgi çek
+      final physicalKey = event.physicalKey;
+
+      final keyInfo = {
+        'keyId': event.logicalKey.keyId,
+        'label': event.logicalKey.keyLabel,
+        'physicalKey': physicalKey.debugName ?? physicalKey.usbHidUsage.toString(),
+        'physicalKeyID': physicalKey.usbHidUsage,
+        'eventType': 'KeyDown',
+        'timestamp': DateTime.now().toString(),
+      };
+
+      // Aynı tuşu tekrar ekleme
+      final existingIndex = _tempKeyBuffer.indexWhere((k) =>
+        k['physicalKeyID'] == keyInfo['physicalKeyID']);
+
+      if (existingIndex == -1) {
+        _tempKeyBuffer.add(keyInfo);
+      }
+
+      // Debug konsola yazdır
+      print('🔑 Hardware Key Detected: LogicalID=${event.logicalKey.keyId}, '
+            'Physical=${event.physicalKey.debugName}, '
+            'USB_HID=${event.physicalKey.usbHidUsage}');
+
+      // Timer'ı iptal et ve yeni başlat
+      _keyGroupTimer?.cancel();
+      _keyGroupTimer = Timer(Duration(milliseconds: 200), () {
+        // 200ms sonra hala key gelmediyse, buffer'daki tüm keyleri göster
+        if (_tempKeyBuffer.isNotEmpty) {
+          _currentPressKeysNotifier.value = List.from(_tempKeyBuffer);
+          print('📋 Scanner Press Complete - Total keys: ${_tempKeyBuffer.length}');
+          _tempKeyBuffer.clear();
+        }
+      });
+    }
+    return false; // Event'i başka widgetlar da alsın
+  }
 
   @override
   void didChangeDependencies() {
@@ -169,28 +233,118 @@ class _SyncViewState extends State<SyncView> {
     });
   }
 
+  // 🔑 El terminali key ID tespit dialog'u
+  void _showKeyDetectionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => ValueListenableBuilder<List<Map<String, dynamic>>>(
+        valueListenable: _currentPressKeysNotifier,
+        builder: (context, detectedKeys, child) {
+          return AlertDialog(
+            title: Text('Scanner Key Debug', style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold)),
+            content: SizedBox(
+              width: 80.w,
+              height: 60.h,
+              child: detectedKeys.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Press scanner button...',
+                        style: TextStyle(color: Colors.grey, fontSize: 16.sp),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (int i = 0; i < detectedKeys.length; i++) ...[
+                            if (i > 0) Divider(height: 4.h, thickness: 2),
+                            Text(
+                              'Key ${i + 1}',
+                              style: TextStyle(
+                                fontSize: 18.sp,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                            SizedBox(height: 2.h),
+                            _buildBigKeyInfo('Logical ID', detectedKeys[i]['keyId'].toString()),
+                            SizedBox(height: 2.h),
+                            _buildBigKeyInfo('Physical', detectedKeys[i]['physicalKey'].toString()),
+                            SizedBox(height: 2.h),
+                            _buildBigKeyInfo('USB HID', detectedKeys[i]['physicalKeyID'].toString()),
+                          ],
+                        ],
+                      ),
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Close', style: TextStyle(fontSize: 14.sp)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBigKeyInfo(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14.sp,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: 0.5.h),
+        SelectableText(
+          value,
+          style: TextStyle(
+            fontSize: 20.sp,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Sizer(
       // Sizer ile sarmalıyoruz
       builder: (context, orientation, deviceType) {
         return Scaffold(
-          appBar: AppBar(
-            centerTitle: true,
-            leading: IconButton(
-              icon: Icon(Icons.home, size: 28.sp),
-              tooltip: 'Return to Menu',
-              onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => MenuView()),
-                  (Route<dynamic> route) => false,
-                );
-              },
+            appBar: AppBar(
+              centerTitle: true,
+              leading: IconButton(
+                icon: Icon(Icons.home, size: 28.sp),
+                tooltip: 'Return to Menu',
+                onPressed: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => MenuView()),
+                    (Route<dynamic> route) => false,
+                  );
+                },
+              ),
+              title: Text('Sync View', style: TextStyle(fontSize: 18.sp)),
+              actions: [
+                // 🔑 Key tespit butonu
+                IconButton(
+                  icon: Icon(Icons.settings_remote, size: 24.sp),
+                  tooltip: 'El Terminali Key Tespiti',
+                  onPressed: _showKeyDetectionDialog,
+                ),
+              ],
             ),
-            title: Text('Sync View', style: TextStyle(fontSize: 18.sp)),
-          ),
-          body: Padding(
+            body: Padding(
             padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 4.h),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

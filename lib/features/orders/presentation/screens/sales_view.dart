@@ -36,9 +36,19 @@ class _SalesViewState extends State<SalesView> {
   Future<void> _loadSales() async {
     try {
       final sales = await DatabaseHelper().getAll('CustomerBalance');
+      // Listeyi kopyala (read-only hatası önlenir)
+      final mutableSales = List<Map<String, dynamic>>.from(sales);
+
+      // A'dan Z'ye sıralama
+      mutableSales.sort((a, b) {
+        final nameA = (a['unvan'] ?? a['Unvan'] ?? '').toString().toLowerCase();
+        final nameB = (b['unvan'] ?? b['Unvan'] ?? '').toString().toLowerCase();
+        return nameA.compareTo(nameB);
+      });
+
       setState(() {
-        _allSales = sales;
-        _filteredSales = sales.take(100).toList();
+        _allSales = mutableSales;
+        _filteredSales = _allSales.take(100).toList();
         _expandedStates = List.generate(_filteredSales.length, (_) => false);
       });
     } catch (e) {
@@ -57,6 +67,13 @@ class _SalesViewState extends State<SalesView> {
           final title = (sale['unvan'] ?? sale['Unvan'])?.toString().toLowerCase() ?? '';
           return title.contains(query);
         }).toList();
+
+    // Filtrelenmiş sonuçları da A'dan Z'ye sırala
+    filtered.sort((a, b) {
+      final nameA = (a['unvan'] ?? a['Unvan'] ?? '').toString().toLowerCase();
+      final nameB = (b['unvan'] ?? b['Unvan'] ?? '').toString().toLowerCase();
+      return nameA.compareTo(nameB);
+    });
 
     setState(() {
       _filteredSales = filtered.take(50).toList();

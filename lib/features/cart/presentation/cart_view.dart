@@ -11,6 +11,7 @@ import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
+import 'package:pos_app/core/services/scanner_service.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
@@ -53,11 +54,16 @@ class _CartViewState extends State<CartView> {
   Timer? _imageDownloadTimer;
 
   // --- Lifecycle Methods ---
+  late bool Function(KeyEvent) _scannerHandler;
+
   @override
   void initState() {
     super.initState();
     _loadProducts();
     _setupAudioPlayer();
+    // 🔑 Hardware keyboard listener ekle
+    _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
+    HardwareKeyboard.instance.addHandler(_scannerHandler);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _barcodeFocusNode.requestFocus();
       _syncWithProvider();
@@ -80,6 +86,8 @@ class _CartViewState extends State<CartView> {
     _quantityControllers.values.forEach((c) => c.dispose());
     _discountFocusNodes.values.forEach((f) => f.dispose());
     _audioPlayer.dispose();
+    // 🔑 Hardware keyboard listener kaldır
+    HardwareKeyboard.instance.removeHandler(_scannerHandler);
     super.dispose();
   }
 
@@ -455,21 +463,7 @@ class _CartViewState extends State<CartView> {
           _buildShoppingCartIcon(cartItems.length, unitCount + boxCount),
         ],
       ),
-      body: Focus(
-        autofocus: true,
-        onKeyEvent: (FocusNode node, KeyEvent event) {
-          if (event is KeyDownEvent) {
-            final sunmiScanKeyIds = {
-              0x01100000209, 0x01100000208, 4294967556, 73014445159, 4294967309
-            };
-            if (sunmiScanKeyIds.contains(event.logicalKey.keyId)) {
-              _clearAndFocusBarcode();
-              return KeyEventResult.handled;
-            }
-          }
-          return KeyEventResult.ignored;
-        },
-        child: Column(
+      body: Column(
           children: [
             Opacity(
               opacity: 0.0,
@@ -502,7 +496,6 @@ class _CartViewState extends State<CartView> {
             ),
           ],
         ),
-      ),
     );
   }
 
