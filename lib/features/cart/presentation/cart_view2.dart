@@ -28,8 +28,15 @@ class _CartView2State extends State<CartView2> {
   // Controller'ları her item için saklayacağız
   final Map<String, TextEditingController> _priceControllers = {};
   final Map<String, TextEditingController> _discountControllers = {};
+  final Map<String, TextEditingController> _quantityControllers = {};
   final Map<String, FocusNode> _priceFocusNodes = {};
   final Map<String, FocusNode> _discountFocusNodes = {};
+  final Map<String, FocusNode> _quantityFocusNodes = {};
+
+  // Focus değişikliklerinde eski değerleri saklamak için
+  final Map<String, String> _oldPriceValues = {};
+  final Map<String, String> _oldDiscountValues = {};
+  final Map<String, String> _oldQuantityValues = {};
 
   // Image cache sistemi
   Map<String, Future<String?>> _imageFutures = {};
@@ -58,8 +65,10 @@ class _CartView2State extends State<CartView2> {
     // Controller'ları dispose et
     _priceControllers.forEach((_, controller) => controller.dispose());
     _discountControllers.forEach((_, controller) => controller.dispose());
+    _quantityControllers.forEach((_, controller) => controller.dispose());
     _priceFocusNodes.forEach((_, node) => node.dispose());
     _discountFocusNodes.forEach((_, node) => node.dispose());
+    _quantityFocusNodes.forEach((_, node) => node.dispose());
     _imageDownloadTimer?.cancel();
     super.dispose();
   }
@@ -208,26 +217,85 @@ class _CartView2State extends State<CartView2> {
                           if (!_priceControllers.containsKey(controllerKey)) {
                             _priceControllers[controllerKey] = TextEditingController();
                             _priceFocusNodes[controllerKey] = FocusNode();
+
+                            // Price focus listener ekle
+                            _priceFocusNodes[controllerKey]!.addListener(() {
+                              final focusNode = _priceFocusNodes[controllerKey]!;
+                              final controller = _priceControllers[controllerKey]!;
+
+                              if (focusNode.hasFocus) {
+                                // Focus kazanıldığında eski değeri sakla ve temizle
+                                _oldPriceValues[controllerKey] = controller.text;
+                                controller.clear();
+                              } else {
+                                // Focus kaybedildiğinde, alan boşsa eski değeri geri yükle
+                                if (controller.text.isEmpty && _oldPriceValues.containsKey(controllerKey)) {
+                                  controller.text = _oldPriceValues[controllerKey]!;
+                                }
+                              }
+                            });
                           }
                           if (!_discountControllers.containsKey(controllerKey)) {
                             _discountControllers[controllerKey] = TextEditingController();
                             _discountFocusNodes[controllerKey] = FocusNode();
+
+                            // Discount focus listener ekle
+                            _discountFocusNodes[controllerKey]!.addListener(() {
+                              final focusNode = _discountFocusNodes[controllerKey]!;
+                              final controller = _discountControllers[controllerKey]!;
+
+                              if (focusNode.hasFocus) {
+                                // Focus kazanıldığında eski değeri sakla ve temizle
+                                _oldDiscountValues[controllerKey] = controller.text;
+                                controller.clear();
+                              } else {
+                                // Focus kaybedildiğinde, alan boşsa eski değeri geri yükle
+                                if (controller.text.isEmpty && _oldDiscountValues.containsKey(controllerKey)) {
+                                  controller.text = _oldDiscountValues[controllerKey]!;
+                                }
+                              }
+                            });
+                          }
+                          if (!_quantityControllers.containsKey(controllerKey)) {
+                            _quantityControllers[controllerKey] = TextEditingController();
+                            _quantityFocusNodes[controllerKey] = FocusNode();
+
+                            // Quantity focus listener ekle
+                            _quantityFocusNodes[controllerKey]!.addListener(() {
+                              final focusNode = _quantityFocusNodes[controllerKey]!;
+                              final controller = _quantityControllers[controllerKey]!;
+
+                              if (focusNode.hasFocus) {
+                                // Focus kazanıldığında eski değeri sakla ve temizle
+                                _oldQuantityValues[controllerKey] = controller.text;
+                                controller.clear();
+                              } else {
+                                // Focus kaybedildiğinde, alan boşsa eski değeri geri yükle
+                                if (controller.text.isEmpty && _oldQuantityValues.containsKey(controllerKey)) {
+                                  controller.text = _oldQuantityValues[controllerKey]!;
+                                }
+                              }
+                            });
                           }
 
                           final priceController = _priceControllers[controllerKey]!;
                           final discountController = _discountControllers[controllerKey]!;
+                          final quantityController = _quantityControllers[controllerKey]!;
                           final priceFocusNode = _priceFocusNodes[controllerKey]!;
                           final discountFocusNode = _discountFocusNodes[controllerKey]!;
+                          final quantityFocusNode = _quantityFocusNodes[controllerKey]!;
 
-                          // İlk kez oluşturuluyorsa controller'a değer ata
+                          // İlk kez oluşturuluyorsa controller'a ORJINAL fiyatı ata (indirim sonrası değil!)
                           if (priceController.text.isEmpty) {
-                            final discountAmount = (item.birimFiyat * item.iskonto) / 100;
-                            final discountedPrice = item.birimFiyat - discountAmount;
-                            priceController.text = discountedPrice.toStringAsFixed(2);
+                            priceController.text = item.birimFiyat.toStringAsFixed(2);
                           }
                           // İndirim controller'ını sadece ilk kez doldur, sonra kullanıcıya bırak
                           if (discountController.text.isEmpty && !discountFocusNode.hasFocus) {
                             discountController.text = item.iskonto > 0 ? item.iskonto.toString() : '';
+                          }
+                          // Quantity controller'ı her zaman güncelle (provider'dan gelen miktar değişebilir)
+                          if (quantityController.text != item.miktar.toString()) {
+                            quantityController.text = item.miktar.toString();
                           }
 
                           return Column(
@@ -527,6 +595,7 @@ class _CartView2State extends State<CartView2> {
                                                               );
                                                             }
                                                           }
+                                                          priceFocusNode.unfocus();
                                                         },
                                                         onSubmitted: (value) {
                                                           // Submit edildiğinde formatlama işlemi
@@ -535,6 +604,7 @@ class _CartView2State extends State<CartView2> {
                                                             final formattedValue = parsed.toStringAsFixed(2);
                                                             priceController.text = formattedValue;
                                                           }
+                                                          priceFocusNode.unfocus();
                                                         },
                                                       ),
                                                 ),
@@ -729,9 +799,8 @@ class _CartView2State extends State<CartView2> {
                                                     borderRadius: BorderRadius.circular(4),
                                                   ),
                                                   child: TextField(
-                                                    controller: TextEditingController(
-                                                      text: "${item.miktar}",
-                                                    ),
+                                                    controller: quantityController,
+                                                    focusNode: quantityFocusNode,
                                                     textAlign: TextAlign.center,
                                                     style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
                                                     decoration: InputDecoration(

@@ -34,6 +34,7 @@ class CartView extends StatefulWidget {
 class _CartViewState extends State<CartView> {
   // --- State Variables ---
   final Map<String, TextEditingController> _priceControllers = {};
+  final Map<String, FocusNode> _priceFocusNodes = {};
   final Map<String, TextEditingController> _discountControllers = {};
   final Map<String, FocusNode> _discountFocusNodes = {};
   final FocusNode _barcodeFocusNode = FocusNode();
@@ -41,6 +42,7 @@ class _CartViewState extends State<CartView> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _searchController2 = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final ScrollController _scrollController = ScrollController();
 
   List<ProductModel> _allProducts = [];
   List<ProductModel> _filteredProducts = [];
@@ -81,7 +83,9 @@ class _CartViewState extends State<CartView> {
     _barcodeFocusNode2.dispose();
     _searchController.dispose();
     _searchController2.dispose();
+    _scrollController.dispose();
     _priceControllers.values.forEach((c) => c.dispose());
+    _priceFocusNodes.values.forEach((f) => f.dispose());
     _discountControllers.values.forEach((c) => c.dispose());
     _quantityControllers.values.forEach((c) => c.dispose());
     _discountFocusNodes.values.forEach((f) => f.dispose());
@@ -281,6 +285,11 @@ class _CartViewState extends State<CartView> {
       _filteredProducts = filtered.take(50).toList();
       _generateImageFutures(_filteredProducts);
     });
+
+    // Arama yapıldığında listenin en üste scroll edilmesi
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
 
     _scheduleImageDownload();
 
@@ -557,6 +566,7 @@ class _CartViewState extends State<CartView> {
 
   Widget _buildProductList(CartProvider provider) {
     return ListView.separated(
+      controller: _scrollController,
       padding: EdgeInsets.symmetric(horizontal: 1.w, vertical: 1.h),
       itemCount: _filteredProducts.length,
       itemBuilder: (context, index) {
@@ -576,6 +586,9 @@ class _CartViewState extends State<CartView> {
         if (!_discountControllers.containsKey(key)) {
           _discountControllers[key] = TextEditingController(text: provider.getIskonto(key).toString());
         }
+        if (!_priceFocusNodes.containsKey(key)) {
+          _priceFocusNodes[key] = FocusNode();
+        }
         if (!_discountFocusNodes.containsKey(key)) {
           _discountFocusNodes[key] = FocusNode();
         }
@@ -592,6 +605,7 @@ class _CartViewState extends State<CartView> {
           imageFuture: _imageFutures[key],
           refundProductNames: widget.refundProductNames,
           priceController: _priceControllers[key]!,
+          priceFocusNode: _priceFocusNodes[key]!,
           discountController: _discountControllers[key]!,
           quantityController: _quantityControllers[key]!,
           discountFocusNode: _discountFocusNodes[key]!,
@@ -640,6 +654,7 @@ class ProductListItem extends StatefulWidget {
   final Future<String?>? imageFuture;
   final List<String> refundProductNames;
   final TextEditingController priceController;
+  final FocusNode priceFocusNode;
   final TextEditingController discountController;
   final TextEditingController quantityController;
   final FocusNode discountFocusNode;
@@ -658,6 +673,7 @@ class ProductListItem extends StatefulWidget {
     this.imageFuture,
     required this.refundProductNames,
     required this.priceController,
+    required this.priceFocusNode,
     required this.discountController,
     required this.quantityController,
     required this.discountFocusNode,
@@ -733,6 +749,7 @@ class _ProductListItemState extends State<ProductListItem> {
               provider: widget.provider,
               refundProductNames: widget.refundProductNames,
               priceController: widget.priceController,
+              priceFocusNode: widget.priceFocusNode,
               discountController: widget.discountController,
               quantityController: widget.quantityController,
               discountFocusNode: widget.discountFocusNode,
@@ -861,15 +878,16 @@ class ProductImage extends StatelessWidget {
 }
 
 
-class ProductDetails extends StatelessWidget {
+class ProductDetails extends StatefulWidget {
   final ProductModel product;
   final CartProvider provider;
   final List<String> refundProductNames;
   final TextEditingController priceController;
+  final FocusNode priceFocusNode;
   final TextEditingController discountController;
   final TextEditingController quantityController;
   final FocusNode discountFocusNode;
-  final FocusNode quantityFocusNode; // Add this
+  final FocusNode quantityFocusNode;
   final bool isBox;
   final int quantity;
   final ValueChanged<bool> onBirimTipiChanged;
@@ -884,10 +902,11 @@ class ProductDetails extends StatelessWidget {
     required this.provider,
     required this.refundProductNames,
     required this.priceController,
+    required this.priceFocusNode,
     required this.discountController,
     required this.quantityController,
     required this.discountFocusNode,
-    required this.quantityFocusNode, // Add this
+    required this.quantityFocusNode,
     required this.isBox,
     required this.quantity,
     required this.onBirimTipiChanged,
@@ -898,18 +917,85 @@ class ProductDetails extends StatelessWidget {
   });
 
   @override
+  State<ProductDetails> createState() => _ProductDetailsState();
+}
+
+class _ProductDetailsState extends State<ProductDetails> {
+  String _oldDiscountValue = '';
+  String _oldPriceValue = '';
+
+  @override
+  void initState() {
+    super.initState();
+    widget.discountFocusNode.addListener(_onDiscountFocusChange);
+    widget.priceFocusNode.addListener(_onPriceFocusChange);
+  }
+
+  @override
+  void dispose() {
+    widget.discountFocusNode.removeListener(_onDiscountFocusChange);
+    widget.priceFocusNode.removeListener(_onPriceFocusChange);
+    super.dispose();
+  }
+
+  void _onDiscountFocusChange() {
+    if (widget.discountFocusNode.hasFocus) {
+      // Focus kazanıldığında eski değeri sakla ve alanı temizle
+      _oldDiscountValue = widget.discountController.text;
+      widget.discountController.clear();
+    } else {
+      // Focus kaybolduğunda, eğer alan boşsa eski değeri geri yükle
+      if (widget.discountController.text.isEmpty && _oldDiscountValue.isNotEmpty) {
+        if (mounted) {
+          widget.discountController.text = _oldDiscountValue;
+        }
+      }
+    }
+  }
+
+  void _onPriceFocusChange() {
+    if (widget.priceFocusNode.hasFocus) {
+      // Focus kazanıldığında eski değeri sakla ve alanı temizle
+      _oldPriceValue = widget.priceController.text;
+      widget.priceController.clear();
+    } else {
+      // Focus kaybolduğunda, eğer alan boşsa eski değeri geri yükle
+      if (widget.priceController.text.isEmpty && _oldPriceValue.isNotEmpty) {
+        if (mounted) {
+          widget.priceController.text = _oldPriceValue;
+        }
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final customer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
-    final selectedType = getBirimTipi() ?? 'Unit';
+    final selectedType = widget.getBirimTipi() ?? 'Unit';
 
-    // Senkronizasyon
-    final anlikIskonto = context.watch<CartProvider>().getIskonto(product.stokKodu);
-    if (!discountFocusNode.hasFocus && discountController.text != anlikIskonto.toString()) {
-      discountController.text = anlikIskonto > 0 ? anlikIskonto.toString() : '';
+    // Senkronizasyon - sadece focus yokken VE price focus da yokken güncelle
+    final anlikIskonto = context.watch<CartProvider>().getIskonto(widget.product.stokKodu);
+    if (!widget.discountFocusNode.hasFocus && !widget.priceFocusNode.hasFocus) {
+      final expectedText = anlikIskonto > 0 ? anlikIskonto.toString() : '';
+      if (widget.discountController.text != expectedText) {
+        // Post frame callback ile güncelle, böylece listener ile çakışma olmaz
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !widget.discountFocusNode.hasFocus && !widget.priceFocusNode.hasFocus) {
+            widget.discountController.text = expectedText;
+          }
+        });
+      }
     }
-    final anlikFiyat = context.watch<CartProvider>().getBirimFiyat(product.stokKodu, selectedType);
-    if(anlikFiyat > 0 && priceController.text != anlikFiyat.toStringAsFixed(2)) {
-      priceController.text = anlikFiyat.toStringAsFixed(2);
+
+    final anlikFiyat = context.watch<CartProvider>().getBirimFiyat(widget.product.stokKodu, selectedType);
+    if (!widget.priceFocusNode.hasFocus) {
+      if(anlikFiyat > 0 && widget.priceController.text != anlikFiyat.toStringAsFixed(2)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !widget.priceFocusNode.hasFocus) {
+            widget.priceController.text = anlikFiyat.toStringAsFixed(2);
+          }
+        });
+      }
     }
 
 
@@ -917,7 +1003,7 @@ class ProductDetails extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          product.urunAdi,
+          widget.product.urunAdi,
           maxLines: 4,
           overflow: TextOverflow.ellipsis,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -959,8 +1045,8 @@ class ProductDetails extends StatelessWidget {
   }
 
   Widget _buildUnitSelector(BuildContext context) {
-    final hasUnit = product.birimKey1 != 0;
-    final hasBox = product.birimKey2 != 0;
+    final hasUnit = widget.product.birimKey1 != 0;
+    final hasBox = widget.product.birimKey2 != 0;
     final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
 
     if (availableUnits <= 1) {
@@ -989,7 +1075,7 @@ class ProductDetails extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: DropdownButton<String>(
-        value: getBirimTipi(),
+        value: widget.getBirimTipi(),
         isDense: true,
         underline: Container(),
         style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
@@ -999,7 +1085,7 @@ class ProductDetails extends StatelessWidget {
         ],
         onChanged: (val) {
           if (val != null) {
-            onBirimTipiChanged(val == 'Box');
+            widget.onBirimTipiChanged(val == 'Box');
           }
         },
       ),
@@ -1015,10 +1101,11 @@ class ProductDetails extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: TextField(
-        controller: priceController,
+        controller: widget.priceController,
+        focusNode: widget.priceFocusNode,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
-        enabled: quantity > 0,
+        enabled: widget.quantity > 0,
         textAlign: TextAlign.center,
         decoration: const InputDecoration(
           filled: false,
@@ -1031,34 +1118,41 @@ class ProductDetails extends StatelessWidget {
         onChanged: (value) {
           final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
           var orjinalFiyat = selectedType == 'Unit'
-              ? (double.tryParse(product.adetFiyati.toString()) ?? 0)
-              : (double.tryParse(product.kutuFiyati.toString()) ?? 0);
+              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
               ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
               : 0;
 
-          discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+          // İndirim controller'ı her zaman güncelle (focus kontrolü kaldırıldı)
+          widget.discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
 
-          provider.addOrUpdateItem(
-            stokKodu: product.stokKodu,
-            urunAdi: product.urunAdi,
+          widget.provider.addOrUpdateItem(
+            stokKodu: widget.product.stokKodu,
+            urunAdi: widget.product.urunAdi,
             birimFiyat: yeniFiyat,
-            urunBarcode: product.barcode1,
+            urunBarcode: widget.product.barcode1,
             miktar: 0,
             iskonto: indirimOrani,
             birimTipi: selectedType,
-            vat: product.vat,
-            imsrc: product.imsrc,
-            adetFiyati: product.adetFiyati,
-            kutuFiyati: product.kutuFiyati,
-            birimKey1: product.birimKey1,
-            birimKey2: product.birimKey2,
+            vat: widget.product.vat,
+            imsrc: widget.product.imsrc,
+            adetFiyati: widget.product.adetFiyati,
+            kutuFiyati: widget.product.kutuFiyati,
+            birimKey1: widget.product.birimKey1,
+            birimKey2: widget.product.birimKey2,
           );
         },
-        onEditingComplete: formatPriceField,
-        onSubmitted: (value) => formatPriceField(),
+        onEditingComplete: () {
+          widget.formatPriceField();
+          widget.priceFocusNode.unfocus();
+        },
+        onSubmitted: (value) {
+          widget.formatPriceField();
+          widget.priceFocusNode.unfocus();
+        },
       ),
     );
   }
@@ -1071,8 +1165,8 @@ class ProductDetails extends StatelessWidget {
         Expanded(
           child: TextField(
             keyboardType: TextInputType.number,
-            controller: discountController,
-            focusNode: discountFocusNode,
+            controller: widget.discountController,
+            focusNode: widget.discountFocusNode,
             decoration: InputDecoration(
               prefixText: '%',
               prefixStyle: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.error),
@@ -1085,9 +1179,9 @@ class ProductDetails extends StatelessWidget {
             style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
             onChanged: (val) {
               if (val.isEmpty) {
-                final originalPrice = selectedType == 'Unit' ? product.adetFiyati : product.kutuFiyati;
-                priceController.text = (double.tryParse(originalPrice.toString()) ?? 0).toStringAsFixed(2);
-                provider.addOrUpdateItem(stokKodu: product.stokKodu, miktar: 0, iskonto: 0, birimTipi: selectedType, urunAdi: product.urunAdi, birimFiyat: double.tryParse(originalPrice) ?? 0, vat: product.vat, imsrc: product.imsrc, adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, urunBarcode: product.barcode1, birimKey1: product.birimKey1, birimKey2: product.birimKey2);
+                final originalPrice = selectedType == 'Unit' ? widget.product.adetFiyati : widget.product.kutuFiyati;
+                widget.priceController.text = (double.tryParse(originalPrice.toString()) ?? 0).toStringAsFixed(2);
+                widget.provider.addOrUpdateItem(stokKodu: widget.product.stokKodu, miktar: 0, iskonto: 0, birimTipi: selectedType, urunAdi: widget.product.urunAdi, birimFiyat: double.tryParse(originalPrice) ?? 0, vat: widget.product.vat, imsrc: widget.product.imsrc, adetFiyati: widget.product.adetFiyati, kutuFiyati: widget.product.kutuFiyati, urunBarcode: widget.product.barcode1, birimKey1: widget.product.birimKey1, birimKey2: widget.product.birimKey2);
                 return;
               }
 
@@ -1095,31 +1189,31 @@ class ProductDetails extends StatelessWidget {
               if (discountPercent > 100) discountPercent = 100;
 
               final originalPrice = selectedType == 'Unit'
-                  ? (double.tryParse(product.adetFiyati.toString()) ?? 0)
-                  : (double.tryParse(product.kutuFiyati.toString()) ?? 0);
+                  ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+                  : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
 
               final discountedPrice = originalPrice * (1 - (discountPercent / 100));
-              priceController.text = discountedPrice.toStringAsFixed(2);
+              widget.priceController.text = discountedPrice.toStringAsFixed(2);
 
-              provider.addOrUpdateItem(
-                  stokKodu: product.stokKodu,
+              widget.provider.addOrUpdateItem(
+                  stokKodu: widget.product.stokKodu,
                   miktar: 0,
                   iskonto: discountPercent,
                   birimTipi: selectedType,
-                  urunAdi: product.urunAdi,
+                  urunAdi: widget.product.urunAdi,
                   birimFiyat: discountedPrice,
-                  vat: product.vat,
-                  imsrc: product.imsrc,
-                  adetFiyati: product.adetFiyati,
-                  kutuFiyati: product.kutuFiyati,
-                  urunBarcode: product.barcode1,
-                  birimKey1: product.birimKey1,
-                  birimKey2: product.birimKey2
+                  vat: widget.product.vat,
+                  imsrc: widget.product.imsrc,
+                  adetFiyati: widget.product.adetFiyati,
+                  kutuFiyati: widget.product.kutuFiyati,
+                  urunBarcode: widget.product.barcode1,
+                  birimKey1: widget.product.birimKey1,
+                  birimKey2: widget.product.birimKey2
               );
 
               if (val != discountPercent.toString()) {
-                discountController.text = discountPercent.toString();
-                discountController.selection = TextSelection.fromPosition(TextPosition(offset: discountController.text.length));
+                widget.discountController.text = discountPercent.toString();
+                widget.discountController.selection = TextSelection.fromPosition(TextPosition(offset: widget.discountController.text.length));
               }
             },
           ),
@@ -1150,8 +1244,8 @@ class ProductDetails extends StatelessWidget {
 
   Widget _buildFreeItemBadge(BuildContext context, {required bool isBox}) {
     final type = isBox ? 'Box' : 'Unit';
-    final count = provider.items.values
-        .where((item) => item.urunAdi == '${product.urunAdi}_(FREE$type)' && item.birimTipi == type)
+    final count = widget.provider.items.values
+        .where((item) => item.urunAdi == '${widget.product.urunAdi}_(FREE$type)' && item.birimTipi == type)
         .fold(0, (sum, item) => sum + item.miktar);
 
     return Positioned(
@@ -1176,7 +1270,7 @@ class ProductDetails extends StatelessWidget {
   }
 
   Future<void> _showFreeItemDialog(BuildContext context, dynamic customer) async {
-    String selectedBirimTipi = product.birimKey2 != 0 ? 'Box' : 'Unit';
+    String selectedBirimTipi = widget.product.birimKey2 != 0 ? 'Box' : 'Unit';
     final miktarController = TextEditingController(text: '1');
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -1189,8 +1283,8 @@ class ProductDetails extends StatelessWidget {
               DropdownButtonFormField<String>(
                 value: selectedBirimTipi,
                 items: [
-                  if(product.birimKey1 != 0) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
-                  if(product.birimKey2 != 0) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
+                  if(widget.product.birimKey1 != 0) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
+                  if(widget.product.birimKey2 != 0) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
                 ],
                 onChanged: (value) {
                   if (value != null) selectedBirimTipi = value;
@@ -1223,23 +1317,23 @@ class ProductDetails extends StatelessWidget {
 
     if (result == null) return;
 
-    provider.customerName = customer!.kod!;
-    final freeKey = "${product.stokKodu}_(FREE${result['birimTipi']})";
+    widget.provider.customerName = customer!.kod!;
+    final freeKey = "${widget.product.stokKodu}_(FREE${result['birimTipi']})";
 
-    provider.addOrUpdateItem(
+    widget.provider.addOrUpdateItem(
       stokKodu: freeKey,
-      urunAdi: "${product.urunAdi}_(FREE${result['birimTipi']})",
+      urunAdi: "${widget.product.urunAdi}_(FREE${result['birimTipi']})",
       birimFiyat: 0,
       miktar: result['miktar'],
-      urunBarcode: product.barcode1,
+      urunBarcode: widget.product.barcode1,
       iskonto: 100,
       birimTipi: result['birimTipi'],
-      imsrc: product.imsrc,
-      vat: product.vat,
+      imsrc: widget.product.imsrc,
+      vat: widget.product.vat,
       adetFiyati: '0',
       kutuFiyati: '0',
-      birimKey1: product.birimKey1,
-      birimKey2: product.birimKey2,
+      birimKey1: widget.product.birimKey1,
+      birimKey2: widget.product.birimKey2,
     );
   }
 
@@ -1273,9 +1367,9 @@ class ProductDetails extends StatelessWidget {
                   height: double.infinity,
                   child: Center(
                     child: TextField(
-                      key: ValueKey('quantity_${product.stokKodu}'),
-                      controller: quantityController,
-                      focusNode: quantityFocusNode,
+                      key: ValueKey('quantity_${widget.product.stokKodu}'),
+                      controller: widget.quantityController,
+                      focusNode: widget.quantityFocusNode,
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.done,
                       textAlign: TextAlign.center,
@@ -1289,7 +1383,7 @@ class ProductDetails extends StatelessWidget {
                         contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                         isDense: true,
                       ),
-                      onSubmitted: (value) => updateQuantityFromTextField(value),
+                      onSubmitted: (value) => widget.updateQuantityFromTextField(value),
                     ),
                   ),
                 ),
@@ -1307,7 +1401,7 @@ class ProductDetails extends StatelessWidget {
   }
 
   Widget _buildQuantityButton(BuildContext context, {required bool isIncrement, required String selectedType}) {
-    final bool isEnabled = isIncrement || quantity > 0;
+    final bool isEnabled = isIncrement || widget.quantity > 0;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -1321,22 +1415,22 @@ class ProductDetails extends StatelessWidget {
         child: InkWell(
           onTap: isEnabled
               ? () {
-            final newQuantity = quantity + (isIncrement ? 1 : -1);
+            final newQuantity = widget.quantity + (isIncrement ? 1 : -1);
 
             final fiyat = selectedType == 'Box'
-                ? (double.tryParse(product.kutuFiyati.toString()) ?? 0)
-                : (double.tryParse(product.adetFiyati.toString()) ?? 0);
+                ? (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0)
+                : (double.tryParse(widget.product.adetFiyati.toString()) ?? 0);
 
-            final cartItem = provider.items[product.stokKodu];
-            final iskonto = cartItem?.iskonto ?? provider.getIskonto(product.stokKodu);
+            final cartItem = widget.provider.items[widget.product.stokKodu];
+            final iskonto = cartItem?.iskonto ?? widget.provider.getIskonto(widget.product.stokKodu);
 
-            provider.addOrUpdateItem(
-              urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, vat: product.vat, urunBarcode: product.barcode1, miktar: isIncrement ? 1 : -1, // Decrement by 1
-              iskonto: iskonto, birimTipi: selectedType, imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2,
+            widget.provider.addOrUpdateItem(
+              urunAdi: widget.product.urunAdi, stokKodu: widget.product.stokKodu, birimFiyat: fiyat, adetFiyati: widget.product.adetFiyati, kutuFiyati: widget.product.kutuFiyati, vat: widget.product.vat, urunBarcode: widget.product.barcode1, miktar: isIncrement ? 1 : -1, // Decrement by 1
+              iskonto: iskonto, birimTipi: selectedType, imsrc: widget.product.imsrc, birimKey1: widget.product.birimKey1, birimKey2: widget.product.birimKey2,
             );
 
-            onQuantityChanged(newQuantity);
-            quantityController.text = '$newQuantity';
+            widget.onQuantityChanged(newQuantity);
+            widget.quantityController.text = '$newQuantity';
           }
               : null,
           borderRadius: BorderRadius.circular(4),
@@ -1357,8 +1451,8 @@ class ProductDetails extends StatelessWidget {
   }
 
   Color _getProductNameColor(BuildContext context) {
-    final isInRefundList = refundProductNames.any((e) => e.toLowerCase() == product.urunAdi.toLowerCase());
-    final isPassive = product.aktif == 0;
+    final isInRefundList = widget.refundProductNames.any((e) => e.toLowerCase() == widget.product.urunAdi.toLowerCase());
+    final isPassive = widget.product.aktif == 0;
     if (isPassive && isInRefundList) return Colors.blue;
     if (isInRefundList) return Colors.green;
     if (isPassive) return Colors.red;
