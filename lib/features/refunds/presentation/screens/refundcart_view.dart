@@ -6,10 +6,10 @@ import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
 import 'package:pos_app/features/refunds/presentation/providers/cart_provider_refund.dart';
 import 'package:pos_app/features/refunds/presentation/screens/refundcart_view2.dart';
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
-import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
@@ -201,6 +201,14 @@ class _RefundCartViewState extends State<RefundCartView> {
     });
   }
 
+  Future<void> _openBarcodeScanner() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BarcodeScannerPage(onScanned: _onBarcodeScanned),
+      ),
+    );
+  }
+
   // --- Filtering & Searching ---
   void _filterProducts({String? queryOverride}) {
     final provider = Provider.of<RCartProvider>(context, listen: false);
@@ -383,7 +391,6 @@ class _RefundCartViewState extends State<RefundCartView> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<RCartProvider>(context);
-    final customer = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
     final cartItems = provider.items.values.toList();
     final unitCount = cartItems.where((i) => i.birimTipi == 'Unit').fold<int>(0, (p, i) => p + i.miktar);
     final boxCount = cartItems.where((i) => i.birimTipi == 'Box').fold<int>(0, (p, i) => p + i.miktar);
@@ -418,6 +425,10 @@ class _RefundCartViewState extends State<RefundCartView> {
                       icon: Icon(Icons.clear, color: Colors.white.withValues(alpha: 0.7), size: 20),
                       onPressed: _clearSearch2,
                     ),
+                  IconButton(
+                    icon: Icon(Icons.qr_code_scanner, color: Colors.white.withValues(alpha: 0.9), size: 22),
+                    onPressed: _openBarcodeScanner,
+                  ),
                   const SizedBox(width: 8),
                 ],
               ),

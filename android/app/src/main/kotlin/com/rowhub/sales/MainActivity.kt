@@ -1,4 +1,4 @@
-package com.example.pos_app
+package com.rowhub.sales
 
 import io.flutter.embedding.android.FlutterActivity
 

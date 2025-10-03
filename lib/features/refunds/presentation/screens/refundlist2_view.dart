@@ -201,165 +201,243 @@ void updateTotal() {
   Widget build(BuildContext context) {
     final musteri = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
     return Scaffold(
-      appBar: AppBar(title: Text('Refund List')),
-      body: Padding(
-        padding: EdgeInsets.all(2.w),
-        child: Column(
-          children: [
-            if (musteri != null)
-              ListTile(
-                title: Text(musteri.unvan ?? ''),
-              ),
-            Text("Return No: $fisNo"),
-            Row(
-              children: [
-                Text("Date: ${DateFormat('dd.MM.yyyy').format(_selectedDate)}"),
-                TextButton(
-                  onPressed: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) {
-                      setState(() => _selectedDate = picked);
-                    }
-                  },
-                  child: Text("Choose Date"),
-                )
-              ],
-            ),
-
-  //           TextField(
-  //             onChanged: (val) => setState(() => _aciklama = val),
-  //             decoration: InputDecoration(hintText: "Enter a comment",    border: OutlineInputBorder(), // tüm kenarlarda çerçeve
-  //   enabledBorder: OutlineInputBorder(
-  //     borderSide: BorderSide(color: Colors.grey, width: 1),
-  //   ),
-  //   focusedBorder: OutlineInputBorder(
-  //     borderSide: BorderSide(color: Colors.blue, width: 2),
-  //   ),
-  // ),
-  //           ),            
-            SizedBox(height: 1.h),
-
-//             Divider(),            TextField(
-//               decoration: InputDecoration(labelText: "Search Products",    border: OutlineInputBorder(), // tüm kenarlarda çerçeve
-//     enabledBorder: OutlineInputBorder(
-//       borderSide: BorderSide(color: Colors.grey, width: 1),
-//     ),
-//     focusedBorder: OutlineInputBorder(
-//       borderSide: BorderSide(color: Colors.blue, width: 2),
-//     ),
-//   ),
-//               onChanged: (val) => setState(() => _searchQuery = val),
-//             ),
-//             Expanded(
-//               child: ListView.builder(
-//                 itemCount: filteredProducts.length,
-//                 itemBuilder: (_, index) {
-//                   final product = filteredProducts[index];
-//                   final miktar = _quantities[product.stokKodu] ?? 0;
-//                   final fiyat = _customPrices[product.stokKodu] ?? double.tryParse(product.adetFiyati ?? "0") ?? 0.0;
-//                   final controller = TextEditingController(text: fiyat.toString());
-
-//                   return ListTile(
-//                     leading: FutureBuilder<String?>(
-//   future: _getLocalImagePath(product.imsrc),
-//   builder: (context, snapshot) {
-//     if (snapshot.connectionState != ConnectionState.done) {
-//       return SizedBox(
-//         width: 20.w,
-//         height: 25.w,
-//         child: Center(child: CircularProgressIndicator(strokeWidth: 1.5)),
-//       );
-//     }
-//     if (!snapshot.hasData || snapshot.data == null || !File(snapshot.data!).existsSync()) {
-//       return Container(
-//         width: 20.w,
-//         height: 20.w,
-//         decoration: BoxDecoration(
-//           borderRadius: BorderRadius.circular(4),
-//           color: Colors.grey[300],
-//         ),
-//         child: Icon(Icons.shopping_bag, size: 16.w, color: Colors.grey[700]),
-//       );
-//     }
-
-//     return ClipRRect(
-//       borderRadius: BorderRadius.circular(4),
-//       child: Image.file(
-//         File(snapshot.data!),
-//         width: 20.w,
-//         height: 20.w,
-//         fit: BoxFit.cover,
-//       ),
-//     );
-//   },
-// ),
-//                     title: Text(product.urunAdi),
-//                     subtitle: Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         TextField(
-//                           controller: controller,
-//                           keyboardType: TextInputType.number,
-//                           decoration: InputDecoration(labelText: "Fiyat",),
-//                           onSubmitted: (val) => updateCustomPrice(product.stokKodu, val),
-//                         ),
-//                       ],
-//                     ),
-//                     trailing: Row(
-//                       mainAxisSize: MainAxisSize.min,
-//                       children: [
-//                         IconButton(
-//                           icon: Icon(Icons.remove),
-//                           onPressed: () => removeFromCart(product.stokKodu, fiyat),
-//                         ),
-//                         Text(miktar.toString()),
-//                         IconButton(
-//                           icon: Icon(Icons.add),
-//                           onPressed: () => addToCart(product.stokKodu, fiyat),
-//                         ),
-//                       ],
-//                     ),
-//                   );
-//                 },
-//               ),
-//             ),
-Divider(),
-            SizedBox(
-  width: 90.w,
-  height: 8.h,
-  child: ElevatedButton(
-    onPressed: (){
-          RefundFisModel fisModel = RefundFisModel(
-      fisNo: fisNo,
-      aciklama: _aciklama,
-      iadeNedeni: _selectedIadeNedeni,
-      fistarihi: DateFormat('dd.MM.yyyy').format(_selectedDate),
-      musteriId: musteri!.kod!,
-      toplamtutar: toplam,
-      status: 1,
-    );
-      Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => RefundCartView(refundProductNames: urunAdlariUnique,fisModel:fisModel,refunds: refunds,)),
-          );},
-          //sendRefundItems
-    style: ElevatedButton.styleFrom(
-      padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
-      textStyle: TextStyle(fontSize: 18.sp),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(2.w),
+      appBar: AppBar(
+        title: Text('Refund List'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
       ),
-    ),
-    child: Text("Choose Products", style: TextStyle(fontSize: 20.sp)),
-  ),
-),
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+                // Customer Card
+                if (musteri != null)
+                  Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(3.w),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(2.w),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.person,
+                              color: Theme.of(context).primaryColor,
+                              size: 24.sp,
+                            ),
+                          ),
+                          SizedBox(width: 3.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Customer',
+                                  style: TextStyle(
+                                    fontSize: 11.sp,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(height: 0.5.h),
+                                Text(
+                                  musteri.unvan ?? '',
+                                  style: TextStyle(
+                                    fontSize: 14.sp,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
-          ],
+                SizedBox(height: 2.h),
+
+                // Return Info Card
+                Card(
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(3.w),
+                    child: Column(
+                      children: [
+                        // Return Number
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.receipt_long,
+                              color: Theme.of(context).primaryColor,
+                              size: 20.sp,
+                            ),
+                            SizedBox(width: 2.w),
+                            Text(
+                              'Return No:',
+                              style: TextStyle(
+                                fontSize: 12.sp,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(width: 2.w),
+                            Text(
+                              fisNo,
+                              style: TextStyle(
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        SizedBox(height: 2.h),
+                        Divider(height: 1),
+                        SizedBox(height: 2.h),
+
+                        // Date Selection
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  color: Theme.of(context).primaryColor,
+                                  size: 20.sp,
+                                ),
+                                SizedBox(width: 2.w),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Return Date',
+                                      style: TextStyle(
+                                        fontSize: 11.sp,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                    Text(
+                                      DateFormat('dd.MM.yyyy').format(_selectedDate),
+                                      style: TextStyle(
+                                        fontSize: 14.sp,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2000),
+                                  lastDate: DateTime(2100),
+                                );
+                                if (picked != null) {
+                                  setState(() => _selectedDate = picked);
+                                }
+                              },
+                              icon: Icon(Icons.edit_calendar, size: 18.sp),
+                              label: Text('Change'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(context).primaryColor,
+                                side: BorderSide(
+                                  color: Theme.of(context).primaryColor,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                Spacer(),
+
+                // Choose Products Button
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
+                        blurRadius: 12,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      RefundFisModel fisModel = RefundFisModel(
+                        fisNo: fisNo,
+                        aciklama: _aciklama,
+                        iadeNedeni: _selectedIadeNedeni,
+                        fistarihi: DateFormat('dd.MM.yyyy').format(_selectedDate),
+                        musteriId: musteri!.kod!,
+                        toplamtutar: toplam,
+                        status: 1,
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => RefundCartView(
+                            refundProductNames: urunAdlariUnique,
+                            fisModel: fisModel,
+                            refunds: refunds,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 3.5.h),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.shopping_cart, size: 22.sp),
+                        SizedBox(width: 3.w),
+                        Text(
+                          "Choose Products",
+                          style: TextStyle(
+                            fontSize: 18.sp,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 2.h),
+            ],
+          ),
         ),
       ),
     );
