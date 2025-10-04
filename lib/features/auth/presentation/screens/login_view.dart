@@ -187,10 +187,13 @@ Future<Map<String, dynamic>?> getLastLogin() async {
               SizedBox(height: 3.h),
               SizedBox(
                 width: 60.w,
-                height: 6.h,
+                height: 8.h.clamp(56.0, double.infinity),
                 child: ElevatedButton(
                   onPressed: _login,
-                  child: Text("LOGIN", style: TextStyle(fontSize: 16.sp)),
+                  child: Text(
+                    "LOGIN",
+                    style: TextStyle(fontSize: 18.sp.clamp(16.0, double.infinity)),
+                  ),
                 ),
               )
             ],

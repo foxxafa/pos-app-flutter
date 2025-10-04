@@ -99,31 +99,66 @@ class _CartViewState extends State<CartView> {
   Future<void> _loadProducts() async {
     // ✅ Repository kullan (DatabaseHelper yerine)
     final productRepository = Provider.of<ProductRepository>(context, listen: false);
+
+    // İlk frame'de loading göster
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+
+    // Async işlemleri başlat
     final allProducts = await productRepository.getAllProducts();
+
+    if (!mounted) return;
+
+    // Hızlı bir şekilde aktif ürünleri filtrele
     final activeProducts = allProducts.where((p) => p.aktif == 1).toList();
 
-    activeProducts.sort((a, b) {
-      final nameA = a.urunAdi;
-      final nameB = b.urunAdi;
-      final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameA);
-      final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameB);
-
-      if (startsWithLetterA && !startsWithLetterB) return -1;
-      if (!startsWithLetterA && startsWithLetterB) return 1;
-      return nameA.compareTo(nameB);
-    });
-
+    // İlk 50 ürünü hemen göster (sıralanmamış)
     setState(() {
       _allProducts = activeProducts;
       _filteredProducts = activeProducts.take(50).toList();
       _isLoading = false;
 
-      for (var product in activeProducts) {
+      // Map'leri doldur (sadece ilk 50 için)
+      for (var product in _filteredProducts) {
         final key = product.stokKodu;
         _isBoxMap[key] = product.birimKey2 != 0;
         _quantityMap[key] = 0;
       }
       _generateImageFutures(_filteredProducts);
+    });
+
+    // ✅ Sıralama işlemini arka planda yap (tüm liste için)
+    await Future.microtask(() {
+      activeProducts.sort((a, b) {
+        final nameA = a.urunAdi;
+        final nameB = b.urunAdi;
+        final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameA);
+        final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameB);
+
+        if (startsWithLetterA && !startsWithLetterB) return -1;
+        if (!startsWithLetterA && startsWithLetterB) return 1;
+        return nameA.compareTo(nameB);
+      });
+    });
+
+    if (!mounted) return;
+
+    // Sıralanmış listeyi güncelle
+    setState(() {
+      _allProducts = activeProducts;
+      _filteredProducts = activeProducts.take(50).toList();
+
+      // Kalan ürünler için map'leri doldur
+      for (var product in activeProducts) {
+        final key = product.stokKodu;
+        if (!_isBoxMap.containsKey(key)) {
+          _isBoxMap[key] = product.birimKey2 != 0;
+          _quantityMap[key] = 0;
+        }
+      }
     });
   }
 

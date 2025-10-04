@@ -237,7 +237,7 @@ print("bunlarrr $_refundProductNames");
               isCompact: true,
             ),
 
-            SizedBox(height: 2.h),
+            SizedBox(height: 0.8.h),
 
             // Comment Card
             _buildInfoCard(
@@ -258,7 +258,7 @@ print("bunlarrr $_refundProductNames");
               ),
             ),
 
-            SizedBox(height: 2.h),
+            SizedBox(height: 0.8.h),
 
             // Payment Method Card
             _buildActionCard(
@@ -270,7 +270,7 @@ print("bunlarrr $_refundProductNames");
               onTap: _showPaymentBottomSheet,
             ),
 
-            SizedBox(height: 1.5.h),
+            SizedBox(height: 0.8.h),
 
             // Payment Date Card
             _buildActionCard(
@@ -280,7 +280,7 @@ print("bunlarrr $_refundProductNames");
               onTap: () => _selectPaymentDate(context),
             ),
 
-            SizedBox(height: 1.5.h),
+            SizedBox(height: 0.8.h),
 
             // Delivery Date Card
             _buildActionCard(
@@ -290,16 +290,16 @@ print("bunlarrr $_refundProductNames");
               onTap: () => _selectDeliveryDate(context),
             ),
 
-            SizedBox(height: 3.h),
+            SizedBox(height: 1.5.h),
 
             // Select Products Button
             Card(
               child: SizedBox(
                 width: double.infinity,
-                height: 7.h,
+                height: 64.0,
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await _loadRefunds(customer!.kod!);
+                  onPressed: () {
+                    // Hemen sayfaya geç, refunds arka planda yüklenecek
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -309,11 +309,14 @@ print("bunlarrr $_refundProductNames");
                         ),
                       ),
                     );
+                    // Arka planda refunds yükle (gelecekte kullanmak için)
+                    _loadRefunds(customer!.kod!);
                   },
-                  icon: Icon(Icons.shopping_cart_outlined),
+                  icon: Icon(Icons.shopping_cart_outlined, size: 24),
                   label: Text(
                     'order.select_products'.tr(),
-                    style: theme.textTheme.titleMedium?.copyWith(
+                    style: TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

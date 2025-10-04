@@ -17,15 +17,14 @@ class ScannerService {
   static const Set<int> _scannerLogicalKeys = {
     73014444321,  // KEYCODE_SCANNER_RIGHT
     73014444322,  // KEYCODE_SCANNER_BOTTOM
-    73014444552,  // Terminal 3 & 4 Logical ID (aynı değer, physical farklı)
-    73014444553,  // Terminal 4 Logical ID alternatif
+    73014444552,  // Terminal 3 Logical ID
+    73014444553,  // Terminal 4 Logical ID (0x01100000209)
     4294967309,   // Alternatif scanner key
     4294969355,   // Terminal 1 Logical ID
     4294969871,   // Terminal 2 Logical ID
-    0x01100000209,
-    0x01100000208,
-    4294967556,
-    73014445159,
+    73014444296,  // 0x01100000208
+    4294967556,   // Eski scanner key
+    73014445159,  // Eski scanner key
   };
 
   /// Scanner tuşu olup olmadığını kontrol eder
