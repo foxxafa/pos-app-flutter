@@ -77,7 +77,11 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
         current.kutuFiyati = kutuFiyati;
       }
     } else {
-      
+      // Don't create new item if quantity is 0 or negative
+      if (miktar <= 0) {
+        return;
+      }
+
         _items[stokKodu] = CartItem(
           stokKodu: stokKodu,
           urunAdi: urunAdi,
@@ -92,7 +96,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
           adetFiyati: adetFiyati,
           kutuFiyati: kutuFiyati,
         );
-      
+
     }
 
     notifyListeners();

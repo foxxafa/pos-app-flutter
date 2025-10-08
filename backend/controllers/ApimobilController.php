@@ -374,26 +374,35 @@ class ApimobilController extends Controller
         $apiKey = Yii::$app->request->headers->get('Authorization');
 
         $jsonData = Yii::$app->request->getRawBody();
-        // $dataArray = json_decode($jsonData, true);
-        $filePath = Yii::getAlias('@app/runtime/satis'.date("Ymdhis").'.txt');
+        $satisci = $this->getApikey($apiKey);
 
-        $satisci=$this->getApikey( $apiKey );
-         //file_put_contents($filePath, $jsonData."APIKEY :".$apiKey." User :".$satisci);
+        $filePath = Yii::getAlias('@app/runtime/satis_log_' . date("Ymdhis") . '.txt');
+        $logContent = "--- actionSatis LOG BAŞLANGIÇ ---\n";
+        $logContent .= "Timestamp: " . date("Y-m-d H:i:s") . "\n";
+        $logContent .= "API Key: " . $apiKey . "\n";
+        $logContent .= "User: " . ($satisci ? $satisci : 'BULUNAMADI') . "\n\n";
+        $logContent .= "Raw Data:\n";
+        $logContent .= $jsonData . "\n\n";
+        file_put_contents($filePath, $logContent);
 
-        if(!$satisci)
-            return  ['IsSuccessStatusCode'=>false,'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
-         // Get the raw JSON data
-        $request = Yii::$app->request;
-        $data = json_decode($request->getRawBody(), true);
-
-        // Validate the data
-        if (empty($data['fis']) || empty($data['satirlar'])) {
-            return ['status' => 'error', 'message' => 'Geçersiz veri formatı'];
+        if (!$satisci) {
+            file_put_contents($filePath, "HATA: Eksik veya Hatalı Apikey. İşlem sonlandırıldı.\n", FILE_APPEND);
+            return ['IsSuccessStatusCode' => false, 'status' => 'error', 'message' => "Eksik veya Hatalı Apikey"];
         }
 
+        $data = json_decode($jsonData, true);
+        file_put_contents($filePath, "1. JSON Decode yapıldı.\n", FILE_APPEND);
+
+        if (empty($data['fis']) || empty($data['satirlar'])) {
+            file_put_contents($filePath, "HATA: Geçersiz veri formatı. 'fis' veya 'satirlar' anahtarları eksik. İşlem sonlandırıldı.\n", FILE_APPEND);
+            return ['status' => 'error', 'message' => 'Geçersiz veri formatı'];
+        }
+        file_put_contents($filePath, "2. Veri formatı doğrulandı.\n", FILE_APPEND);
+
         $transaction = Yii::$app->db->beginTransaction();
+        file_put_contents($filePath, "3. Veritabanı transaction başlatıldı.\n", FILE_APPEND);
+
         try {
-            // Save SatisFisleri
             $fis = new Satisfisleri();
             $fis->attributes = $data['fis'];
             $fis->MusteriId=$data['fis']['MusteriId'];
@@ -403,29 +412,40 @@ class ApimobilController extends Controller
             $fis->Toplamtutar=$data['fis']['Toplamtutar'];
             $fis->satispersoneli=$satisci;
             $fis->comment=$data['fis']['Comment'];
+            file_put_contents($filePath, "4. Satisfisleri modeli dolduruldu. Kaydediliyor...\nModel Data: " . json_encode($fis->attributes) . "\n", FILE_APPEND);
 
             if (!$fis->save()) {
-                throw new \Exception("Fiş ".json_encode($fis->getErrors()));
+                $errors = json_encode($fis->getErrors());
+                file_put_contents($filePath, "HATA: Fiş kaydedilemedi. Hatalar: $errors\n", FILE_APPEND);
+                throw new \Exception("Fiş kaydedilemedi: " . $errors);
             }
+            file_put_contents($filePath, "5. Fiş başarıyla kaydedildi. FisNo: {$fis->FisNo}\n", FILE_APPEND);
 
-            // Save SatisSatirlar
-            foreach ($data['satirlar'] as $satirData) {
+            file_put_contents($filePath, "6. Satırları kaydetme işlemi başlıyor...\n", FILE_APPEND);
+            foreach ($data['satirlar'] as $index => $satirData) {
                 $satir = new Satissatirlari();
                 $satir->attributes = $satirData;
                 $satir->FisNo = $fis->FisNo; // Set the FisId from the saved fis
                 $satir->satispersoneli=$satisci;
                 $satir->BirimTipi=strtoupper($satirData["BirimTipi"]);
-                // if($satirData["BirimFiyat"]==0){
-                //     $satir->BirimFiyat=1;
-                //     $satir->Iskonto=100;
-                // }
+                file_put_contents($filePath, "   - Satır #$index modeli dolduruldu. Kaydediliyor...\nModel Data: " . json_encode($satir->attributes) . "\n", FILE_APPEND);
                 if (!$satir->save()) {
-                    throw new \Exception("Satir".json_encode($satir->getErrors()));
+                    $errors = json_encode($satir->getErrors());
+                    file_put_contents($filePath, "HATA: Satır #$index kaydedilemedi. Hatalar: $errors\n", FILE_APPEND);
+                    throw new \Exception("Satır kaydedilemedi: " . $errors);
                 }
+                file_put_contents($filePath, "   - Satır #$index başarıyla kaydedildi.\n", FILE_APPEND);
             }
 
+            file_put_contents($filePath, "7. Transaction commit ediliyor...\n", FILE_APPEND);
             $transaction->commit();
-            Dia::siparisgondermobil($fis,2);
+            file_put_contents($filePath, "8. Transaction commit edildi.\n", FILE_APPEND);
+
+            file_put_contents($filePath, "9. Dia::siparisgondermobil çağrılıyor...\n", FILE_APPEND);
+            Dia::siparisgondermobil($fis, 2, $filePath);
+            file_put_contents($filePath, "10. Dia::siparisgondermobil çağrıldı.\n", FILE_APPEND);
+
+            file_put_contents($filePath, "11. Başarılı yanıt dönülüyor.\n--- actionSatis LOG SON ---\n", FILE_APPEND);
             return [
                 'IsSuccessStatusCode'=>true,
                 'status' => 'success',
@@ -433,6 +453,7 @@ class ApimobilController extends Controller
                 'fisNo' => $fis->FisNo
             ];
         } catch (\Exception $e) {
+            file_put_contents($filePath, "\n!!! CATCH bloğuna girildi !!!\nTransaction rollback yapılıyor.\nHata Mesajı: " . $e->getMessage() . "\nSatır: " . $e->getLine() . "\nDosya: " . $e->getFile() . "\n--- actionSatis LOG SON ---\n", FILE_APPEND);
             $transaction->rollBack();
             return ['IsSuccessStatusCode'=>false,'status' => 'error', 'message' => $e->getMessage()];
         }

@@ -16,8 +16,8 @@ class ApiEnvConfig {
 class ApiEnvironments {
   // POS uygulaması için API endpoint'leri
   static const String _localBaseUrl = 'http://localhost:8080';
-  static const String _stagingBaseUrl = 'https://test.rowhub.net';
-  static const String _productionBaseUrl = 'https://test.rowhub.net';
+  static const String _stagingBaseUrl = 'https://aytac.rowhub.net';
+  static const String _productionBaseUrl = 'https://aytac.rowhub.net';
 
   static const Map<ApiEnvironment, ApiEnvConfig> _environments = {
     ApiEnvironment.local: ApiEnvConfig(

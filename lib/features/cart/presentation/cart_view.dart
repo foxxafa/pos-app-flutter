@@ -619,7 +619,8 @@ class _CartViewState extends State<CartView> {
           _priceControllers[key] = TextEditingController(text: initialPrice);
         }
         if (!_discountControllers.containsKey(key)) {
-          _discountControllers[key] = TextEditingController(text: provider.getIskonto(key).toString());
+          final iskonto = provider.getIskonto(key);
+          _discountControllers[key] = TextEditingController(text: iskonto > 0 ? iskonto.toString() : '');
         }
         if (!_priceFocusNodes.containsKey(key)) {
           _priceFocusNodes[key] = FocusNode();
@@ -1063,9 +1064,9 @@ class _ProductDetailsState extends State<ProductDetails> {
                   SizedBox(height: 1.h),
                   Row(
                     children: [
-                      Expanded(child: _buildDiscountTextField(context, selectedType)),
+                      Expanded(flex: 11, child: _buildDiscountTextField(context, selectedType)),
                       SizedBox(width: 2.w),
-                      Flexible(child: _buildFreeItemControl(context, customer)),
+                      Flexible(flex: 10, child: _buildFreeItemControl(context, customer)),
                     ],
                   ),
                 ],

@@ -270,6 +270,7 @@ class _RefundCartView2State extends State<RefundCartView2> {
                 itemBuilder: (context, index) {
                   final item = cartItems[index];
                   return RefundCartItemCard(
+                    key: ValueKey(item.stokKodu),
                     item: item,
                     imageFuture: _imageFutures[item.stokKodu],
                     onRemove: () => cartProvider.removeItem(item.stokKodu),
@@ -456,25 +457,33 @@ class RefundCartItemCard extends StatefulWidget {
 
 class _RefundCartItemCardState extends State<RefundCartItemCard> {
   late TextEditingController _quantityController;
+  late TextEditingController _priceController;
   final FocusNode _quantityFocusNode = FocusNode();
+  final FocusNode _priceFocusNode = FocusNode();
   String _oldQuantityValue = '';
+  String _oldPriceValue = '';
 
   @override
   void initState() {
     super.initState();
     _quantityController = TextEditingController(text: widget.item.miktar.toString());
-    _quantityFocusNode.addListener(_onFocusChange);
+    _priceController = TextEditingController(text: widget.item.birimFiyat.toStringAsFixed(2));
+    _quantityFocusNode.addListener(_onQuantityFocusChange);
+    _priceFocusNode.addListener(_onPriceFocusChange);
   }
 
   @override
   void dispose() {
-    _quantityFocusNode.removeListener(_onFocusChange);
+    _quantityFocusNode.removeListener(_onQuantityFocusChange);
+    _priceFocusNode.removeListener(_onPriceFocusChange);
     _quantityFocusNode.dispose();
+    _priceFocusNode.dispose();
     _quantityController.dispose();
+    _priceController.dispose();
     super.dispose();
   }
 
-  void _onFocusChange() {
+  void _onQuantityFocusChange() {
     if (_quantityFocusNode.hasFocus) {
       _oldQuantityValue = _quantityController.text;
       _quantityController.clear();
@@ -487,6 +496,31 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
         }
       }
       _updateQuantityFromTextField(_quantityController.text);
+    }
+  }
+
+  void _onPriceFocusChange() {
+    if (_priceFocusNode.hasFocus) {
+      _oldPriceValue = _priceController.text;
+      _priceController.clear();
+    } else {
+      if (_priceController.text.isEmpty && _oldPriceValue.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _priceController.text = _oldPriceValue;
+          });
+        }
+      } else if (_priceController.text.isNotEmpty) {
+        // Format and update price
+        final value = _priceController.text.replaceAll(',', '.');
+        final parsed = double.tryParse(value);
+        if (parsed != null && mounted) {
+          setState(() {
+            _priceController.text = parsed.toStringAsFixed(2);
+          });
+          _updatePriceFromTextField(parsed);
+        }
+      }
     }
   }
 
@@ -508,16 +542,67 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
     }
   }
 
+  void _updatePriceFromTextField(double newPrice) {
+    // Call parent's onQuantityChange with 0 to update price without changing quantity
+    // We need to access the provider directly
+    final cartProvider = Provider.of<RCartProvider>(context, listen: false);
+    final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+
+    // Check if item still exists in cart before updating
+    if (!cartProvider.items.containsKey(widget.item.stokKodu)) {
+      return; // Item was removed, don't update
+    }
+
+    cartProvider.customerName = customerProvider.selectedCustomer?.kod ?? '';
+    cartProvider.addOrUpdateItem(
+      urunAdi: widget.item.urunAdi,
+      stokKodu: widget.item.stokKodu,
+      birimFiyat: newPrice,
+      urunBarcode: widget.item.urunBarcode,
+      adetFiyati: widget.item.adetFiyati,
+      kutuFiyati: widget.item.kutuFiyati,
+      miktar: 0, // Don't change quantity
+      iskonto: widget.item.iskonto,
+      birimTipi: widget.item.birimTipi,
+      durum: widget.item.durum,
+      vat: widget.item.vat,
+      imsrc: widget.item.imsrc,
+    );
+  }
+
   @override
   void didUpdateWidget(RefundCartItemCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.item.miktar != widget.item.miktar) {
+    // Only update quantity controller if focus is not on quantity field
+    if (!_quantityFocusNode.hasFocus && oldWidget.item.miktar != widget.item.miktar) {
       _quantityController.text = widget.item.miktar.toString();
+    }
+    // Only update price controller if focus is not on price field
+    if (!_priceFocusNode.hasFocus && oldWidget.item.birimFiyat != widget.item.birimFiyat) {
+      _priceController.text = widget.item.birimFiyat.toStringAsFixed(2);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Sync quantity controller with widget.item.miktar if not focused
+    if (!_quantityFocusNode.hasFocus && _quantityController.text != widget.item.miktar.toString()) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_quantityFocusNode.hasFocus) {
+          _quantityController.text = widget.item.miktar.toString();
+        }
+      });
+    }
+
+    // Sync price controller with widget.item.birimFiyat if not focused
+    if (!_priceFocusNode.hasFocus && _priceController.text != widget.item.birimFiyat.toStringAsFixed(2)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_priceFocusNode.hasFocus) {
+          _priceController.text = widget.item.birimFiyat.toStringAsFixed(2);
+        }
+      });
+    }
+
     return Padding(
       padding: EdgeInsets.all(2.w),
       child: Row(
@@ -545,47 +630,34 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
   Widget _buildImage(BuildContext context) {
     return GestureDetector(
       onTap: () => _showImageDialog(context),
-      child: Column(
-        children: [
-          Container(
-            width: 30.w,
-            height: 30.w,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.grey.shade200,
-            ),
-            child: widget.item.imsrc == null
-                ? Icon(Icons.shopping_bag, size: 15.w, color: Colors.grey)
-                : FutureBuilder<String?>(
-              future: widget.imageFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return Center(child: CircularProgressIndicator(strokeWidth: 2));
-                }
-                if (snapshot.hasData && snapshot.data != null) {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      File(snapshot.data!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => Icon(Icons.broken_image, size: 15.w, color: Colors.grey),
-                    ),
-                  );
-                }
-                return Icon(Icons.shopping_bag, size: 15.w, color: Colors.grey);
-              },
-            ),
-          ),
-          SizedBox(height: 0.5.h),
-          Text(
-            '${widget.item.indirimliTutar.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 14.sp,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
+      child: Container(
+        width: 30.w,
+        height: 30.w,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey.shade200,
+        ),
+        child: widget.item.imsrc == null
+            ? Icon(Icons.shopping_bag, size: 15.w, color: Colors.grey)
+            : FutureBuilder<String?>(
+          future: widget.imageFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return Center(child: CircularProgressIndicator(strokeWidth: 2));
+            }
+            if (snapshot.hasData && snapshot.data != null) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  File(snapshot.data!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (c, e, s) => Icon(Icons.broken_image, size: 15.w, color: Colors.grey),
+                ),
+              );
+            }
+            return Icon(Icons.shopping_bag, size: 15.w, color: Colors.grey);
+          },
+        ),
       ),
     );
   }
@@ -614,39 +686,79 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
   }
 
   Widget _buildReturnReasonSection(BuildContext context) {
-    return InkWell(
-      onTap: widget.onReturnReasonTap,
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 1.h),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: widget.item.aciklama.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.assignment,
-              size: 18.sp,
-              color: widget.item.aciklama.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primary,
-            ),
-            SizedBox(width: 2.w),
-            Expanded(
-              child: Text(
-                widget.item.aciklama.isEmpty ? 'Select return reason' : widget.item.aciklama,
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  color: widget.item.aciklama.isEmpty ? Colors.grey : Colors.black,
+    return Row(
+      children: [
+        Expanded(
+          flex: 7,
+          child: InkWell(
+            onTap: widget.onReturnReasonTap,
+            child: Container(
+              height: 8.w,
+              padding: EdgeInsets.symmetric(horizontal: 2.w),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: widget.item.aciklama.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primary,
                 ),
-                overflow: TextOverflow.ellipsis,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.assignment,
+                    size: 18.sp,
+                    color: widget.item.aciklama.isEmpty ? Colors.grey : Theme.of(context).colorScheme.primary,
+                  ),
+                  SizedBox(width: 2.w),
+                  Expanded(
+                    child: Text(
+                      widget.item.aciklama.isEmpty ? 'Select return reason' : widget.item.aciklama,
+                      style: TextStyle(
+                        fontSize: 13.sp,
+                        color: widget.item.aciklama.isEmpty ? Colors.grey : Colors.black,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
+        SizedBox(width: 2.w),
+        Expanded(
+          flex: 3,
+          child: Container(
+            height: 8.w,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            alignment: Alignment.center,
+            child: TextField(
+              controller: _priceController,
+              focusNode: _priceFocusNode,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onSubmitted: (value) {
+                final parsed = double.tryParse(value.replaceAll(',', '.'));
+                if (parsed != null) {
+                  _updatePriceFromTextField(parsed);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 

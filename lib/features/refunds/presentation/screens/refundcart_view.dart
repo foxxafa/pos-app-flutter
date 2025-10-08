@@ -35,6 +35,8 @@ class RefundCartView extends StatefulWidget {
 class _RefundCartViewState extends State<RefundCartView> {
   // --- State Variables ---
   final Map<String, TextEditingController> _quantityControllers = {};
+  final Map<String, TextEditingController> _priceControllers = {};
+  final Map<String, FocusNode> _priceFocusNodes = {};
   final FocusNode _barcodeFocusNode = FocusNode();
   final FocusNode _barcodeFocusNode2 = FocusNode();
   final TextEditingController _searchController = TextEditingController();
@@ -94,6 +96,8 @@ class _RefundCartViewState extends State<RefundCartView> {
     _searchController.dispose();
     _searchController2.dispose();
     _quantityControllers.values.forEach((c) => c.dispose());
+    _priceControllers.values.forEach((c) => c.dispose());
+    _priceFocusNodes.values.forEach((f) => f.dispose());
     _audioPlayer.dispose();
     // 🔑 Hardware keyboard listener kaldır
     HardwareKeyboard.instance.removeHandler(_scannerHandler);
@@ -353,8 +357,8 @@ class _RefundCartViewState extends State<RefundCartView> {
   }
 
   String? getBirimTipiFromProduct(ProductModel product) {
-    if (product.birimKey2 != 0) return 'Box';
     if (product.birimKey1 != 0) return 'Unit';
+    if (product.birimKey2 != 0) return 'Box';
     return null;
   }
 
@@ -553,6 +557,29 @@ class _RefundCartViewState extends State<RefundCartView> {
           _quantityControllers[key] = TextEditingController(text: provider.getmiktar(key).toString());
         }
 
+        if (!_priceControllers.containsKey(key)) {
+          final selectedType = getBirimTipiFromProduct(product);
+          // Check if item exists in provider (cart)
+          final cartPrice = provider.getBirimFiyat(key);
+          final priceToUse = cartPrice > 0 ? cartPrice : (() {
+            final originalPrice = selectedType == 'Unit'
+                ? double.tryParse(product.adetFiyati.toString()) ?? 0
+                : double.tryParse(product.kutuFiyati.toString()) ?? 0;
+            return originalPrice * 0.7; // %70 çarpılı
+          })();
+          _priceControllers[key] = TextEditingController(text: priceToUse.toStringAsFixed(2));
+        } else {
+          // Update existing controller with provider price if item is in cart
+          final cartPrice = provider.getBirimFiyat(key);
+          if (cartPrice > 0 && _priceControllers[key]!.text != cartPrice.toStringAsFixed(2)) {
+            _priceControllers[key]!.text = cartPrice.toStringAsFixed(2);
+          }
+        }
+
+        if (!_priceFocusNodes.containsKey(key)) {
+          _priceFocusNodes[key] = FocusNode();
+        }
+
         return RefundProductListItem(
           key: ValueKey(product.stokKodu),
           product: product,
@@ -561,6 +588,8 @@ class _RefundCartViewState extends State<RefundCartView> {
           refundProductNames: widget.refundProductNames,
           refunds: widget.refunds,
           quantityController: _quantityControllers[key]!,
+          priceController: _priceControllers[key]!,
+          priceFocusNode: _priceFocusNodes[key]!,
           quantity: context.watch<RCartProvider>().getmiktar(key),
           onQuantityChanged: (newQuantity) {
             setState(() {
@@ -591,6 +620,8 @@ class RefundProductListItem extends StatefulWidget {
   final List<String> refundProductNames;
   final List<Refund> refunds;
   final TextEditingController quantityController;
+  final TextEditingController priceController;
+  final FocusNode priceFocusNode;
   final int quantity;
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
@@ -605,6 +636,8 @@ class RefundProductListItem extends StatefulWidget {
     required this.refundProductNames,
     required this.refunds,
     required this.quantityController,
+    required this.priceController,
+    required this.priceFocusNode,
     required this.quantity,
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
@@ -619,21 +652,24 @@ class RefundProductListItem extends StatefulWidget {
 class _RefundProductListItemState extends State<RefundProductListItem> {
   final FocusNode _quantityFocusNode = FocusNode();
   String _oldQuantityValue = '';
+  String _oldPriceValue = '';
 
   @override
   void initState() {
     super.initState();
-    _quantityFocusNode.addListener(_onFocusChange);
+    _quantityFocusNode.addListener(_onQuantityFocusChange);
+    widget.priceFocusNode.addListener(_onPriceFocusChange);
   }
 
   @override
   void dispose() {
-    _quantityFocusNode.removeListener(_onFocusChange);
+    _quantityFocusNode.removeListener(_onQuantityFocusChange);
+    widget.priceFocusNode.removeListener(_onPriceFocusChange);
     _quantityFocusNode.dispose();
     super.dispose();
   }
 
-  void _onFocusChange() {
+  void _onQuantityFocusChange() {
     if (_quantityFocusNode.hasFocus) {
       _oldQuantityValue = widget.quantityController.text;
       widget.quantityController.clear();
@@ -649,10 +685,51 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
     }
   }
 
+  void _onPriceFocusChange() {
+    if (widget.priceFocusNode.hasFocus) {
+      _oldPriceValue = widget.priceController.text;
+      widget.priceController.clear();
+    } else {
+      if (widget.priceController.text.isEmpty && _oldPriceValue.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            widget.priceController.text = _oldPriceValue;
+          });
+        }
+      } else if (widget.priceController.text.isNotEmpty) {
+        // Format price field when focus is lost
+        final value = widget.priceController.text.replaceAll(',', '.');
+        final parsed = double.tryParse(value);
+        if (parsed != null && mounted) {
+          setState(() {
+            widget.priceController.text = parsed.toStringAsFixed(2);
+          });
+
+          // Update provider with new price
+          final selectedType = widget.getBirimTipi() ?? 'Unit';
+          widget.provider.addOrUpdateItem(
+            urunAdi: widget.product.urunAdi,
+            stokKodu: widget.product.stokKodu,
+            birimFiyat: parsed,
+            adetFiyati: widget.product.adetFiyati,
+            kutuFiyati: widget.product.kutuFiyati,
+            vat: widget.product.vat,
+            urunBarcode: widget.product.barcode1,
+            miktar: 0,
+            iskonto: 0,
+            birimTipi: selectedType,
+            imsrc: widget.product.imsrc,
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final anlikMiktar = context.watch<RCartProvider>().getmiktar(widget.product.stokKodu);
-    if (widget.quantityController.text != anlikMiktar.toString()) {
+    // Only update controller if focus is not on quantity field
+    if (!_quantityFocusNode.hasFocus && widget.quantityController.text != anlikMiktar.toString()) {
       widget.quantityController.text = anlikMiktar.toString();
     }
 
@@ -673,6 +750,8 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
               refundProductNames: widget.refundProductNames,
               refunds: widget.refunds,
               quantityController: widget.quantityController,
+              priceController: widget.priceController,
+              priceFocusNode: widget.priceFocusNode,
               quantityFocusNode: _quantityFocusNode,
               quantity: anlikMiktar,
               onQuantityChanged: widget.onQuantityChanged,
@@ -800,6 +879,8 @@ class RefundProductDetails extends StatelessWidget {
   final List<String> refundProductNames;
   final List<Refund> refunds;
   final TextEditingController quantityController;
+  final TextEditingController priceController;
+  final FocusNode priceFocusNode;
   final FocusNode quantityFocusNode;
   final int quantity;
   final ValueChanged<int> onQuantityChanged;
@@ -814,6 +895,8 @@ class RefundProductDetails extends StatelessWidget {
     required this.refundProductNames,
     required this.refunds,
     required this.quantityController,
+    required this.priceController,
+    required this.priceFocusNode,
     required this.quantityFocusNode,
     required this.quantity,
     required this.onQuantityChanged,
@@ -940,13 +1023,7 @@ class RefundProductDetails extends StatelessWidget {
   }
 
   Widget _buildPriceDisplay(BuildContext context) {
-    final matchingRefunds = refunds.where((r) => r.urunAdi == product.urunAdi).toList()
-      ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
-    final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
-
     final selectedType = getBirimTipi() ?? 'Unit';
-    final displayPrice = latestRefund?.birimFiyat ??
-      (selectedType == 'Box' ? double.tryParse(product.kutuFiyati.toString()) ?? 0 : double.tryParse(product.adetFiyati.toString()) ?? 0);
 
     return Container(
       height: 8.w,
@@ -955,10 +1032,24 @@ class RefundProductDetails extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.center,
-      child: Text(
-        displayPrice.toStringAsFixed(2),
+      child: TextField(
+        controller: priceController,
+        focusNode: priceFocusNode,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
+        enabled: quantity > 0,
         textAlign: TextAlign.center,
+        decoration: const InputDecoration(
+          filled: false,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
+        onEditingComplete: () {
+          priceFocusNode.unfocus();
+        },
       ),
     );
   }
@@ -1067,13 +1158,28 @@ class RefundProductDetails extends StatelessWidget {
         child: InkWell(
           onTap: isEnabled
               ? () {
-            final matchingRefunds = refunds.where((r) => r.urunAdi == product.urunAdi).toList()
-              ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
-            final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
+            // Use current price from provider if exists, otherwise calculate
+            final existingPrice = provider.getBirimFiyat(product.stokKodu);
+            final birimFiyat = existingPrice > 0 ? existingPrice : (() {
+              final matchingRefunds = refunds.where((r) => r.urunAdi == product.urunAdi).toList()
+                ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
+              final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
 
-            final birimFiyat = latestRefund?.birimFiyat ??
-              (selectedType == 'Box' ? double.tryParse(product.kutuFiyati.toString()) ?? 0 : double.tryParse(product.adetFiyati.toString()) ?? 0);
-            final iskonto = latestRefund?.iskonto ?? 0;
+              return latestRefund?.birimFiyat ?? (() {
+                final originalPrice = selectedType == 'Box'
+                  ? double.tryParse(product.kutuFiyati.toString()) ?? 0
+                  : double.tryParse(product.adetFiyati.toString()) ?? 0;
+                return originalPrice * 0.7; // %70 çarpılı
+              })();
+            })();
+
+            final existingIskonto = provider.getIskonto(product.stokKodu);
+            final iskonto = existingIskonto > 0 ? existingIskonto : (() {
+              final matchingRefunds = refunds.where((r) => r.urunAdi == product.urunAdi).toList()
+                ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
+              final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
+              return latestRefund?.iskonto ?? 0;
+            })();
 
             provider.addOrUpdateItem(
               urunAdi: product.urunAdi,
