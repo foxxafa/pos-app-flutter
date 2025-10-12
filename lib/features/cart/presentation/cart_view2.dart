@@ -1200,17 +1200,6 @@ class _CartView2State extends State<CartView2> {
     );
   }
 
-  String generateFisNo(DateTime now) {
-    final yy = now.year % 100; // Yılın son iki hanesi
-    final mm = now.month.toString().padLeft(2, '0');
-    final dd = now.day.toString().padLeft(2, '0');
-
-    final random = Random();
-    final randomNumber = random
-        .nextInt(1000)
-        .toString()
-        .padLeft(4, '0'); // 0000 - 9999
-
-    return "MO$yy$mm$dd$randomNumber";
-  }
+  // ❌ ESKİ generateFisNo FONKSİYONU SİLİNDİ
+  // ✅ Artık FisNo invoice2_activity.dart'ta üretiliyor ve OrderInfoProvider'dan alınıyor
 }

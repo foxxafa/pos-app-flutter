@@ -49,6 +49,7 @@ class _RefundCartViewState extends State<RefundCartView> {
   bool _isLoading = true;
 
   final Map<String, int> _quantityMap = {};
+  final Map<String, String> _birimTipiMap = {}; // Her ürün için seçili birim tipi
 
   Timer? _imageDownloadTimer;
 
@@ -129,6 +130,8 @@ class _RefundCartViewState extends State<RefundCartView> {
       for (var product in activeProducts) {
         final key = product.stokKodu;
         _quantityMap[key] = 0;
+        // Varsayılan birim tipini belirle
+        _birimTipiMap[key] = product.birimKey1 != 0 ? 'Unit' : (product.birimKey2 != 0 ? 'Box' : 'Unit');
       }
       _generateImageFutures(_filteredProducts);
     });
@@ -561,11 +564,14 @@ class _RefundCartViewState extends State<RefundCartView> {
           final selectedType = getBirimTipiFromProduct(product);
           // Check if item exists in provider (cart)
           final cartPrice = provider.getBirimFiyat(key);
+
+          // Eğer sepette varsa o fiyatı kullan, yoksa %70'lik fiyatı göster
           final priceToUse = cartPrice > 0 ? cartPrice : (() {
             final originalPrice = selectedType == 'Unit'
                 ? double.tryParse(product.adetFiyati.toString()) ?? 0
                 : double.tryParse(product.kutuFiyati.toString()) ?? 0;
-            return originalPrice * 0.7; // %70 çarpılı
+            // Ekranda %70'lik fiyat gösterilir
+            return originalPrice * 0.7;
           })();
           _priceControllers[key] = TextEditingController(text: priceToUse.toStringAsFixed(2));
         } else {
@@ -597,7 +603,12 @@ class _RefundCartViewState extends State<RefundCartView> {
             });
           },
           updateQuantityFromTextField: (value) => _updateQuantityFromTextField(key, value, product),
-          getBirimTipi: () => getBirimTipiFromProduct(product),
+          getBirimTipi: () => _birimTipiMap[key] ?? getBirimTipiFromProduct(product) ?? 'Unit',
+          onBirimTipiChanged: (newBirimTipi) {
+            setState(() {
+              _birimTipiMap[key] = newBirimTipi;
+            });
+          },
           onReturnReasonPressed: () => _showReturnReasonDialog(context, key, provider),
         );
       },
@@ -626,6 +637,7 @@ class RefundProductListItem extends StatefulWidget {
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
   final String? Function() getBirimTipi;
+  final ValueChanged<String> onBirimTipiChanged;
   final VoidCallback onReturnReasonPressed;
 
   const RefundProductListItem({
@@ -642,6 +654,7 @@ class RefundProductListItem extends StatefulWidget {
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
     required this.getBirimTipi,
+    required this.onBirimTipiChanged,
     required this.onReturnReasonPressed,
   });
 
@@ -757,6 +770,7 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
               onQuantityChanged: widget.onQuantityChanged,
               updateQuantityFromTextField: widget.updateQuantityFromTextField,
               getBirimTipi: widget.getBirimTipi,
+              onBirimTipiChanged: widget.onBirimTipiChanged,
               onReturnReasonPressed: widget.onReturnReasonPressed,
             ),
           ),
@@ -886,6 +900,7 @@ class RefundProductDetails extends StatelessWidget {
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
   final String? Function() getBirimTipi;
+  final ValueChanged<String> onBirimTipiChanged;
   final VoidCallback onReturnReasonPressed;
 
   const RefundProductDetails({
@@ -902,6 +917,7 @@ class RefundProductDetails extends StatelessWidget {
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
     required this.getBirimTipi,
+    required this.onBirimTipiChanged,
     required this.onReturnReasonPressed,
   });
 
@@ -995,27 +1011,39 @@ class RefundProductDetails extends StatelessWidget {
           if (hasBox) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
         ],
         onChanged: (val) {
-          if (val != null && quantity > 0) {
-            final matchingRefunds = refunds.where((r) => r.urunAdi == product.urunAdi).toList()
-              ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
-            final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
+          if (val != null) {
+            // Parent'a birim değişikliğini bildir
+            onBirimTipiChanged(val);
 
-            final birimFiyat = latestRefund?.birimFiyat ??
-              (val == 'Box' ? double.tryParse(product.kutuFiyati.toString()) ?? 0 : double.tryParse(product.adetFiyati.toString()) ?? 0);
-            final iskonto = latestRefund?.iskonto ?? 0;
+            // Birim değişikliği yapılırken yeni birim için %70'lik fiyatı hesapla
+            final originalPrice = val == 'Box'
+                ? double.tryParse(product.kutuFiyati.toString()) ?? 0
+                : double.tryParse(product.adetFiyati.toString()) ?? 0;
+            final birimFiyat = originalPrice * 0.7; // %70 fiyat
 
-            provider.addOrUpdateItem(
-              urunAdi: product.urunAdi,
-              stokKodu: product.stokKodu,
-              birimFiyat: birimFiyat,
-              adetFiyati: product.adetFiyati,
-              kutuFiyati: product.kutuFiyati,
-              vat: product.vat,
-              urunBarcode: product.barcode1,
-              miktar: 0,
-              iskonto: iskonto,
-              birimTipi: val,
-            );
+            // Eğer ürün sepette varsa güncelle, yoksa güncellemeye gerek yok (henüz eklenmemiş)
+            if (quantity > 0) {
+              final matchingRefunds = refunds.where((r) => r.urunAdi == product.urunAdi).toList()
+                ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
+              final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
+              final iskonto = latestRefund?.iskonto ?? 0;
+
+              provider.addOrUpdateItem(
+                urunAdi: product.urunAdi,
+                stokKodu: product.stokKodu,
+                birimFiyat: birimFiyat,
+                adetFiyati: product.adetFiyati,
+                kutuFiyati: product.kutuFiyati,
+                vat: product.vat,
+                urunBarcode: product.barcode1,
+                miktar: 0,
+                iskonto: iskonto,
+                birimTipi: val,
+              );
+            }
+
+            // Fiyat controller'ını güncelle
+            priceController.text = birimFiyat.toStringAsFixed(2);
           }
         },
       ),

@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
@@ -7,6 +5,8 @@ import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/orders/presentation/providers/orderinfo_provider.dart';
 import 'package:pos_app/features/cart/presentation/cart_view.dart';
+import 'package:pos_app/core/utils/fisno_generator.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
@@ -19,13 +19,14 @@ class Invoice2Activity extends StatefulWidget {
 }
 
 class _Invoice2ActivityState extends State<Invoice2Activity> {
-  String orderNo = "123456";
+  String orderNo = '';  // ✅ Boş string ile başlat, initState'de doldurulacak
   String comment = "";
   String? selectedPaymentMethod;
   DateTime selectedPaymentDate = DateTime.now();
   DateTime selectedDeliveryDate = DateTime.now();
   List<String> _refundProductNames=[];
   List<Refund> refunds = [];
+  bool _fisNoGenerated = false;  // FisNo'nun oluşturulup oluşturulmadığını takip eder
 
 
   final List<String> paymentMethods = [
@@ -37,6 +38,51 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
     "Bank",
     "No Payment",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Sayfa ilk açıldığında FisNo'yu oluştur (sadece 1 kez)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!_fisNoGenerated) {
+        await _generateFisNo();
+        _fisNoGenerated = true;
+      }
+    });
+  }
+
+  /// FisNo üretir ve OrderInfoProvider'a kaydeder
+  Future<void> _generateFisNo() async {
+    try {
+      // Login tablosundan kullanıcı ID'sini al
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      final result = await db.query('Login', limit: 1);
+      final int userId = result.isNotEmpty ? (result.first['id'] as int) : 1;
+
+      // FisNo üret
+      orderNo = FisNoGenerator.generate(userId: userId);
+
+      // Provider'a kaydet
+      if (mounted) {
+        final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+        orderInfoProvider.orderNo = orderNo;
+        setState(() {}); // UI'ı güncelle
+      }
+
+      print('✅ FisNo başarıyla oluşturuldu: $orderNo (UserID: $userId)');
+    } catch (e) {
+      print('⚠️ FisNo oluşturma hatası: $e');
+      // Fallback: Basit timestamp kullan
+      orderNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+      if (mounted) {
+        final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+        orderInfoProvider.orderNo = orderNo;
+        setState(() {});
+      }
+    }
+  }
 
   Future<void> _selectPaymentDate(BuildContext context) async {
       final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
@@ -201,10 +247,9 @@ print("bunlarrr $_refundProductNames");
     final theme = Theme.of(context);
     final customer = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
     final dateFormat = DateFormat('dd.MM.yyyy');
-    final now = DateTime.now();
-    final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
-    String orderNo = generateFisNo(now);
-    orderInfoProvider.orderNo = orderNo;
+
+    // ❌ ARTIK BURADA FİSNO ÜRETMİYORUZ!
+    // FisNo initState'de oluşturuldu ve orderNo değişkeninde saklanıyor
 
     return Scaffold(
       backgroundColor: AppTheme.lightBackgroundColor,
@@ -226,13 +271,32 @@ print("bunlarrr $_refundProductNames");
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.grey[300]!),
                 ),
-                child: Text(
-                  orderNo,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'monospace',
-                  ),
-                ),
+                child: orderNo.isEmpty
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 4.w,
+                            height: 4.w,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          SizedBox(width: 2.w),
+                          Text(
+                            'Generating...',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey[600],
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        orderNo,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
               ),
               isCompact: true,
             ),
@@ -424,16 +488,5 @@ print("bunlarrr $_refundProductNames");
     );
   }
 }
-  String generateFisNo(DateTime now) {
-    final yy = now.year % 100; // Yılın son iki hanesi
-    final mm = now.month.toString().padLeft(2, '0');
-    final dd = now.day.toString().padLeft(2, '0');
-
-    final random = Random();
-    final randomNumber = random
-        .nextInt(1000)
-        .toString()
-        .padLeft(4, '0'); // 0000 - 9999
-
-    return "MO$yy$mm$dd$randomNumber";
-  }
+// ❌ ESKİ generateFisNo FONKSİYONU SİLİNDİ
+// ✅ Artık FisNoGenerator.generate() kullanılıyor

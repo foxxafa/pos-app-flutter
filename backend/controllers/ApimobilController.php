@@ -399,6 +399,25 @@ class ApimobilController extends Controller
         }
         file_put_contents($filePath, "2. Veri formatı doğrulandı.\n", FILE_APPEND);
 
+        // ✅ FisNo formatını kontrol et (MO + 13 rakam = 15 karakter)
+        // Format: MO + YY(2) + MM(2) + DD(2) + UserID(2) + Dakika(2) + Mikrosaniye(4)
+        // Örnek: MO250724053539746
+        if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
+            file_put_contents($filePath, "HATA: Geçersiz FisNo formatı. Beklenen: MO + 13 rakam (örn: MO250724053539746)\n", FILE_APPEND);
+            file_put_contents($filePath, "Gelen FisNo: " . ($data['fis']['FisNo'] ?? 'BOŞ') . "\n", FILE_APPEND);
+            return ['IsSuccessStatusCode' => false, 'status' => 'error', 'message' => 'Geçersiz sipariş numarası formatı'];
+        }
+        file_put_contents($filePath, "2.1. FisNo format kontrolü başarılı: {$data['fis']['FisNo']}\n", FILE_APPEND);
+
+        // ✅ Duplicate FisNo kontrolü
+        $existingFis = Satisfisleri::find()->where(['FisNo' => $data['fis']['FisNo']])->one();
+        if ($existingFis) {
+            file_put_contents($filePath, "HATA: Bu FisNo zaten mevcut: {$data['fis']['FisNo']}\n", FILE_APPEND);
+            file_put_contents($filePath, "Mevcut Fiş Tarihi: {$existingFis->Fistarihi}, Müşteri: {$existingFis->MusteriId}\n", FILE_APPEND);
+            return ['IsSuccessStatusCode' => false, 'status' => 'error', 'message' => 'Bu sipariş numarası daha önce kullanılmış'];
+        }
+        file_put_contents($filePath, "2.2. Duplicate FisNo kontrolü başarılı.\n", FILE_APPEND);
+
         $transaction = Yii::$app->db->beginTransaction();
         file_put_contents($filePath, "3. Veritabanı transaction başlatıldı.\n", FILE_APPEND);
 

@@ -170,7 +170,10 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         fis TEXT NOT NULL,
         satirlar TEXT NOT NULL,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        retry_count INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        last_error TEXT
       )
     ''');
 

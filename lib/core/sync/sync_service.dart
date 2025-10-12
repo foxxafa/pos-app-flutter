@@ -297,9 +297,22 @@ class SyncService {
     } else {
       print('No API Key found.');
     }
-    final pendingList = await db.query('PendingSales');
+    // Sadece pending ve retry_count < 3 olanları al
+    final pendingList = await db.query(
+      'PendingSales',
+      where: "(status = 'pending' OR status IS NULL) AND (retry_count < 3 OR retry_count IS NULL)",
+      orderBy: 'created_at ASC',
+    );
+
+    debugPrint('📤 ${pendingList.length} pending sipariş gönderilecek');
+
+    int successCount = 0;
+    int failedCount = 0;
 
     for (final item in pendingList) {
+      final itemId = item['id'];
+      final retryCount = (item['retry_count'] as int?) ?? 0;
+
       try {
         final fisJson = jsonDecode(item['fis'] as String);
         final satirlarJson = jsonDecode(item['satirlar'] as String);
@@ -317,6 +330,8 @@ class SyncService {
           deliveryDate: fisJson['DeliveryDate'],
           comment: fisJson['Comment'],
         );
+
+        debugPrint('📤 Gönderiliyor: ${fisModel.fisNo} (Deneme: ${retryCount + 1})');
 
         // CartItem listesi oluştur
         final satirlar =
@@ -336,30 +351,68 @@ class SyncService {
             }).toList();
 
         // Gönder
+        bool success = false;
         if (orderRepository != null) {
-          await orderRepository!.submitOrder(
+          success = await orderRepository!.submitOrder(
             fisModel: fisModel,
             orderItems: satirlar,
             bearerToken: savedApiKey,
           );
         } else {
-          debugPrint('OrderRepository not provided, skipping order submission');
+          debugPrint('⚠️ OrderRepository not provided, skipping order submission');
         }
 
-        // Başarılıysa sil
-        await db.delete(
-          'PendingSales',
-          where: 'id = ?',
-          whereArgs: [item['id']],
-        );
+        if (success) {
+          // Başarılıysa sil
+          await db.delete(
+            'PendingSales',
+            where: 'id = ?',
+            whereArgs: [itemId],
+          );
 
-        debugPrint(
-          "Pending Satış gönderildi ve silindi: Fiş No ${fisModel.fisNo}",
-        );
+          debugPrint("✅ Sipariş gönderildi: ${fisModel.fisNo}");
+          successCount++;
+        } else {
+          throw Exception('Server returned false');
+        }
       } catch (e) {
-        debugPrint("Gönderim hatası: $e");
+        failedCount++;
+        final errorMsg = e.toString();
+        debugPrint("❌ Gönderim hatası (ID: $itemId): $errorMsg");
+
+        // Retry count artır ve hatayı kaydet
+        final newRetryCount = retryCount + 1;
+
+        if (newRetryCount >= 3) {
+          // 3 deneme sonrası failed olarak işaretle
+          await db.update(
+            'PendingSales',
+            {
+              'retry_count': newRetryCount,
+              'status': 'failed',
+              'last_error': errorMsg.length > 500 ? errorMsg.substring(0, 500) : errorMsg,
+            },
+            where: 'id = ?',
+            whereArgs: [itemId],
+          );
+          debugPrint("⛔ Sipariş başarısız olarak işaretlendi (3 deneme): ID $itemId");
+        } else {
+          // Retry count artır, status pending kalsın
+          await db.update(
+            'PendingSales',
+            {
+              'retry_count': newRetryCount,
+              'last_error': errorMsg.length > 500 ? errorMsg.substring(0, 500) : errorMsg,
+            },
+            where: 'id = ?',
+            whereArgs: [itemId],
+          );
+          debugPrint("🔄 Sipariş tekrar denenecek: ID $itemId (Deneme: $newRetryCount/3)");
+        }
       }
     }
+
+    debugPrint('📊 Sync Özeti: ✅ $successCount başarılı, ❌ $failedCount başarısız');
   }
 
   // GET LAST UPDATE TIME
