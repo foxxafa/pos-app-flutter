@@ -12,7 +12,6 @@ import 'package:pos_app/features/customer/presentation/providers/cartcustomer_pr
 import 'package:pos_app/features/customer/presentation/customer_view.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 class RefundCartView2 extends StatefulWidget {
   final RefundFisModel fisModel;

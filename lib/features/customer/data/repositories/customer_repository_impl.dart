@@ -23,7 +23,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
   Future<List<CustomerModel>> getAllCustomers() async {
     try {
       final db = await dbHelper.database;
-      final results = await db.query('customers', orderBy: 'name ASC');
+      final results = await db.query('CustomerBalance', orderBy: 'unvan ASC');
 
       return results.map((map) => CustomerModel.fromMap(map)).toList();
     } catch (e) {
@@ -36,10 +36,10 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'customers',
-        where: 'name LIKE ? OR phone LIKE ? OR email LIKE ?',
-        whereArgs: ['%$query%', '%$query%', '%$query%'],
-        orderBy: 'name ASC',
+        'CustomerBalance',
+        where: 'unvan LIKE ? OR telefon LIKE ? OR email LIKE ? OR kod LIKE ?',
+        whereArgs: ['%$query%', '%$query%', '%$query%', '%$query%'],
+        orderBy: 'unvan ASC',
       );
 
       return results.map((map) => CustomerModel.fromMap(map)).toList();
@@ -53,7 +53,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'customers',
+        'CustomerBalance',
         where: 'id = ?',
         whereArgs: [id],
       );
@@ -72,8 +72,8 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'customers',
-        where: 'phone = ?',
+        'CustomerBalance',
+        where: 'telefon = ?',
         whereArgs: [phone],
       );
 
@@ -124,7 +124,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
   Future<void> _addCustomerOffline(CustomerModel customer) async {
     try {
       final db = await dbHelper.database;
-      await db.insert('customers', customer.toMap());
+      await db.insert('CustomerBalance', customer.toMap());
     } catch (e) {
       throw Exception('Failed to add customer offline: $e');
     }
@@ -166,7 +166,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       await db.update(
-        'customers',
+        'CustomerBalance',
         customer.toMap(),
         where: 'id = ?',
         whereArgs: [customer.id],
@@ -209,7 +209,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       await db.delete(
-        'customers',
+        'CustomerBalance',
         where: 'id = ?',
         whereArgs: [customerId],
       );
@@ -232,10 +232,10 @@ class CustomerRepositoryImpl implements CustomerRepository {
 
           // Clear and insert all customers
           final db = await dbHelper.database;
-          await db.delete('customers');
+          await db.delete('CustomerBalance');
 
           for (final customer in customers) {
-            await db.insert('customers', customer.toMap());
+            await db.insert('CustomerBalance', customer.toMap());
           }
         }
       } catch (e) {
@@ -250,7 +250,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
   Future<int> getCustomersCount() async {
     try {
       final db = await dbHelper.database;
-      final result = await db.rawQuery('SELECT COUNT(*) as count FROM customers');
+      final result = await db.rawQuery('SELECT COUNT(*) as count FROM CustomerBalance');
       return result.first['count'] as int;
     } catch (e) {
       throw Exception('Failed to get customers count: $e');
@@ -262,8 +262,8 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'customers',
-        where: 'phone = ?',
+        'CustomerBalance',
+        where: 'telefon = ?',
         whereArgs: [phone],
       );
       return results.isNotEmpty;
@@ -277,14 +277,15 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'customers',
-        columns: ['balance'],
+        'CustomerBalance',
+        columns: ['bakiye'],
         where: 'id = ?',
         whereArgs: [customerId],
       );
 
       if (results.isNotEmpty) {
-        return (results.first['balance'] as num?)?.toDouble() ?? 0.0;
+        final bakiyeStr = results.first['bakiye'] as String?;
+        return double.tryParse(bakiyeStr ?? '0') ?? 0.0;
       }
       return 0.0;
     } catch (e) {
@@ -297,8 +298,8 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       await db.update(
-        'customers',
-        {'balance': balance},
+        'CustomerBalance',
+        {'bakiye': balance.toString()},
         where: 'id = ?',
         whereArgs: [customerId],
       );
@@ -323,10 +324,8 @@ class CustomerRepositoryImpl implements CustomerRepository {
   Future<List<CustomerModel>> getCustomersWithBalance() async {
     try {
       final db = await dbHelper.database;
-      final results = await db.query(
-        'customers',
-        where: 'balance > 0',
-        orderBy: 'balance DESC',
+      final results = await db.rawQuery(
+        'SELECT * FROM CustomerBalance WHERE CAST(bakiye AS REAL) > 0 ORDER BY CAST(bakiye AS REAL) DESC',
       );
 
       return results.map((map) => CustomerModel.fromMap(map)).toList();
@@ -340,7 +339,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'customers',
+        'CustomerBalance',
         orderBy: 'last_used DESC',
         limit: limit,
       );
@@ -356,10 +355,10 @@ class CustomerRepositoryImpl implements CustomerRepository {
     try {
       final db = await dbHelper.database;
       final results = await db.query(
-        'transactions',
-        where: 'customer_id = ?',
-        whereArgs: [customerId],
-        orderBy: 'created_at DESC',
+        'Refunds',
+        where: 'musteriId = ?',
+        whereArgs: [customerId.toString()],
+        orderBy: 'fisTarihi DESC',
       );
 
       return results;

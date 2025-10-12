@@ -9,6 +9,10 @@ class CustomerModel {
   final String? unvan;
   final String? postCode;
   final int? aktif;
+  final String? city;
+  final String? contact;
+  final String? mobile;
+  final String? bakiye;
 
   CustomerModel({
     this.id,
@@ -21,19 +25,27 @@ class CustomerModel {
     this.unvan,
     this.postCode,
     this.aktif,
+    this.city,
+    this.contact,
+    this.mobile,
+    this.bakiye,
   });
 
-    Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap() {
     return {
-      'VergiNo': vergiNo,
-      'VergiDairesi': vergiDairesi,
-      'Adres': adres,
-      'Telefon': telefon,
-      'Email': email,
-      'Kod': kod,
-      'Unvan': unvan,
-      'PostCode': postCode,
-      'Aktif': aktif,
+      'vergiNo': vergiNo,
+      'vergiDairesi': vergiDairesi,
+      'adres': adres,
+      'telefon': telefon,
+      'email': email,
+      'kod': kod,
+      'unvan': unvan,
+      'postcode': postCode,
+      'aktif': aktif,
+      'city': city,
+      'contact': contact,
+      'mobile': mobile,
+      'bakiye': bakiye,
     };
   }
 
@@ -77,6 +89,10 @@ class CustomerModel {
       email: map['email'] ?? map['Email'] ?? '',
       postCode: map['postcode'] ?? map['PostCode'] ?? '',
       aktif: map['aktif'] ?? map['Aktif'] ?? 1,
+      city: map['city'],
+      contact: map['contact'],
+      mobile: map['mobile'],
+      bakiye: map['bakiye'],
     );
   }
 
@@ -92,6 +108,10 @@ class CustomerModel {
     String? unvan,
     String? postCode,
     int? aktif,
+    String? city,
+    String? contact,
+    String? mobile,
+    String? bakiye,
   }) {
     return CustomerModel(
       id: id ?? this.id,
@@ -104,6 +124,10 @@ class CustomerModel {
       unvan: unvan ?? this.unvan,
       postCode: postCode ?? this.postCode,
       aktif: aktif ?? this.aktif,
+      city: city ?? this.city,
+      contact: contact ?? this.contact,
+      mobile: mobile ?? this.mobile,
+      bakiye: bakiye ?? this.bakiye,
     );
   }
 }

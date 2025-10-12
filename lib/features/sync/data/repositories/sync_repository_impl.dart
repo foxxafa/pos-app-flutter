@@ -603,8 +603,8 @@ class SyncRepositoryImpl implements SyncRepository {
       final db = await dbHelper.database;
 
       // Check if core tables exist and have data
-      final productsCount = await db.rawQuery('SELECT COUNT(*) as count FROM products');
-      final customersCount = await db.rawQuery('SELECT COUNT(*) as count FROM customers');
+      final productsCount = await db.rawQuery('SELECT COUNT(*) as count FROM Product');
+      final customersCount = await db.rawQuery('SELECT COUNT(*) as count FROM CustomerBalance');
 
       // Basic validation - ensure we have some core data
       final hasProducts = (productsCount.first['count'] as int) > 0;
@@ -659,10 +659,10 @@ class SyncRepositoryImpl implements SyncRepository {
       // Clear all local data
       final db = await dbHelper.database;
 
-      await db.delete('products');
-      await db.delete('customers');
-      await db.delete('orders');
-      await db.delete('transactions');
+      await db.delete('Product');
+      await db.delete('CustomerBalance');
+      await db.delete('PendingSales');
+      await db.delete('Refunds');
 
       // Reset sync status
       await resetSyncStatus();
