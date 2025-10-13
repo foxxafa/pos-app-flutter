@@ -42,6 +42,9 @@ class _CartView2State extends State<CartView2> {
   Map<String, Future<String?>> _imageFutures = {};
   Timer? _imageDownloadTimer;
 
+  // ✅ Double-click protection for Place Order button
+  bool _isSubmittingOrder = false;
+
   void _clearUIState() {
     // Controller'ları temizle
     _priceControllers.forEach((_, controller) => controller.clear());
@@ -1029,7 +1032,12 @@ class _CartView2State extends State<CartView2> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () async {
+                        onPressed: _isSubmittingOrder ? null : () async {
+                          // ✅ Double-click protection
+                          if (_isSubmittingOrder) return;
+                          setState(() => _isSubmittingOrder = true);
+
+                          try {
                           DatabaseHelper dbHelper = DatabaseHelper();
                           final db = await dbHelper.database;
 
@@ -1050,6 +1058,9 @@ class _CartView2State extends State<CartView2> {
                           }
 
                           if (customer == null) {
+                            if (mounted) {
+                              setState(() => _isSubmittingOrder = false); // ✅ Flag reset
+                            }
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -1061,6 +1072,9 @@ class _CartView2State extends State<CartView2> {
                           }
 
                           if (cartProvider.items.isEmpty) {
+                            if (mounted) {
+                              setState(() => _isSubmittingOrder = false); // ✅ Flag reset
+                            }
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text('Cart is empty!')),
                             );
@@ -1115,52 +1129,72 @@ class _CartView2State extends State<CartView2> {
                             );
                             print("Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString");
 
+                            // ✅ ÖNCE sepeti temizle (navigation'dan ÖNCE!)
+                            print("🧹 Clearing cart...");
                             await cartProvider.clearCart();
-                            
+                            print("✅ Cart cleared from provider");
+
                             // UI state'ini de temizle
                             _clearUIState();
-                            
-                            // UI'yi yenile
-                            setState(() {});
+                            print("✅ UI state cleared");
 
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: SizedBox(
-                                  height: 10.h,
-                                  child: Center(
-                                    child: Text(
-                                      'Order saved to Pending.',
-                                      style: TextStyle(
-                                        fontSize: 20.sp,
-                                        fontWeight: FontWeight.bold,
+                            // UI'yi yenile (mounted kontrolü ile)
+                            if (mounted) {
+                              setState(() {});
+                            }
+
+                            // ✅ Bakiye bilgisini al (hata olsa bile navigation yapılsın)
+                            String bakiye = "0.0";
+                            try {
+                              final selectedCustomer =
+                                  Provider.of<SalesCustomerProvider>(
+                                    context,
+                                    listen: false,
+                                  ).selectedCustomer;
+                              final customerRepository = Provider.of<CustomerRepository>(
+                                context,
+                                listen: false,
+                              );
+                              final customer = await customerRepository
+                                  .getCustomerByUnvan(
+                                    selectedCustomer!.kod ?? "TURAN",
+                                  );
+                              bakiye = customer?['bakiye']?.toString() ?? "0.0";
+                              print("📊 Bakiye alındı: $bakiye");
+                            } catch (e) {
+                              print("⚠️ Bakiye alınamadı: $e");
+                            }
+
+                            // ✅ SnackBar göster (mounted kontrolü ile)
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: SizedBox(
+                                    height: 10.h,
+                                    child: Center(
+                                      child: Text(
+                                        'Order saved to Pending.',
+                                        style: TextStyle(
+                                          fontSize: 20.sp,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
+                              );
+                            }
 
-                            final selectedCustomer =
-                                Provider.of<SalesCustomerProvider>(
-                                  context,
-                                  listen: false,
-                                ).selectedCustomer;
-                            final customerRepository = Provider.of<CustomerRepository>(
-                              context,
-                              listen: false,
-                            );
-                            final customer = await customerRepository
-                                .getCustomerByUnvan(
-                                  selectedCustomer!.kod ?? "TURAN",
-                                );
-                            String bakiye = customer?['bakiye']?.toString() ?? "0.0";
-                            print("bakişyeee: $bakiye");
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                builder: (_) => CustomerView(bakiye: bakiye),
-                              ),
-                              (route) => false,
-                            );
+                            // ✅ Navigation yap (mounted kontrolü ile)
+                            if (mounted) {
+                              print("🚀 Navigating to CustomerView...");
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => CustomerView(bakiye: bakiye),
+                                ),
+                                (route) => false,
+                              );
+                            }
 
                             // İLERİDE YAPILACAK: Otomatik gönderim
                             // if (connectivityResult[0] != ConnectivityResult.none) {
@@ -1180,15 +1214,38 @@ class _CartView2State extends State<CartView2> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Order failed: $e')),
                             );
+                          } finally {
+                            // ✅ Reset flag even if error occurs (but only if still mounted)
+                            if (mounted) {
+                              setState(() => _isSubmittingOrder = false);
+                            }
+                          }
+                          } catch (e) {
+                            // ✅ Catch outer try-catch errors too
+                            if (mounted) {
+                              setState(() => _isSubmittingOrder = false);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Unexpected error: $e')),
+                              );
+                            }
                           }
                         },
 
                         child: Padding(
                           padding: EdgeInsets.symmetric(vertical: 1.5.h),
-                          child: Text(
-                            "Place Order",
-                            style: TextStyle(fontSize: 18.sp),
-                          ),
+                          child: _isSubmittingOrder
+                              ? SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                )
+                              : Text(
+                                  "Place Order",
+                                  style: TextStyle(fontSize: 18.sp),
+                                ),
                         ),
                       ),
                     ),

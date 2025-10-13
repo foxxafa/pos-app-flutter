@@ -28,6 +28,9 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
   List<Refund> refunds = [];
   bool _fisNoGenerated = false;  // FisNo'nun oluşturulup oluşturulmadığını takip eder
 
+  // ✅ Double-click protection for Select Products button
+  bool _isNavigatingToProducts = false;
+
 
   final List<String> paymentMethods = [
     "Cash on Delivery",
@@ -362,19 +365,30 @@ print("bunlarrr $_refundProductNames");
                 width: double.infinity,
                 height: 64.0,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Hemen sayfaya geç, refunds arka planda yüklenecek
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => CartView(
-                          refundProductNames: _refundProductNames,
-                          refunds: refunds,
+                  onPressed: _isNavigatingToProducts ? null : () async {
+                    // ✅ Double-click protection
+                    if (_isNavigatingToProducts) return;
+                    setState(() => _isNavigatingToProducts = true);
+
+                    try {
+                      // Hemen sayfaya geç, refunds arka planda yüklenecek
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CartView(
+                            refundProductNames: _refundProductNames,
+                            refunds: refunds,
+                          ),
                         ),
-                      ),
-                    );
-                    // Arka planda refunds yükle (gelecekte kullanmak için)
-                    _loadRefunds(customer!.kod!);
+                      );
+                      // Arka planda refunds yükle (gelecekte kullanmak için)
+                      _loadRefunds(customer!.kod!);
+                    } finally {
+                      // ✅ Reset flag when returning
+                      if (mounted) {
+                        setState(() => _isNavigatingToProducts = false);
+                      }
+                    }
                   },
                   icon: Icon(Icons.shopping_cart_outlined, size: 24),
                   label: Text(

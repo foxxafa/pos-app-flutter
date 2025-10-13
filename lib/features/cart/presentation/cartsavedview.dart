@@ -189,6 +189,15 @@ class _CartListPageState extends State<CartListPage> {
         ? item['birimFiyat'].toDouble()
         : double.tryParse(item['birimFiyat'].toString()) ?? 0.0;
     final total = quantity * price;
+    final unitType = item['birimTipi']?.toString() ?? 'Unit';
+
+    // Birim tipine göre fiyat etiketi belirle
+    String priceLabel;
+    if (unitType.toLowerCase() == 'box') {
+      priceLabel = 'Box Price';
+    } else {
+      priceLabel = 'Unit Price';
+    }
 
     return Container(
       margin: EdgeInsets.only(bottom: 1.h),
@@ -231,7 +240,7 @@ class _CartListPageState extends State<CartListPage> {
                 Row(
                   children: [
                     Text(
-                      '${'saved_carts.quantity'.tr()}: ${quantity.toInt()}',
+                      '${'saved_carts.quantity'.tr()}: ${quantity % 1 == 0 ? quantity.toInt() : quantity} $unitType',
                       style: TextStyle(
                         fontSize: 15.sp,
                         color: Colors.grey[600],
@@ -244,7 +253,7 @@ class _CartListPageState extends State<CartListPage> {
                     ),
                     SizedBox(width: 2.w),
                     Text(
-                      '${'saved_carts.unit_price'.tr()}: £${price.toStringAsFixed(2)}',
+                      '$priceLabel: £${price.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: 15.sp,
                         color: Colors.grey[600],

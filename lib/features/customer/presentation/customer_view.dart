@@ -25,6 +25,8 @@ class CustomerView extends StatefulWidget {
 
 
 class _CustomerViewState extends State<CustomerView> {
+  // ✅ Double-click protection for navigation buttons
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -156,11 +158,22 @@ Future<Map<String, dynamic>?> loadCustomerBalanceByName(String customerName, Bui
                   context,
                   title: 'customer_menu.order'.tr(),
                   icon: Icons.shopping_cart_outlined,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const InvoiceActivityView()),
-                    );
+                  onTap: () async {
+                    // ✅ Double-click protection
+                    if (_isNavigating) return;
+                    setState(() => _isNavigating = true);
+
+                    try {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const InvoiceActivityView()),
+                      );
+                    } finally {
+                      // ✅ Reset flag when returning from navigation
+                      if (mounted) {
+                        setState(() => _isNavigating = false);
+                      }
+                    }
                   },
                 ),
                 _buildMenuItem(

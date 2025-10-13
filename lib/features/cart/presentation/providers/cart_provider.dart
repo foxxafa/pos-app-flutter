@@ -237,8 +237,16 @@ class CartProvider extends ChangeNotifier {
     print("DEBUG: CartProvider.clearCart() called - items before clear: ${_items.length}");
     _items.clear();
     print("DEBUG: CartProvider items cleared - current count: ${_items.length}");
-    await _saveCartToDatabase();
-    print("DEBUG: CartProvider _saveCartToDatabase() completed");
+
+    // ✅ Database kaydetme başarısız olsa bile devam et
+    try {
+      await _saveCartToDatabase();
+      print("DEBUG: CartProvider _saveCartToDatabase() completed successfully");
+    } catch (e) {
+      print("ERROR: CartProvider _saveCartToDatabase() failed: $e");
+      // Hata olsa bile devam et - memory'den zaten temizlendi
+    }
+
     notifyListeners();
     print("DEBUG: CartProvider notifyListeners() completed");
   }
