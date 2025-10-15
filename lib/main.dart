@@ -18,7 +18,7 @@ import 'package:pos_app/features/cart/domain/repositories/cart_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
-import 'package:pos_app/features/reports/domain/repositories/activity_repository.dart';
+import 'package:pos_app/features/reports/domain/repositclaudeories/activity_repository.dart';
 import 'package:pos_app/features/sync/domain/repositories/sync_repository.dart';
 
 // Repository implementations

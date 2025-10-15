@@ -8,6 +8,7 @@ import 'package:pos_app/features/refunds/presentation/screens/refundcart_view2.d
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
 import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:pos_app/core/services/scanner_service.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
@@ -79,9 +80,9 @@ class _RefundCartViewState extends State<RefundCartView> {
     // 🔑 Hardware keyboard listener ekle
     _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
     HardwareKeyboard.instance.addHandler(_scannerHandler);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _barcodeFocusNode.requestFocus();
-      _syncWithProvider();
+      await _syncWithProvider();
     });
   }
 
@@ -107,27 +108,40 @@ class _RefundCartViewState extends State<RefundCartView> {
 
   // --- Product & Data Loading ---
   Future<void> _loadProducts() async {
-    final productRepository = Provider.of<ProductRepository>(context, listen: false);
-    final allProducts = await productRepository.getAllProducts();
-    final activeProducts = allProducts.where((p) => p.aktif == 1).toList();
+    // İlk frame'de loading göster
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
-    activeProducts.sort((a, b) {
-      final nameA = a.urunAdi;
-      final nameB = b.urunAdi;
-      final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameA);
-      final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameB);
+    // ⚡ İlk yüklemede sadece 50 ürünü yükle (lazy loading)
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
-      if (startsWithLetterA && !startsWithLetterB) return -1;
-      if (!startsWithLetterA && startsWithLetterB) return 1;
-      return nameA.compareTo(nameB);
-    });
+    // Sadece ilk 50 ürünü tam yükle
+    final initialProducts = await db.query(
+      'Product',
+      where: 'aktif = ?',
+      whereArgs: [1],
+      orderBy: 'sortOrder ASC',
+      limit: 50,
+    );
 
+    if (!mounted) return;
+
+    print('⚡ Refund Cart açıldı: İlk 50 ürün yüklendi (lazy loading aktif)');
+
+    final products = initialProducts.map((json) => ProductModel.fromMap(json)).toList();
+
+    // ✅ Ürünler zaten sync sırasında sıralandı
     setState(() {
-      _allProducts = activeProducts;
-      _filteredProducts = activeProducts.take(50).toList();
+      _allProducts = products; // İlk başta sadece 50 ürün
+      _filteredProducts = products;
       _isLoading = false;
 
-      for (var product in activeProducts) {
+      // ⚡ Map'leri sadece gösterilen 50 ürün için doldur
+      for (var product in _filteredProducts) {
         final key = product.stokKodu;
         _quantityMap[key] = 0;
         // Varsayılan birim tipini belirle
@@ -137,16 +151,60 @@ class _RefundCartViewState extends State<RefundCartView> {
     });
   }
 
-  void _syncWithProvider() {
+  Future<void> _syncWithProvider() async {
     final provider = Provider.of<RCartProvider>(context, listen: false);
-    setState(() {
-      for (var product in _allProducts) {
-        final key = product.stokKodu;
-        final miktar = provider.getmiktar(key);
-        _quantityMap[key] = miktar;
-        _quantityControllers[key]?.text = miktar.toString();
+
+    // ⚡ Sadece sepette olan ürünleri sync et
+    if (provider.items.isEmpty) return;
+
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+
+    for (var cartItem in provider.items.values) {
+      final key = cartItem.stokKodu;
+
+      // Bu ürün _allProducts'ta var mı?
+      ProductModel? product = _allProducts.cast<ProductModel?>().firstWhere(
+        (p) => p?.stokKodu == key,
+        orElse: () => null,
+      );
+
+      // Eğer yoksa veritabanından yükle
+      if (product == null) {
+        final result = await db.query(
+          'Product',
+          where: 'stokKodu = ?',
+          whereArgs: [key],
+          limit: 1,
+        );
+
+        if (result.isNotEmpty) {
+          product = ProductModel.fromMap(result.first);
+          // _allProducts listesine ekle (bir dahaki sefere tekrar sorgulamayalım)
+          if (mounted) {
+            setState(() {
+              _allProducts.add(product!);
+              // Map'leri de güncelle
+              final key = product.stokKodu;
+              _quantityMap[key] = 0;
+              _birimTipiMap[key] = product.birimKey1 != 0 ? 'Unit' : (product.birimKey2 != 0 ? 'Box' : 'Unit');
+            });
+          }
+        } else {
+          // Ürün veritabanında yok - skip
+          continue;
+        }
       }
-    });
+
+      final miktar = provider.getmiktar(key);
+
+      if (mounted) {
+        setState(() {
+          _quantityMap[key] = miktar;
+          _quantityControllers[key]?.text = miktar.toString();
+        });
+      }
+    }
   }
 
   // --- Image Handling ---
@@ -183,37 +241,48 @@ class _RefundCartViewState extends State<RefundCartView> {
     await _audioPlayer.play(AssetSource('beep.mp3'));
   }
 
-  void _onBarcodeScanned(String barcode) {
+  void _onBarcodeScanned(String barcode) async {
     if (!mounted) return;
 
     _searchController.text = barcode;
     _searchController2.text = barcode;
     _filterProducts(queryOverride: barcode);
 
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (!mounted) return;
+    // ⚡ SQL ile kontrol et (hafızaya yüklemeye gerek yok)
+    await Future.delayed(const Duration(milliseconds: 200));
 
-      final query = barcode.trimRight().toLowerCase();
-      final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-      final filtered = _allProducts.where((product) {
-        final name = product.urunAdi.toLowerCase();
-        final stokKodu = product.stokKodu.toLowerCase();
-        final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
-            .map((b) => b.toLowerCase())
-            .toList();
-        return queryWords.every((word) =>
-          name.contains(word) ||
-          stokKodu.contains(word) ||
-          barcodes.any((b) => b.contains(word))
-        );
-      }).toList();
+    if (!mounted) return;
 
-      if (filtered.isNotEmpty) {
-        playBeep();
-      } else {
-        playWrong();
-      }
-    });
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+
+    final query = barcode.trimRight().toLowerCase();
+    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+
+    String whereClause = queryWords.map((_) =>
+      '(urunAdi LIKE ? OR stokKodu LIKE ? OR barcode1 LIKE ? OR barcode2 LIKE ? OR barcode3 LIKE ? OR barcode4 LIKE ?)'
+    ).join(' AND ');
+
+    List<String> whereArgs = [];
+    for (var word in queryWords) {
+      final likePattern = '%$word%';
+      whereArgs.addAll([likePattern, likePattern, likePattern, likePattern, likePattern, likePattern]);
+    }
+
+    final searchResults = await db.query(
+      'Product',
+      where: 'aktif = ? AND ($whereClause)',
+      whereArgs: [1, ...whereArgs],
+      limit: 1,
+    );
+
+    if (!mounted) return;
+
+    if (searchResults.isNotEmpty) {
+      playBeep();
+    } else {
+      playWrong();
+    }
   }
 
   Future<void> _openBarcodeScanner() async {
@@ -225,7 +294,7 @@ class _RefundCartViewState extends State<RefundCartView> {
   }
 
   // --- Filtering & Searching ---
-  void _filterProducts({String? queryOverride}) {
+  void _filterProducts({String? queryOverride}) async {
     final provider = Provider.of<RCartProvider>(context, listen: false);
     final query = (queryOverride ?? _searchController.text).trimRight().toLowerCase();
     final fromUI = queryOverride != null;
@@ -238,32 +307,39 @@ class _RefundCartViewState extends State<RefundCartView> {
       return;
     }
 
-    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-    final filtered = _allProducts.where((product) {
-      final name = product.urunAdi.toLowerCase();
-      final stokKodu = product.stokKodu.toLowerCase();
-      final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
-          .map((b) => b.toLowerCase())
-          .toList();
-      return queryWords.every((word) =>
-        name.contains(word) ||
-        stokKodu.contains(word) ||
-        barcodes.any((b) => b.contains(word))
-      );
-    }).toList();
+    // ⚡ Arama yapılıyorsa veritabanından direkt ara (SQL LIKE kullan)
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
-    filtered.sort((a, b) {
-      final aName = a.urunAdi;
-      final bName = b.urunAdi;
-      final aStartsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(aName);
-      final bStartsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(bName);
-      if (aStartsWithLetter && !bStartsWithLetter) return -1;
-      if (!aStartsWithLetter && bStartsWithLetter) return 1;
-      return aName.toLowerCase().compareTo(bName.toLowerCase());
-    });
+    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+
+    // SQL LIKE sorgusu oluştur
+    String whereClause = queryWords.map((_) =>
+      '(urunAdi LIKE ? OR stokKodu LIKE ? OR barcode1 LIKE ? OR barcode2 LIKE ? OR barcode3 LIKE ? OR barcode4 LIKE ?)'
+    ).join(' AND ');
+
+    List<String> whereArgs = [];
+    for (var word in queryWords) {
+      final likePattern = '%$word%';
+      whereArgs.addAll([likePattern, likePattern, likePattern, likePattern, likePattern, likePattern]);
+    }
+
+    final searchResults = await db.query(
+      'Product',
+      where: 'aktif = ? AND ($whereClause)',
+      whereArgs: [1, ...whereArgs],
+      orderBy: 'sortOrder ASC',
+      limit: 50,
+    );
+
+    if (!mounted) return;
+
+    final filtered = searchResults.map((json) => ProductModel.fromMap(json)).toList();
+
+    // Zaten sortOrder ile sıralı geldi, tekrar sıralamaya gerek yok
 
     setState(() {
-      _filteredProducts = filtered.take(50).toList();
+      _filteredProducts = filtered; // Zaten 50 ile limitli
       _generateImageFutures(_filteredProducts);
     });
 

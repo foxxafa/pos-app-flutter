@@ -254,7 +254,8 @@ class SyncService {
             birim2 TEXT,
             birimKey2 INTEGER,
             aktif INTEGER,
-            imsrc TEXT
+            imsrc TEXT,
+            sortOrder INTEGER
           )
         ''');
     } else {
@@ -267,14 +268,66 @@ class SyncService {
       if (!columns.contains('imsrc')) {
         await db.execute("ALTER TABLE Product ADD COLUMN imsrc TEXT;");
       }
+      if (!columns.contains('sortOrder')) {
+        await db.execute("ALTER TABLE Product ADD COLUMN sortOrder INTEGER;");
+      }
     }
 
     if (products != null) {
-      // Batch operation ile çok daha hızlı insert
+      // ✅ Ürünleri sırala ve sortOrder ekle
+      print('🔄 Ürünler sıralanıyor... (${products.length} ürün)');
+
+      // İlk 5 ürünün sıralama öncesi halini göster
+      if (products.length > 0) {
+        print('📋 Sıralama öncesi ilk 5 ürün:');
+        for (int i = 0; i < (products.length < 5 ? products.length : 5); i++) {
+          print('  [$i] ${products[i].urunAdi}');
+        }
+      }
+
+      products.sort((a, b) {
+        final nameA = a.urunAdi.trim();
+        final nameB = b.urunAdi.trim();
+
+        // İlk karaktere bak (boş string kontrolü)
+        if (nameA.isEmpty) return 1;
+        if (nameB.isEmpty) return -1;
+
+        final firstCharA = nameA[0];
+        final firstCharB = nameB[0];
+
+        // İlk karakter harf mi kontrol et
+        final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(firstCharA);
+        final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(firstCharB);
+
+        // Harfle başlayanlar önce, sayı/özel karakterle başlayanlar sonra
+        if (startsWithLetterA && !startsWithLetterB) return -1;
+        if (!startsWithLetterA && startsWithLetterB) return 1;
+
+        // İkisi de aynı tipte başlıyorsa alfabetik sırala
+        return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+      });
+
+      // İlk 5 ürünün sıralama sonrası halini göster
+      if (products.length > 0) {
+        print('✅ Sıralama sonrası ilk 5 ürün:');
+        for (int i = 0; i < (products.length < 5 ? products.length : 5); i++) {
+          final name = products[i].urunAdi.trim();
+          final firstChar = name.isNotEmpty ? name[0] : '';
+          final startsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(firstChar);
+          print('  [$i] ${products[i].urunAdi} (sortOrder: $i, ilkKarakter: "$firstChar", harf: $startsWithLetter)');
+        }
+      }
+
+      print('✅ Ürün sıralaması tamamlandı');
+
+      // Batch operation ile çok daha hızlı insert (sortOrder ile)
       final batch = db.batch();
 
-      for (var product in products) {
-        batch.insert('Product', product.toMap());
+      for (int i = 0; i < products.length; i++) {
+        final productMap = products[i].toMap();
+        productMap['sortOrder'] = i; // Sıra numarası ekle
+        batch.insert('Product', productMap);
       }
 
       print('📦 ${products.length} ürün veritabanına yazılıyor...');

@@ -83,7 +83,8 @@ class DatabaseHelper {
         birim2 TEXT,
         birimKey2 TEXT,
         aktif INTEGER,
-        imsrc TEXT
+        imsrc TEXT,
+        sortOrder INTEGER
       )
     ''');
 

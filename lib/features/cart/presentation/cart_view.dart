@@ -12,6 +12,7 @@ import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/core/services/scanner_service.dart';
+import 'package:pos_app/core/local/database_helper.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
@@ -39,7 +40,6 @@ class _CartViewState extends State<CartView> {
   final Map<String, FocusNode> _discountFocusNodes = {};
   final FocusNode _barcodeFocusNode = FocusNode();
   final FocusNode _barcodeFocusNode2 = FocusNode();
-  final TextEditingController _searchController = TextEditingController();
   final TextEditingController _searchController2 = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
   final ScrollController _scrollController = ScrollController();
@@ -66,9 +66,9 @@ class _CartViewState extends State<CartView> {
     // 🔑 Hardware keyboard listener ekle
     _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
     HardwareKeyboard.instance.addHandler(_scannerHandler);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _barcodeFocusNode.requestFocus();
-      _syncWithProvider();
+      await _syncWithProvider();
     });
   }
 
@@ -81,7 +81,6 @@ class _CartViewState extends State<CartView> {
     _imageDownloadTimer?.cancel();
     _barcodeFocusNode.dispose();
     _barcodeFocusNode2.dispose();
-    _searchController.dispose();
     _searchController2.dispose();
     _scrollController.dispose();
     _priceControllers.values.forEach((c) => c.dispose());
@@ -97,9 +96,6 @@ class _CartViewState extends State<CartView> {
 
   // --- Product & Data Loading ---
   Future<void> _loadProducts() async {
-    // ✅ Repository kullan (DatabaseHelper yerine)
-    final productRepository = Provider.of<ProductRepository>(context, listen: false);
-
     // İlk frame'de loading göster
     if (mounted) {
       setState(() {
@@ -107,21 +103,32 @@ class _CartViewState extends State<CartView> {
       });
     }
 
-    // Async işlemleri başlat
-    final allProducts = await productRepository.getAllProducts();
+    // ⚡ İlk yüklemede sadece ID ve stokKodu'nu al (hafif veri)
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+
+    // Sadece ilk 50 ürünü tam yükle, geri kalanı lazy loading
+    final initialProducts = await db.query(
+      'Product',
+      where: 'aktif = ?',
+      whereArgs: [1],
+      orderBy: 'sortOrder ASC',
+      limit: 50,
+    );
 
     if (!mounted) return;
 
-    // Hızlı bir şekilde aktif ürünleri filtrele
-    final activeProducts = allProducts.where((p) => p.aktif == 1).toList();
+    print('⚡ Cart açıldı: İlk 50 ürün yüklendi (lazy loading aktif)');
 
-    // İlk 50 ürünü hemen göster (sıralanmamış)
+    final products = initialProducts.map((json) => ProductModel.fromMap(json)).toList();
+
+    // ✅ Ürünler zaten sync sırasında sıralandı
     setState(() {
-      _allProducts = activeProducts;
-      _filteredProducts = activeProducts.take(50).toList();
+      _allProducts = products; // İlk başta sadece 50 ürün
+      _filteredProducts = products;
       _isLoading = false;
 
-      // Map'leri doldur (sadece ilk 50 için)
+      // ⚡ Map'leri sadece gösterilen 50 ürün için doldur
       for (var product in _filteredProducts) {
         final key = product.stokKodu;
         _isBoxMap[key] = product.birimKey2 != 0;
@@ -129,62 +136,70 @@ class _CartViewState extends State<CartView> {
       }
       _generateImageFutures(_filteredProducts);
     });
-
-    // ✅ Sıralama işlemini arka planda yap (tüm liste için)
-    await Future.microtask(() {
-      activeProducts.sort((a, b) {
-        final nameA = a.urunAdi;
-        final nameB = b.urunAdi;
-        final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameA);
-        final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçİĞÜŞÖÇ]').hasMatch(nameB);
-
-        if (startsWithLetterA && !startsWithLetterB) return -1;
-        if (!startsWithLetterA && startsWithLetterB) return 1;
-        return nameA.compareTo(nameB);
-      });
-    });
-
-    if (!mounted) return;
-
-    // Sıralanmış listeyi güncelle
-    setState(() {
-      _allProducts = activeProducts;
-      _filteredProducts = activeProducts.take(50).toList();
-
-      // Kalan ürünler için map'leri doldur
-      for (var product in activeProducts) {
-        final key = product.stokKodu;
-        if (!_isBoxMap.containsKey(key)) {
-          _isBoxMap[key] = product.birimKey2 != 0;
-          _quantityMap[key] = 0;
-        }
-      }
-    });
   }
 
-  void _syncWithProvider() {
+  Future<void> _syncWithProvider() async {
     final provider = Provider.of<CartProvider>(context, listen: false);
-    setState(() {
-      for (var product in _allProducts) {
-        final key = product.stokKodu;
-        final isBox = _isBoxMap[key] ?? false;
-        final birimTipi = isBox ? 'Box' : 'Unit';
 
-        final miktar = provider.getmiktar(key, birimTipi);
-        final iskonto = provider.getIskonto(key);
+    // ⚡ Sadece sepette olan ürünleri sync et (18985 yerine ~10-20 ürün)
+    if (provider.items.isEmpty) return;
 
-        _quantityMap[key] = miktar;
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
-        _quantityControllers[key]?.text = miktar.toString();
-        _discountControllers[key]?.text = iskonto > 0 ? iskonto.toString() : '';
-        if (_priceControllers.containsKey(key) && miktar == 0) {
-          final selectedType = getBirimTipiFromProduct(product);
-          _priceControllers[key]!.text = selectedType == 'Unit'
-              ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
-              : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
+    for (var cartItem in provider.items.values) {
+      final key = cartItem.stokKodu;
+
+      // Bu ürün _allProducts'ta var mı?
+      ProductModel? product = _allProducts.cast<ProductModel?>().firstWhere(
+        (p) => p?.stokKodu == key,
+        orElse: () => null,
+      );
+
+      // Eğer yoksa veritabanından yükle
+      if (product == null) {
+        final result = await db.query(
+          'Product',
+          where: 'stokKodu = ?',
+          whereArgs: [key],
+          limit: 1,
+        );
+
+        if (result.isNotEmpty) {
+          product = ProductModel.fromMap(result.first);
+          // _allProducts listesine ekle (bir dahaki sefere tekrar sorgulamayalım)
+          if (mounted) {
+            setState(() {
+              _allProducts.add(product!);
+            });
+          }
+        } else {
+          // Ürün veritabanında yok - skip
+          continue;
         }
       }
-    });
+
+      final isBox = _isBoxMap[key] ?? false;
+      final birimTipi = isBox ? 'Box' : 'Unit';
+
+      final miktar = provider.getmiktar(key, birimTipi);
+      final iskonto = provider.getIskonto(key);
+
+      if (mounted) {
+        setState(() {
+          _quantityMap[key] = miktar;
+
+          _quantityControllers[key]?.text = miktar.toString();
+          _discountControllers[key]?.text = iskonto > 0 ? iskonto.toString() : '';
+          if (_priceControllers.containsKey(key) && miktar == 0) {
+            final selectedType = getBirimTipiFromProduct(product!);
+            _priceControllers[key]!.text = selectedType == 'Unit'
+                ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
+                : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
+          }
+        });
+      }
+    }
   }
 
   // --- Image Handling ---
@@ -239,8 +254,7 @@ class _CartViewState extends State<CartView> {
   void _onBarcodeScanned(String barcode) {
     if (!mounted) return; // Widget dispose edilmişse çık
 
-    _searchController.text = barcode;
-    _searchController2.text = barcode; // Her iki controller'a da yaz
+    _searchController2.text = barcode; // Tek controller kullan
     _filterProducts(queryOverride: barcode);
 
     // Barkod sonucuna göre ses çal
@@ -279,9 +293,9 @@ class _CartViewState extends State<CartView> {
   }
 
   // --- Filtering & Searching ---
-  void _filterProducts({String? queryOverride}) {
+  void _filterProducts({String? queryOverride}) async {
     final provider = Provider.of<CartProvider>(context, listen: false);
-    final query = (queryOverride ?? _searchController.text).trimRight().toLowerCase();
+    final query = (queryOverride ?? _searchController2.text).trimRight().toLowerCase();
     final fromUI = queryOverride != null;
 
     if (query.isEmpty) {
@@ -292,32 +306,39 @@ class _CartViewState extends State<CartView> {
       return;
     }
 
-    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-    final filtered = _allProducts.where((product) {
-      final name = product.urunAdi.toLowerCase();
-      final stokKodu = product.stokKodu.toLowerCase(); // Stok kodu araması ekle
-      final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
-          .map((b) => b.toLowerCase())
-          .toList();
-      return queryWords.every((word) =>
-        name.contains(word) ||
-        stokKodu.contains(word) || // Stok kodunda ara
-        barcodes.any((b) => b.contains(word))
-      );
-    }).toList();
+    // ⚡ Arama yapılıyorsa veritabanından direkt ara (SQL LIKE kullan)
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
 
-    filtered.sort((a, b) {
-      final aName = a.urunAdi;
-      final bName = b.urunAdi;
-      final aStartsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(aName);
-      final bStartsWithLetter = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(bName);
-      if (aStartsWithLetter && !bStartsWithLetter) return -1;
-      if (!aStartsWithLetter && bStartsWithLetter) return 1;
-      return aName.toLowerCase().compareTo(bName.toLowerCase());
-    });
+    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+
+    // SQL LIKE sorgusu oluştur
+    String whereClause = queryWords.map((_) =>
+      '(urunAdi LIKE ? OR stokKodu LIKE ? OR barcode1 LIKE ? OR barcode2 LIKE ? OR barcode3 LIKE ? OR barcode4 LIKE ?)'
+    ).join(' AND ');
+
+    List<String> whereArgs = [];
+    for (var word in queryWords) {
+      final likePattern = '%$word%';
+      whereArgs.addAll([likePattern, likePattern, likePattern, likePattern, likePattern, likePattern]);
+    }
+
+    final searchResults = await db.query(
+      'Product',
+      where: 'aktif = ? AND ($whereClause)',
+      whereArgs: [1, ...whereArgs],
+      orderBy: 'sortOrder ASC',
+      limit: 50,
+    );
+
+    if (!mounted) return;
+
+    final filtered = searchResults.map((json) => ProductModel.fromMap(json)).toList();
+
+    // Zaten sortOrder ile sıralı geldi, tekrar sıralamaya gerek yok
 
     setState(() {
-      _filteredProducts = filtered.take(50).toList();
+      _filteredProducts = filtered; // Zaten 50 ile limitli
       _generateImageFutures(_filteredProducts);
     });
 
@@ -367,9 +388,8 @@ class _CartViewState extends State<CartView> {
   }
 
   void _clearAndFocusBarcode() {
-    // El terminali için sadece controller'ları temizle, focus'u koru
-    _searchController.clear();
-    _searchController2.clear();
+    // El terminali için sadece controller'ı temizle, focus'u koru
+    _searchController2.clear(); // Tek controller kullan
     // Focus'u hemen geri ver, delay olmadan
     if (mounted) {
       _barcodeFocusNode.requestFocus();
@@ -516,10 +536,9 @@ class _CartViewState extends State<CartView> {
                 height: 1,
                 child: TextField(
                   focusNode: _barcodeFocusNode,
-                  controller: _searchController,
+                  controller: _searchController2, // Tek controller kullan - controller sync kaldırıldı
                   onChanged: (value) {
                     // El terminali için her değişiklikte filtrele
-                    _searchController2.text = value; // Üst search'e de yansıt
                     _filterProducts();
                   },
                   onSubmitted: (value) {

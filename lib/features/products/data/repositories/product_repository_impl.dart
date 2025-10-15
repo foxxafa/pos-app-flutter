@@ -22,9 +22,47 @@ class ProductRepositoryImpl implements ProductRepository {
   Future<List<ProductModel>> getAllProducts() async {
     final db = await dbHelper.database;
     // Database table adı 'Product' (büyük P)
-    final result = await db.query('Product', orderBy: 'urunAdi ASC');
+    // ✅ sortOrder varsa kullan (çok hızlı!), yoksa fallback
+    // ✅ Sadece aktif ürünleri çek (aktif=1)
+    try {
+      final result = await db.query(
+        'Product',
+        where: 'aktif = ?',
+        whereArgs: [1],
+        orderBy: 'sortOrder ASC',
+      );
+      return result.map((json) => ProductModel.fromMap(json)).toList();
+    } catch (e) {
+      // sortOrder kolonu yoksa (eski database), urunAdi'ye göre sırala
+      print('⚠️ sortOrder yok, urunAdi ile sıralıyorum...');
+      final result = await db.query('Product');
+      final products = result.map((json) => ProductModel.fromMap(json)).toList();
 
-    return result.map((json) => ProductModel.fromMap(json)).toList();
+      products.sort((a, b) {
+        final nameA = a.urunAdi.trim();
+        final nameB = b.urunAdi.trim();
+
+        // İlk karaktere bak (boş string kontrolü)
+        if (nameA.isEmpty) return 1;
+        if (nameB.isEmpty) return -1;
+
+        final firstCharA = nameA[0];
+        final firstCharB = nameB[0];
+
+        // İlk karakter harf mi kontrol et
+        final startsWithLetterA = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(firstCharA);
+        final startsWithLetterB = RegExp(r'^[a-zA-ZğüşöçıİĞÜŞÖÇ]').hasMatch(firstCharB);
+
+        // Harfle başlayanlar önce, sayı/özel karakterle başlayanlar sonra
+        if (startsWithLetterA && !startsWithLetterB) return -1;
+        if (!startsWithLetterA && startsWithLetterB) return 1;
+
+        // İkisi de aynı tipte başlıyorsa alfabetik sırala
+        return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+      });
+
+      return products;
+    }
   }
 
   @override
