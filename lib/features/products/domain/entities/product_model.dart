@@ -1,4 +1,5 @@
 class ProductModel {
+  final int? id;
   final String stokKodu;
   final String adetFiyati;
   final String kutuFiyati;
@@ -19,6 +20,7 @@ class ProductModel {
   final String? imsrc; // Yeni alan
 
   ProductModel({
+    this.id,
     required this.stokKodu,
     required this.adetFiyati,
     required this.kutuFiyati,
@@ -41,6 +43,7 @@ class ProductModel {
 
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     return ProductModel(
+      id: json['id'],
       stokKodu: json['StokKodu'] ?? '',
       adetFiyati: json['AdetFiyati'] ?? '0',
       kutuFiyati: json['KutuFiyati'] ?? '0',
@@ -64,6 +67,7 @@ class ProductModel {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'StokKodu': stokKodu,
       'AdetFiyati': adetFiyati,
       'KutuFiyati': kutuFiyati,
@@ -87,6 +91,7 @@ class ProductModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'id': id,
       'stokKodu': stokKodu,
       'adetFiyati': adetFiyati,
       'kutuFiyati': kutuFiyati,
@@ -110,6 +115,7 @@ class ProductModel {
 
   factory ProductModel.fromMap(Map<String, dynamic> map) {
     return ProductModel(
+      id: map['id'] is int ? map['id'] : int.tryParse(map['id']?.toString() ?? '0'),
       stokKodu: map['stokKodu'] ?? '',
       urunAdi: map['urunAdi'] ?? '',
       adetFiyati: map['adetFiyati']?.toString() ?? '0',

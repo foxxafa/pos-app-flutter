@@ -5,7 +5,6 @@ import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart'
 import 'package:pos_app/features/cart/presentation/cart_view2.dart';
 import 'package:pos_app/features/cart/presentation/cartsuggestion_view.dart';
 import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
-import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
@@ -896,6 +895,8 @@ class ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showBanner = product.id == 1; // İlk ürün (id = 1) için banner göster
+
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
       child: Column(
@@ -903,26 +904,92 @@ class ProductImage extends StatelessWidget {
           SizedBox(
             width: 30.w,
             height: 30.w,
-            child: product.imsrc == null
-                ? Icon(Icons.shopping_bag_sharp, size: 25.w, color: Colors.grey)
-                : FutureBuilder<String?>(
-              future: imageFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: Icon(Icons.image_outlined, size: 20, color: Colors.grey));
-                }
-                if (snapshot.hasData && snapshot.data != null) {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: Image.file(
-                      File(snapshot.data!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (c, e, s) => Icon(Icons.broken_image, size: 20.w, color: Colors.grey),
+            child: Stack(
+              children: [
+                // Main image/icon
+                SizedBox(
+                  width: 30.w,
+                  height: 30.w,
+                  child: product.imsrc == null
+                      ? Icon(Icons.shopping_bag_sharp, size: 25.w, color: Colors.grey)
+                      : FutureBuilder<String?>(
+                    future: imageFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: Icon(Icons.image_outlined, size: 20, color: Colors.grey));
+                      }
+                      if (snapshot.hasData && snapshot.data != null) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: Image.file(
+                            File(snapshot.data!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (c, e, s) => Icon(Icons.broken_image, size: 20.w, color: Colors.grey),
+                          ),
+                        );
+                      }
+                      return Icon(Icons.shopping_bag, size: 25.w, color: Colors.grey);
+                    },
+                  ),
+                ),
+                // Suspended banner for products with id == 1 (ilk ürün)
+                if (showBanner)
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _SuspendedBannerPainter(),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          // Banner'ın kalınlığı 40px
+                          final bannerWidth = 40.0;
+
+                          // Banner sağ üstten sol alta çapraz gidiyor
+                          // Banner'ın geometrik merkezi için:
+                          // - Genişlik ortası: 0 (zaten ortada)
+                          // - Yükseklik ortası: banner kalınlığının yarısı kadar dik olarak banner içine gir
+
+                          // 45 derece açıyla, banner kalınlığının yarısı kadar dik mesafe için:
+                          // Yatay ve dikey offset eşit olmalı (45° trigonometri)
+                          final halfWidth = bannerWidth / 2;
+
+                          // Banner'ın kalınlığının TAM ORTASINA yerleştirmek için
+                          // Banner 40px kalınlık, yarısı 20px, ama biz ortası istiyoruz: 10px
+                          final quarterWidth = bannerWidth / 4; // Çeyrek = 10px
+
+                          // 45 derece açıyla sol üst yönünde kaydır
+                          final perpOffsetX = quarterWidth * 0.707; // cos(45°) = 0.707
+                          final perpOffsetY = quarterWidth * 0.707;
+
+                          return Transform.translate(
+                            offset: Offset(-perpOffsetX, -perpOffsetY), // Sol üst yönünde (üst ve alt kenarın ortası)
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: Transform.rotate(
+                                angle: -0.785398, // -45 derece (banner ile paralel)
+                                child: Text(
+                                  'SUSPENDED',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.sp,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1.5,
+                                    height: 1.0,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black.withValues(alpha: 0.9),
+                                        offset: Offset(2, 2),
+                                        blurRadius: 4,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
-                  );
-                }
-                return Icon(Icons.shopping_bag, size: 25.w, color: Colors.grey);
-              },
+                  ),
+              ],
             ),
           ),
           Text("${'cart.stock'.tr()}: 0/0"),
@@ -930,6 +997,50 @@ class ProductImage extends StatelessWidget {
       ),
     );
   }
+}
+
+// CustomPainter for drawing the red diagonal "SUSPENDED" banner
+// Sağ üstte sadece üst kenara temas, sol altta sadece sol kenara temas
+class _SuspendedBannerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Color(0xFFCC0000).withValues(alpha: 0.9) // Koyu kırmızı, %90 opaklık
+      ..style = PaintingStyle.fill;
+
+    // Banner genişliği (kalınlık) - artırıldı
+    final bannerWidth = 40.0;
+
+    // 45 derece açı için offset hesabı (√2 ≈ 1.414)
+    final offset = bannerWidth / 1.414;
+
+    // Banner path:
+    // Üst kenarda sağdan sola: [size.width - offset, 0] → [size.width, 0]
+    // Çapraz gidiş başlangıcı
+    // Sol kenarda yukarıdan aşağı: [0, size.height - offset] → [0, size.height]
+
+    final path = Path()
+      ..moveTo(size.width - offset, 0) // Üst kenarda (sağdan biraz sol)
+      ..lineTo(size.width, 0) // Sağ üst köşeye git (üst kenarda)
+      ..lineTo(size.width - offset, offset) // Banner kalınlığı kadar içeri (çapraz başlangıcı)
+      ..lineTo(offset, size.height - offset) // Sol alt köşeye çapraz git
+      ..lineTo(0, size.height) // Sol alt köşeye git (sol kenarda)
+      ..lineTo(0, size.height - offset) // Sol kenarda yukarı (banner kalınlığı)
+      ..close();
+
+    canvas.drawPath(path, paint);
+
+    // İnce gölge efekti
+    final shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+
+    canvas.drawPath(path, shadowPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 

@@ -5,7 +5,6 @@ import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
 import 'package:pos_app/features/refunds/presentation/providers/cart_provider_refund.dart';
 import 'package:pos_app/features/refunds/presentation/screens/refundcart_view2.dart';
-import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
 import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:pos_app/core/services/scanner_service.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -1127,8 +1126,6 @@ class RefundProductDetails extends StatelessWidget {
   }
 
   Widget _buildPriceDisplay(BuildContext context) {
-    final selectedType = getBirimTipi() ?? 'Unit';
-
     return Container(
       height: 8.w,
       decoration: BoxDecoration(

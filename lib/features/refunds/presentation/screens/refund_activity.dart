@@ -163,8 +163,8 @@ class _RefundActivityViewState extends State<RefundActivityView> {
                   padding: EdgeInsets.symmetric(horizontal: 3.w, vertical: 0.5.h),
                   decoration: BoxDecoration(
                     color: isCompleted
-                        ? Colors.green.withOpacity(0.1)
-                        : Colors.orange.withOpacity(0.1),
+                        ? Colors.green.withValues(alpha: 0.1)
+                        : Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isCompleted ? Colors.green : Colors.orange,
