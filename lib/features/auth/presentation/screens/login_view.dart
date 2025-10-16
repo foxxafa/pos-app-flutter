@@ -5,7 +5,6 @@ import 'package:pos_app/features/auth/presentation/providers/user_provider.dart'
 import 'package:pos_app/core/widgets/menu_view.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:provider/provider.dart';
-import 'package:sizer/sizer.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 
@@ -16,8 +15,12 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginView> {
+  final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+
+  bool _isLoading = false;
+  String? _errorMessage;
 
    @override
   void initState() {
@@ -77,126 +80,143 @@ Future<Map<String, dynamic>?> getLastLogin() async {
 }
 
 
-  void _login() async {
-    try {
-      final username = _usernameController.text.trim();
-      final password = _passwordController.text.trim();
+  Future<void> _login() async {
+    if (_formKey.currentState?.validate() ?? false) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
 
-      // Validate input
-      if (username.isEmpty || password.isEmpty) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Validation Error"),
-            content: const Text("Please enter both username and password"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text("Okay"),
-              )
-            ],
-          ),
+      try {
+        final userProvider = Provider.of<UserProvider>(context, listen: false);
+
+        print('🔑 Login attempt - Username: ${_usernameController.text}');
+
+        final success = await userProvider.login(
+          _usernameController.text.trim(),
+          _passwordController.text.trim(),
         );
-        return;
-      }
 
-      // ✅ Use UserProvider.login() instead of LoginController
-      final userProvider = Provider.of<UserProvider>(context, listen: false);
+        if (success && mounted) {
+          print('🔑 ✅ Login successful');
 
-      print('🔑 Login attempt - Username: $username');
-
-      // Call repository-based login
-      final success = await userProvider.login(username, password);
-
-      if (success) {
-        print('🔑 ✅ Login successful');
-
-        // Navigate to MenuView
-        if (mounted) {
-          Navigator.push(
+          // Navigate to MenuView
+          Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const MenuView()),
           );
+        } else if (mounted) {
+          setState(() {
+            _errorMessage = userProvider.errorMessage ?? "Login failed. Please check your credentials.";
+          });
         }
-      } else {
-        print('🔑 ❌ Login failed: ${userProvider.errorMessage}');
-
-        // Show error dialog
+      } catch (e) {
+        print('🔑 ❌ Login View Exception: $e');
         if (mounted) {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text("Login Error"),
-              content: Text(userProvider.errorMessage ?? "Login failed. Please check your credentials."),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text("Okay"),
-                )
-              ],
-            ),
-          );
+          setState(() {
+            _errorMessage = 'Error: Login failed - $e';
+          });
         }
-      }
-    } catch (e) {
-      print('🔑 ❌ Login View Exception: $e');
-      print('🔑 ❌ Exception type: ${e.runtimeType}');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: Login failed - $e')),
-        );
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
 
   @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8.w),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "Welcome",
-                style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 3.h),
-              TextField(
-                controller: _usernameController,
-                decoration: InputDecoration(
-                  labelText: 'Username',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(2.w),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 40),
+                Text(
+                  'Welcome',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-              SizedBox(height: 2.h),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(2.w),
-                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'Please login to continue',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
                 ),
-              ),
-              SizedBox(height: 3.h),
-              SizedBox(
-                width: 60.w,
-                height: 8.h.clamp(56.0, double.infinity),
-                child: ElevatedButton(
-                  onPressed: _login,
-                  child: Text(
-                    "LOGIN",
-                    style: TextStyle(fontSize: 18.sp.clamp(16.0, double.infinity)),
+                const SizedBox(height: 40),
+                TextFormField(
+                  controller: _usernameController,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none,
+                  decoration: const InputDecoration(
+                    labelText: 'Username',
+                    prefixIcon: Icon(Icons.person_outline),
                   ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your username';
+                    }
+                    return null;
+                  },
                 ),
-              )
-            ],
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: true,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  textCapitalization: TextCapitalization.none,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your password';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                if (_errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0),
+                    child: Text(
+                      _errorMessage!,
+                      style: TextStyle(color: theme.colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        onPressed: _login,
+                        child: const Text('LOGIN'),
+                      ),
+              ],
+            ),
           ),
         ),
       ),

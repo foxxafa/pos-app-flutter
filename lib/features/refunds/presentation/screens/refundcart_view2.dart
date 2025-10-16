@@ -173,7 +173,9 @@ class _RefundCartView2State extends State<RefundCartView2> {
         satirlar: refundItems,
       );
 
-      await refundRepository.sendRefund(refundSendModel);
+      // İnternet olsa bile önce offline kaydet, sync butonuna basınca gönder
+      await refundRepository.saveRefundOffline(refundSendModel);
+      print("📥 İade offline kaydedildi, sync ile gönderilecek.");
 
       // Log activity
       final activityRepository = Provider.of<ActivityRepository>(context, listen: false);

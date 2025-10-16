@@ -321,17 +321,21 @@ class SyncService {
 
       print('✅ Ürün sıralaması tamamlandı');
 
-      // Batch operation ile çok daha hızlı insert (sortOrder ile)
-      final batch = db.batch();
+      // ✅ Transaction içinde batch operation - deadlock önlenir
+      // Local değişken oluştur (null-safety için)
+      final productList = products;
+      print('📦 ${productList.length} ürün veritabanına yazılıyor...');
+      await db.transaction((txn) async {
+        final batch = txn.batch();
 
-      for (int i = 0; i < products.length; i++) {
-        final productMap = products[i].toMap();
-        productMap['sortOrder'] = i; // Sıra numarası ekle
-        batch.insert('Product', productMap);
-      }
+        for (int i = 0; i < productList.length; i++) {
+          final productMap = productList[i].toMap();
+          productMap['sortOrder'] = i; // Sıra numarası ekle
+          batch.insert('Product', productMap);
+        }
 
-      print('📦 ${products.length} ürün veritabanına yazılıyor...');
-      await batch.commit(noResult: true);
+        await batch.commit(noResult: true);
+      });
       print('✅ Ürün veritabanı yazma tamamlandı');
     }
   }

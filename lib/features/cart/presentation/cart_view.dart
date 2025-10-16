@@ -268,22 +268,25 @@ class _CartViewState extends State<CartView> {
   }
 
   /// Her ürün için sıralı ses çalar
-  /// İlk okutma: beepk.mp3, İkinci okutma: boopk.mp3, Üçüncü: beepk.mp3 ...
+  /// İlk okutma: beepk.mp3, sonraki tüm okutmalar: boopk.mp3
   Future<void> playBeepForProduct(String stokKodu) async {
-    // Bu ürünün kaç kez okutulduğunu al ve artır (setState olmadan!)
+    // Bu ürünün kaç kez okutulduğunu kontrol et
     final currentCount = _productScanCount[stokKodu] ?? 0;
-    _productScanCount[stokKodu] = currentCount + 1;
 
-    // Tek sayıda (1, 3, 5...) beepk.mp3, çift sayıda (2, 4, 6...) boopk.mp3
-    // ⚡ Preload edilmiş player'ları kullan - stop() + seek() + resume() pattern
-    if ((currentCount + 1) % 2 == 1) {
-      // Önce durdur (eğer çalıyorsa), sonra başa sar ve başlat
+    // İlk okutma (currentCount == 0): beepk.mp3
+    // Sonraki tüm okutmalar: boopk.mp3
+    if (currentCount == 0) {
+      // İlk okutma - beepk.mp3
       await _audioPlayerBeepK.stop();
       await _audioPlayerBeepK.resume();
     } else {
+      // Sonraki okutmalar - boopk.mp3
       await _audioPlayerBoopK.stop();
       await _audioPlayerBoopK.resume();
     }
+
+    // Sayacı artır (setState olmadan!)
+    _productScanCount[stokKodu] = currentCount + 1;
   }
 
   void _onBarcodeScanned(String barcode) {
