@@ -342,27 +342,39 @@ ScaffoldMessenger.of(context).showSnackBar(
               ),
             ),
           ),
-          // Submit Button at absolute bottom
+          // Submit Button at absolute bottom - Responsive
           Container(
-            padding: EdgeInsets.only(left: 3.w, right: 3.w, top: 2.h, bottom: 5.h),
-            child: Card(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
               child: SizedBox(
                 width: double.infinity,
-                height: 6.h,
+                height: 56,
                 child: _loading
-                    ? Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator())
                     : ElevatedButton.icon(
                         onPressed: () => _sendTahsilat(_selectedPaymentMethod, context),
-                        icon: Icon(Icons.send_outlined, size: 5.w),
+                        icon: const Icon(Icons.send_outlined, size: 20),
                         label: Text(
                           'transaction.submit'.tr(),
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
+                            fontSize: 16,
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.accentColor,
                           foregroundColor: Colors.white,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),

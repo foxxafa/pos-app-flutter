@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:path/path.dart';
-import 'package:pos_app/features/reports/presentation/screens/collection_activity.dart';
+import 'package:pos_app/features/transactions/presentation/screens/collection_activity.dart';
 import 'package:pos_app/features/customer/presentation/customerdetail_view.dart';
 import 'package:pos_app/features/reports/presentation/screens/invoice_activity.dart';
 import 'package:pos_app/core/widgets/menu_view.dart';
