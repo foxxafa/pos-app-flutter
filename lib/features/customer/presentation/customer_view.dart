@@ -6,7 +6,7 @@ import 'package:pos_app/features/customer/presentation/customerdetail_view.dart'
 import 'package:pos_app/features/reports/presentation/screens/invoice_activity.dart';
 import 'package:pos_app/core/widgets/menu_view.dart';
 import 'package:pos_app/features/refunds/presentation/screens/refund_activity.dart';
-import 'package:pos_app/features/reports/presentation/screens/statement_view.dart';
+import 'package:pos_app/features/reports/presentation/screens/statement_pdf_view.dart';
 import 'package:provider/provider.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:sizer/sizer.dart';
@@ -216,7 +216,7 @@ Future<Map<String, dynamic>?> loadCustomerBalanceByName(String customerName, Bui
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => StatementScreen()),
+                      MaterialPageRoute(builder: (_) => const StatementPdfView()),
                     );
                   },
                 ),
