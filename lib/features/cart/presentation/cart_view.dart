@@ -41,6 +41,8 @@ class _CartViewState extends State<CartView> {
   final FocusNode _barcodeFocusNode2 = FocusNode();
   final TextEditingController _searchController2 = TextEditingController();
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _audioPlayerBeepK = AudioPlayer(); // beepk.mp3 için ayrı player
+  final AudioPlayer _audioPlayerBoopK = AudioPlayer(); // boopk.mp3 için ayrı player
   final ScrollController _scrollController = ScrollController();
 
   List<ProductModel> _allProducts = [];
@@ -51,6 +53,7 @@ class _CartViewState extends State<CartView> {
   final Map<String, bool> _isBoxMap = {};
   final Map<String, int> _quantityMap = {};
   final Map<String, TextEditingController> _quantityControllers = {};
+  final Map<String, int> _productScanCount = {}; // Her ürünün kaç kez okutulduğunu takip eder
 
   Timer? _imageDownloadTimer;
 
@@ -71,8 +74,20 @@ class _CartViewState extends State<CartView> {
     });
   }
 
-  void _setupAudioPlayer() {
+  void _setupAudioPlayer() async {
     _audioPlayer.setVolume(0.8); // %80 sabit ses seviyesi
+
+    // ⚡ Ses dosyalarını önceden yükle (preload) - performans için kritik!
+    _audioPlayerBeepK.setVolume(0.8);
+    _audioPlayerBoopK.setVolume(0.8);
+
+    // Ses dosyalarını hafızaya yükle
+    await _audioPlayerBeepK.setSource(AssetSource('beepk.mp3'));
+    await _audioPlayerBoopK.setSource(AssetSource('boopk.mp3'));
+
+    // ReleaseMode.stop: Ses bitince durur, tekrar çalmaya hazır olur
+    _audioPlayerBeepK.setReleaseMode(ReleaseMode.stop);
+    _audioPlayerBoopK.setReleaseMode(ReleaseMode.stop);
   }
 
   @override
@@ -88,6 +103,8 @@ class _CartViewState extends State<CartView> {
     _quantityControllers.values.forEach((c) => c.dispose());
     _discountFocusNodes.values.forEach((f) => f.dispose());
     _audioPlayer.dispose();
+    _audioPlayerBeepK.dispose();
+    _audioPlayerBoopK.dispose();
     // 🔑 Hardware keyboard listener kaldır
     HardwareKeyboard.instance.removeHandler(_scannerHandler);
     super.dispose();
@@ -250,6 +267,25 @@ class _CartViewState extends State<CartView> {
     await _audioPlayer.play(AssetSource('beep.mp3'));
   }
 
+  /// Her ürün için sıralı ses çalar
+  /// İlk okutma: beepk.mp3, İkinci okutma: boopk.mp3, Üçüncü: beepk.mp3 ...
+  Future<void> playBeepForProduct(String stokKodu) async {
+    // Bu ürünün kaç kez okutulduğunu al ve artır (setState olmadan!)
+    final currentCount = _productScanCount[stokKodu] ?? 0;
+    _productScanCount[stokKodu] = currentCount + 1;
+
+    // Tek sayıda (1, 3, 5...) beepk.mp3, çift sayıda (2, 4, 6...) boopk.mp3
+    // ⚡ Preload edilmiş player'ları kullan - stop() + seek() + resume() pattern
+    if ((currentCount + 1) % 2 == 1) {
+      // Önce durdur (eğer çalıyorsa), sonra başa sar ve başlat
+      await _audioPlayerBeepK.stop();
+      await _audioPlayerBeepK.resume();
+    } else {
+      await _audioPlayerBoopK.stop();
+      await _audioPlayerBoopK.resume();
+    }
+  }
+
   void _onBarcodeScanned(String barcode) {
     if (!mounted) return; // Widget dispose edilmişse çık
 
@@ -261,7 +297,7 @@ class _CartViewState extends State<CartView> {
       if (!mounted) return; // Widget hala mevcut mu kontrol et
 
       final query = barcode.trimRight().toLowerCase();
-      final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
+  final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
       final filtered = _allProducts.where((product) {
         final name = product.urunAdi.toLowerCase();
         final stokKodu = product.stokKodu.toLowerCase(); // Stok kodu araması ekle
@@ -276,7 +312,7 @@ class _CartViewState extends State<CartView> {
       }).toList();
 
       if (filtered.isNotEmpty) {
-        playBeep(); // Ürün bulundu - beep sesi
+        playBeepForProduct(filtered.first.stokKodu); // Ürün bulundu - ürüne özel sıralı ses
       } else {
         playWrong(); // Ürün bulunamadı - wrong sesi
       }
@@ -376,7 +412,7 @@ class _CartViewState extends State<CartView> {
             birimKey2: product.birimKey2,
           );
           // Başarılı ekleme sonrası temizle ve fokusla
-          playBeep();
+          playBeepForProduct(key);
         }
         _clearAndFocusBarcode();
       } else if (_filteredProducts.isEmpty && query.length > 10 && RegExp(r'^\d+$').hasMatch(query)) {
@@ -895,7 +931,7 @@ class ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showBanner = product.id == 1; // İlk ürün (id = 1) için banner göster
+    final showBanner = product.shouldShowSuspendedBanner;
 
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
@@ -935,59 +971,7 @@ class ProductImage extends StatelessWidget {
                 // Suspended banner for products with id == 1 (ilk ürün)
                 if (showBanner)
                   Positioned.fill(
-                    child: CustomPaint(
-                      painter: _SuspendedBannerPainter(),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          // Banner'ın kalınlığı 40px
-                          final bannerWidth = 40.0;
-
-                          // Banner sağ üstten sol alta çapraz gidiyor
-                          // Banner'ın geometrik merkezi için:
-                          // - Genişlik ortası: 0 (zaten ortada)
-                          // - Yükseklik ortası: banner kalınlığının yarısı kadar dik olarak banner içine gir
-
-                          // 45 derece açıyla, banner kalınlığının yarısı kadar dik mesafe için:
-                          // Yatay ve dikey offset eşit olmalı (45° trigonometri)
-                          final halfWidth = bannerWidth / 2;
-
-                          // Banner'ın kalınlığının TAM ORTASINA yerleştirmek için
-                          // Banner 40px kalınlık, yarısı 20px, ama biz ortası istiyoruz: 10px
-                          final quarterWidth = bannerWidth / 4; // Çeyrek = 10px
-
-                          // 45 derece açıyla sol üst yönünde kaydır
-                          final perpOffsetX = quarterWidth * 0.707; // cos(45°) = 0.707
-                          final perpOffsetY = quarterWidth * 0.707;
-
-                          return Transform.translate(
-                            offset: Offset(-perpOffsetX, -perpOffsetY), // Sol üst yönünde (üst ve alt kenarın ortası)
-                            child: Align(
-                              alignment: Alignment.center,
-                              child: Transform.rotate(
-                                angle: -0.785398, // -45 derece (banner ile paralel)
-                                child: Text(
-                                  'SUSPENDED',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.sp,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1.5,
-                                    height: 1.0,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black.withValues(alpha: 0.9),
-                                        offset: Offset(2, 2),
-                                        blurRadius: 4,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
+                    child: _SuspendedBannerWidget(),
                   ),
               ],
             ),
@@ -999,38 +983,91 @@ class ProductImage extends StatelessWidget {
   }
 }
 
-// CustomPainter for drawing the red diagonal "SUSPENDED" banner
-// Sağ üstte sadece üst kenara temas, sol altta sadece sol kenara temas
+/// Widget that displays a diagonal "SUSPENDED" banner overlay
+/// with text centered within the banner's parallel edges
+class _SuspendedBannerWidget extends StatelessWidget {
+  static const double _bannerWidth = 40.0;
+  static const double _rotationAngle = -0.785398; // -45° in radians
+  static const double _sin45 = 0.707; // sin(45°) = cos(45°) ≈ 0.707
+
+  const _SuspendedBannerWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    // Calculate offset to center text between banner's parallel edges
+    // Banner has two parallel edges 40px apart at 45° angle
+    // Text needs to be offset by 1/4 of banner width perpendicular to the diagonal
+    final quarterWidth = _bannerWidth / 4;
+    final perpOffsetX = quarterWidth * _sin45;
+    final perpOffsetY = quarterWidth * _sin45;
+
+    return CustomPaint(
+      painter: _SuspendedBannerPainter(),
+      child: Transform.translate(
+        offset: Offset(-perpOffsetX, -perpOffsetY),
+        child: Align(
+          alignment: Alignment.center,
+          child: Transform.rotate(
+            angle: _rotationAngle,
+            child: Text(
+              'SUSPENDED',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12.sp,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.5,
+                height: 1.0,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withValues(alpha: 0.9),
+                    offset: const Offset(2, 2),
+                    blurRadius: 4,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// CustomPainter for drawing the red diagonal "SUSPENDED" banner
+/// Touches only the top edge at top-right and only the left edge at bottom-left
 class _SuspendedBannerPainter extends CustomPainter {
+  static const double _bannerWidth = 40.0;
+  static const double _sqrt2 = 1.414; // √2 ≈ 1.414 for 45° calculations
+  static const Color _bannerColor = Color(0xFFCC0000);
+  static const double _bannerOpacity = 0.9;
+
+  const _SuspendedBannerPainter();
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Color(0xFFCC0000).withValues(alpha: 0.9) // Koyu kırmızı, %90 opaklık
+      ..color = _bannerColor.withValues(alpha: _bannerOpacity)
       ..style = PaintingStyle.fill;
 
-    // Banner genişliği (kalınlık) - artırıldı
-    final bannerWidth = 40.0;
+    // Calculate offset for 45° angle: bannerWidth / √2
+    final offset = _bannerWidth / _sqrt2;
 
-    // 45 derece açı için offset hesabı (√2 ≈ 1.414)
-    final offset = bannerWidth / 1.414;
-
-    // Banner path:
-    // Üst kenarda sağdan sola: [size.width - offset, 0] → [size.width, 0]
-    // Çapraz gidiş başlangıcı
-    // Sol kenarda yukarıdan aşağı: [0, size.height - offset] → [0, size.height]
-
+    // Draw parallelogram banner path:
+    // - Top edge: starts at (width - offset, 0) ends at (width, 0)
+    // - Left edge: starts at (0, height - offset) ends at (0, height)
+    // - Diagonal connects these two edges at 45°
     final path = Path()
-      ..moveTo(size.width - offset, 0) // Üst kenarda (sağdan biraz sol)
-      ..lineTo(size.width, 0) // Sağ üst köşeye git (üst kenarda)
-      ..lineTo(size.width - offset, offset) // Banner kalınlığı kadar içeri (çapraz başlangıcı)
-      ..lineTo(offset, size.height - offset) // Sol alt köşeye çapraz git
-      ..lineTo(0, size.height) // Sol alt köşeye git (sol kenarda)
-      ..lineTo(0, size.height - offset) // Sol kenarda yukarı (banner kalınlığı)
+      ..moveTo(size.width - offset, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width - offset, offset)
+      ..lineTo(offset, size.height - offset)
+      ..lineTo(0, size.height)
+      ..lineTo(0, size.height - offset)
       ..close();
 
     canvas.drawPath(path, paint);
 
-    // İnce gölge efekti
+    // Add subtle shadow effect
     final shadowPaint = Paint()
       ..color = Colors.black.withValues(alpha: 0.5)
       ..style = PaintingStyle.stroke

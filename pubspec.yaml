@@ -75,6 +75,8 @@ flutter_launcher_icons:
 flutter:
   assets:
     - assets/beep.mp3
+    - assets/beepk.mp3
+    - assets/boopk.mp3
     - assets/logo.png
     - assets/hand.png
     - assets/wrong.mp3

@@ -41,6 +41,19 @@ class ProductModel {
     this.imsrc, // Yeni alan
   });
 
+  /// Banner gösterilip gösterilmeyeceğini belirleyen koşul
+  /// İleride bu koşul değiştirilebilir (örn: aktif == 0, veya pm1 == 'X', vs.)
+  bool get shouldShowSuspendedBanner {
+    // Şu an için: sadece id == 1 olan ürün için banner göster
+    return id == 1;
+
+    // İleride kullanılabilecek diğer koşul örnekleri:
+    // return aktif == 0; // Pasif ürünler için
+    // return pm1 == 'SUSPEND'; // Özel işaretli ürünler için
+    // return stokKodu.startsWith('X'); // Belirli stok kodları için
+    // return id != null && id! <= 10; // İlk 10 ürün için
+  }
+
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     return ProductModel(
       id: json['id'],
