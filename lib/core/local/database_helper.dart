@@ -371,12 +371,14 @@ class DatabaseHelper {
     );
   }
 
-  Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerName) async {
+  Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerIdentifier) async {
     final db = await database;
+    // ✅ SADECE henüz place order yapılmamış siparişleri getir (isPlaced=0 veya NULL)
+    // ✅ customerIdentifier ile hem customerName hem customerKod'u kontrol et
     return await db.query(
       'cart_items',
-      where: 'customerName = ?',
-      whereArgs: [customerName],
+      where: '(customerName = ? OR customerKod = ?) AND (isPlaced IS NULL OR isPlaced = ?)',
+      whereArgs: [customerIdentifier, customerIdentifier, 0],
     );
   }
 

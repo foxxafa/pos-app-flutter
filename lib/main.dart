@@ -144,11 +144,18 @@ void main() async {
               authRepository: context.read<AuthRepository>(),
             ),
           ),
-          ChangeNotifierProvider<SalesCustomerProvider>(create: (_) => SalesCustomerProvider()),
           ChangeNotifierProvider<CartProvider>(
             create: (context) => CartProvider(
               cartRepository: context.read<CartRepository>(),
             ),
+          ),
+          ChangeNotifierProxyProvider<CartProvider, SalesCustomerProvider>(
+            create: (_) => SalesCustomerProvider(),
+            update: (context, cartProvider, customerProvider) {
+              // ✅ Link CartProvider to SalesCustomerProvider so customer selection auto-updates cart
+              customerProvider!.linkCartProvider(cartProvider);
+              return customerProvider;
+            },
           ),
           ChangeNotifierProvider<RCartProvider>(create: (_) => RCartProvider()),
           ChangeNotifierProvider<OrderInfoProvider>(create: (_) => OrderInfoProvider()),

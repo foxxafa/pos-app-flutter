@@ -29,13 +29,10 @@ class _CartListPageState extends State<CartListPage> {
     final db = await dbHelper.database;
     final customerRows = await db.query('CustomerBalance');
 
-    // ✅ SADECE henüz Place Order yapılmamış siparişleri getir (isPlaced=0 veya NULL)
-    // isPlaced=1 olanlar zaten PendingSales'e kaydedilmiş ve artık edit edilemez
-    final allItems = await db.query(
-      'cart_items',
-      where: 'isPlaced IS NULL OR isPlaced = ?',
-      whereArgs: [0],
-    );
+    // ✅ TÜM siparişleri getir (hem draft hem de placed olanlar)
+    // isPlaced=0 veya NULL: Henüz Place Order yapılmamış (edit edilebilir)
+    // isPlaced=1: Place Order yapılmış (sadece görüntüleme için)
+    final allItems = await db.query('cart_items');
 
     // Group by fisNo (order number)
     final Map<String, List<Map<String, dynamic>>> grouped = {};
@@ -108,6 +105,7 @@ class _CartListPageState extends State<CartListPage> {
     final theme = Theme.of(context);
     final totalAmount = _calculateCartTotal(items);
     final itemCount = items.length;
+    final fisNo = items.isNotEmpty ? (items.first['fisNo']?.toString() ?? '') : '';
 
     return Card(
       margin: EdgeInsets.only(bottom: 2.h),

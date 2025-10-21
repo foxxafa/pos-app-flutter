@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/features/cart/domain/repositories/cart_repository.dart';
@@ -88,6 +89,11 @@ class CartProvider extends ChangeNotifier {
   CartProvider({CartRepository? cartRepository}) : _cartRepository = cartRepository;
 
   Map<String, CartItem> get items => {..._items};
+
+  // ✅ Debounce timer to prevent multiple rapid database saves
+  Timer? _debounceTimer;
+  bool _hasPendingSave = false;
+  bool _isSavingToDatabase = false; // Prevent concurrent saves
 
   String _customerName = '';
   set customerName(String value) {
@@ -184,10 +190,11 @@ class CartProvider extends ChangeNotifier {
     int birimKey1 = 0,
     int birimKey2 = 0,
   }) {
-    // ✅ Eğer fisNo boşsa ve sepet boşsa, yeni fisNo oluştur
-    if ((_fisNo.isEmpty || _fisNo == '') && _items.isEmpty) {
-      _fisNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
-      print("🆕 NEW fisNo generated in CartProvider: $_fisNo");
+    // ⚠️ KRITIK: fisNo set edilmemişse UYARI (OrderInfoProvider tarafından set edilmelidir)
+    if (_fisNo.isEmpty || _fisNo == '') {
+      print("⚠️ CRITICAL: addOrUpdateItem called but fisNo is empty!");
+      print("⚠️ Please ensure cartProvider.fisNo is set from OrderInfoProvider BEFORE calling addOrUpdateItem!");
+      print("⚠️ Stack trace: ${StackTrace.current}");
     }
 
     // ⚠️ KRITIK: customerKod set edilmemişse UYARI
@@ -283,39 +290,78 @@ class CartProvider extends ChangeNotifier {
     print("DEBUG: CartProvider.clearCartMemoryOnly() called - items before clear: ${_items.length}");
     _items.clear();
     print("DEBUG: CartProvider memory cleared - database kept intact");
-    notifyListeners();
+
+    // ✅ KRITIK: debounce timer'ı iptal et - database'e kaydetme!
+    // Çünkü bellekten temizliyoruz ama database'de kalması gerekiyor (isPlaced=1 kayıtları)
+    _debounceTimer?.cancel();
+    _hasPendingSave = false;
+
+    // notifyListeners() ÇAĞIRMA - çünkü database'e kaydetmek istemiyoruz
+    // Sadece UI'ı güncelle
+    super.notifyListeners();
   }
 
   @override
   void notifyListeners() {
-    _saveCartToDatabase().catchError((error) {
-      print("Error saving cart to database: $error");
-    }); // Fire and forget for other operations
+    // ✅ Debounce database saves to prevent multiple rapid writes
+    // Increased from 300ms to 800ms to reduce frequency when user rapidly clicks +/-
+    _hasPendingSave = true;
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(Duration(milliseconds: 800), () {
+      if (_hasPendingSave && !_isSavingToDatabase) {
+        _hasPendingSave = false;
+        _saveCartToDatabase().catchError((error) {
+          print("Error saving cart to database: $error");
+        });
+      }
+    });
+
     super.notifyListeners();
   }
 
-  Future<void> _saveCartToDatabase() async {
-    // Use actual customer kod and fisNo
-    String actualCustomerKod = _customerKod.isEmpty ? '' : _customerKod;
-    String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
-    String actualFisNo = _fisNo.isEmpty ? '' : _fisNo;
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
 
-    // ⚠️ WARNING: If customerKod is empty but customerName has a code-like value, it means
-    // the calling code forgot to set customerKod. Let's fix it here temporarily.
-    if (actualCustomerKod.isEmpty && actualCustomerName.isNotEmpty && !actualCustomerName.contains('Unknown')) {
-      // Check if customerName looks like a code (short, no spaces, no special chars except dash)
-      if (actualCustomerName.length < 20 && !actualCustomerName.contains(' ') && !actualCustomerName.contains('(')) {
-        print("⚠️ WARNING: customerKod is empty but customerName='$actualCustomerName' looks like a code. Using it as customerKod.");
-        actualCustomerKod = actualCustomerName;
-      }
+  Future<void> _saveCartToDatabase() async {
+    // ✅ Prevent concurrent database saves
+    if (_isSavingToDatabase) {
+      print("DEBUG _saveCartToDatabase: Already saving, skipping this call");
+      return;
     }
 
-    // Debug: Print what we're saving
-    print("DEBUG _saveCartToDatabase: customerKod = '$actualCustomerKod', customerName = '$actualCustomerName', fisNo = '$actualFisNo', items count = ${_items.length}");
+    // ✅ If cart is empty, don't clear database - just skip save
+    // This preserves placed orders (isPlaced=1) and Saved Carts
+    if (_items.isEmpty) {
+      print("DEBUG _saveCartToDatabase: Skipping save - cart is empty (preserving placed orders and Saved Carts)");
+      return;
+    }
 
-    // Use repository if available, otherwise fall back to DatabaseHelper
-    if (_cartRepository != null) {
-      try {
+    _isSavingToDatabase = true;
+
+    try {
+      // Use actual customer kod and fisNo
+      String actualCustomerKod = _customerKod.isEmpty ? '' : _customerKod;
+      String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
+      String actualFisNo = _fisNo.isEmpty ? '' : _fisNo;
+
+      // ⚠️ WARNING: If customerKod is empty but customerName has a code-like value, it means
+      // the calling code forgot to set customerKod. Let's fix it here temporarily.
+      if (actualCustomerKod.isEmpty && actualCustomerName.isNotEmpty && !actualCustomerName.contains('Unknown')) {
+        // Check if customerName looks like a code (short, no spaces, no special chars except dash)
+        if (actualCustomerName.length < 20 && !actualCustomerName.contains(' ') && !actualCustomerName.contains('(')) {
+          print("⚠️ WARNING: customerKod is empty but customerName='$actualCustomerName' looks like a code. Using it as customerKod.");
+          actualCustomerKod = actualCustomerName;
+        }
+      }
+
+      // Debug: Print what we're saving
+      print("DEBUG _saveCartToDatabase: customerKod = '$actualCustomerKod', customerName = '$actualCustomerName', fisNo = '$actualFisNo', items count = ${_items.length}");
+
+      // Use repository if available, otherwise fall back to DatabaseHelper
+      if (_cartRepository != null) {
         // Clear existing items for this order (fisNo + customer)
         await _cartRepository.clearCartByCustomer(actualCustomerName);
         print("DEBUG _saveCartToDatabase: clearCartByCustomer completed for '$actualCustomerName'");
@@ -340,41 +386,54 @@ class CartProvider extends ChangeNotifier {
           }, actualCustomerName);
         }
         print("DEBUG _saveCartToDatabase: ${_items.length} items inserted for customerKod='$actualCustomerKod' (FisNo: $actualFisNo)");
-      } catch (e) {
-        print("ERROR _saveCartToDatabase: $e");
-        throw e;
+      } else {
+        // Fallback to DatabaseHelper for backward compatibility
+        print("DEBUG _saveCartToDatabase (DatabaseHelper fallback): customerKod = '$actualCustomerKod', fisNo = '$actualFisNo', items count = ${_items.length}");
+
+        final dbHelper = DatabaseHelper();
+
+        // Clear existing items for this customer (using customerName for backward compatibility)
+        await dbHelper.clearCartItemsByCustomer(actualCustomerName);
+
+        // Insert with fisNo and customerKod
+        final db = await dbHelper.database;
+        for (final item in _items.values) {
+          await db.insert('cart_items', {
+            'fisNo': actualFisNo,
+            'customerKod': actualCustomerKod,
+            'customerName': actualCustomerName, // Keep for backward compatibility
+            'stokKodu': item.stokKodu,
+            'urunAdi': item.urunAdi,
+            'birimFiyat': item.birimFiyat,
+            'miktar': item.miktar,
+            'urunBarcode': item.urunBarcode,
+            'iskonto': item.iskonto,
+            'birimTipi': item.birimTipi,
+            'durum': item.durum,
+            'imsrc': item.imsrc,
+            'vat': item.vat,
+            'adetFiyati': item.adetFiyati,
+            'kutuFiyati': item.kutuFiyati,
+          });
+        }
       }
-    } else {
-      // Fallback to DatabaseHelper for backward compatibility
-      print("DEBUG _saveCartToDatabase (DatabaseHelper fallback): customerKod = '$actualCustomerKod', fisNo = '$actualFisNo', items count = ${_items.length}");
-
-      final dbHelper = DatabaseHelper();
-
-      // Clear existing items for this customer (using customerName for backward compatibility)
-      await dbHelper.clearCartItemsByCustomer(actualCustomerName);
-
-      // Insert with fisNo and customerKod
-      final db = await dbHelper.database;
-      for (final item in _items.values) {
-        await db.insert('cart_items', {
-          'fisNo': actualFisNo,
-          'customerKod': actualCustomerKod,
-          'customerName': actualCustomerName, // Keep for backward compatibility
-          'stokKodu': item.stokKodu,
-          'urunAdi': item.urunAdi,
-          'birimFiyat': item.birimFiyat,
-          'miktar': item.miktar,
-          'urunBarcode': item.urunBarcode,
-          'iskonto': item.iskonto,
-          'birimTipi': item.birimTipi,
-          'durum': item.durum,
-          'imsrc': item.imsrc,
-          'vat': item.vat,
-          'adetFiyati': item.adetFiyati,
-          'kutuFiyati': item.kutuFiyati,
-        });
-      }
+    } finally {
+      // ✅ Always reset the flag, even if an error occurred
+      _isSavingToDatabase = false;
     }
+  }
+
+  /// Force immediate save to database, bypassing debounce timer
+  /// Use this when you need to ensure data is saved immediately (e.g., after Load Order)
+  Future<void> forceSaveToDatabase() async {
+    print("DEBUG forceSaveToDatabase: Canceling debounce timer and forcing immediate save");
+
+    // Cancel any pending debounced save
+    _debounceTimer?.cancel();
+    _hasPendingSave = false;
+
+    // Force immediate save
+    await _saveCartToDatabase();
   }
 
   Future<void> loadCartFromDatabase(String customerName) async {
@@ -404,6 +463,23 @@ class CartProvider extends ChangeNotifier {
     // The parameter 'customerName' is only used for database query (backward compatibility)
     // _customerName = customerName;  // ❌ REMOVED - causes customerName to be overwritten with CODE
 
+    // ✅ If cart data found, load fisNo and customerKod from first item
+    if (cartData.isNotEmpty) {
+      final firstItem = cartData.first;
+      final loadedFisNo = firstItem['fisNo']?.toString() ?? '';
+      final loadedCustomerKod = firstItem['customerKod']?.toString() ?? '';
+
+      if (loadedFisNo.isNotEmpty) {
+        _fisNo = loadedFisNo;
+        print("DEBUG loadCartFromDatabase: Loaded existing fisNo: $_fisNo");
+      }
+
+      if (loadedCustomerKod.isNotEmpty) {
+        _customerKod = loadedCustomerKod;
+        print("DEBUG loadCartFromDatabase: Loaded existing customerKod: $_customerKod");
+      }
+    }
+
     for (final item in cartData) {
       final cartItem = CartItem(
         stokKodu: item['stokKodu'],
@@ -425,7 +501,74 @@ class CartProvider extends ChangeNotifier {
     }
     print("DEBUG loadCartFromDatabase: Loaded ${_items.length} items into provider for '$customerName'");
 
-    // notifyListeners(); // isteğe bağlı
+    // ✅ Notify listeners so UI updates with loaded cart
+    notifyListeners();
+  }
+
+  /// Load cart by fisNo (order number) - for resuming incomplete orders
+  Future<void> loadCartByFisNo(String fisNo) async {
+    print("DEBUG loadCartByFisNo: Loading cart for fisNo '$fisNo'");
+
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+
+    // ✅ Load all items with this fisNo (only if not placed yet)
+    final cartData = await db.query(
+      'cart_items',
+      where: 'fisNo = ? AND (isPlaced IS NULL OR isPlaced = ?)',
+      whereArgs: [fisNo, 0],
+    );
+
+    print("DEBUG loadCartByFisNo: Found ${cartData.length} items for fisNo '$fisNo'");
+
+    if (cartData.isEmpty) {
+      print("WARNING: No items found for fisNo '$fisNo' or order already placed");
+      return;
+    }
+
+    _items.clear();
+
+    // ✅ Load fisNo, customerKod, and customerName from the first item
+    final firstItem = cartData.first;
+    _fisNo = firstItem['fisNo']?.toString() ?? '';
+    _customerKod = firstItem['customerKod']?.toString() ?? '';
+    _customerName = firstItem['customerName']?.toString() ?? '';
+
+    print("DEBUG loadCartByFisNo: Loaded order info - fisNo: '$_fisNo', customerKod: '$_customerKod', customerName: '$_customerName'");
+
+    // Load all items into cart
+    for (final item in cartData) {
+      final cartItem = CartItem(
+        stokKodu: item['stokKodu']?.toString() ?? '',
+        urunAdi: item['urunAdi']?.toString() ?? '',
+        birimFiyat: (item['birimFiyat'] is num)
+            ? (item['birimFiyat'] as num).toDouble()
+            : double.tryParse(item['birimFiyat']?.toString() ?? '0') ?? 0.0,
+        miktar: (item['miktar'] is num)
+            ? (item['miktar'] as num).toInt()
+            : int.tryParse(item['miktar']?.toString() ?? '0') ?? 0,
+        urunBarcode: item['urunBarcode']?.toString() ?? '',
+        iskonto: (item['iskonto'] is num)
+            ? (item['iskonto'] as num).toInt()
+            : int.tryParse(item['iskonto']?.toString() ?? '0') ?? 0,
+        birimTipi: item['birimTipi']?.toString() ?? 'Box',
+        durum: (item['durum'] is num)
+            ? (item['durum'] as num).toInt()
+            : int.tryParse(item['durum']?.toString() ?? '1') ?? 1,
+        imsrc: item['imsrc']?.toString(),
+        vat: (item['vat'] is num)
+            ? (item['vat'] as num).toInt()
+            : int.tryParse(item['vat']?.toString() ?? '0') ?? 0,
+        adetFiyati: item['adetFiyati']?.toString() ?? '',
+        kutuFiyati: item['kutuFiyati']?.toString() ?? '',
+      );
+
+      final cartKey = '${cartItem.stokKodu}_${cartItem.birimTipi}';
+      _items[cartKey] = cartItem;
+    }
+
+    print("DEBUG loadCartByFisNo: Loaded ${_items.length} items into provider");
+    notifyListeners();
   }
 
   double get toplamTutar {

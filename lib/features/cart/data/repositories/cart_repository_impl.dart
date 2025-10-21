@@ -516,13 +516,15 @@ class CartRepositoryImpl implements CartRepository {
   }
 
   @override
-  Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerName) async {
+  Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerIdentifier) async {
     try {
       final db = await dbHelper.database;
+      // ✅ SADECE henüz place order yapılmamış siparişleri getir (isPlaced=0 veya NULL)
+      // ✅ customerIdentifier ile hem customerName hem customerKod'u kontrol et
       final results = await db.query(
         'cart_items',
-        where: 'customerName = ?',
-        whereArgs: [customerName],
+        where: '(customerName = ? OR customerKod = ?) AND (isPlaced IS NULL OR isPlaced = ?)',
+        whereArgs: [customerIdentifier, customerIdentifier, 0],
       );
       return results;
     } catch (e) {

@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/features/orders/presentation/providers/orderinfo_provider.dart';
 
 class InvoiceActivityView extends StatefulWidget {
   const InvoiceActivityView({Key? key}) : super(key: key);
@@ -162,6 +163,7 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
 
+    // ✅ Load ONLY from PendingSales (orders not yet synced to server)
     final rows = await db.query('PendingSales');
     Map<String, dynamic> fis = {};
     List<Map<String, dynamic>> satirlar = [];
@@ -190,18 +192,64 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
       return;
     }
 
-    final productRows = await db.query('Product');
+    // ✅ OPTIMIZATION: Query only products we need, not entire Product table
+    final stokKodlari = satirlar
+        .map((s) => s['StokKodu']?.toString() ?? '')
+        .where((kod) => kod.isNotEmpty)
+        .toList();
+
+    final productRows = await db.query(
+      'Product',
+      where: 'stokKodu IN (${List.filled(stokKodlari.length, '?').join(',')})',
+      whereArgs: stokKodlari,
+    );
+
+    // Create a map for faster lookup
+    final productMap = <String, Map<String, dynamic>>{};
+    for (var product in productRows) {
+      final stokKodu = product['stokKodu']?.toString() ?? '';
+      if (stokKodu.isNotEmpty) {
+        productMap[stokKodu] = product;
+      }
+    }
 
     final provider = Provider.of<CartProvider>(context, listen: false);
-    provider.clearCart();
-    provider.customerName = fis['CariUnvan'] ?? '';
+    final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+    final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
 
+    // ✅ KRITIK: Load Order yaparken fisNo, customerKod set et
+    final customerKod = fis['MusteriId']?.toString() ?? '';
+    provider.fisNo = fis['FisNo']?.toString() ?? order.no;
+    provider.customerKod = customerKod;
+
+    // ✅ CustomerBalance'dan customer bilgisini çek
+    String customerName = '';
+    if (customerKod.isNotEmpty) {
+      final customerRows = await db.query(
+        'CustomerBalance',
+        where: 'kod = ?',
+        whereArgs: [customerKod],
+      );
+
+      if (customerRows.isNotEmpty) {
+        customerName = customerRows.first['unvan']?.toString() ?? '';
+      }
+    }
+
+    provider.customerName = customerName;
+
+    // ✅ OrderInfoProvider'a da fisNo set et
+    orderInfoProvider.orderNo = provider.fisNo;
+
+    // ✅ Clear cart AFTER setting fisNo and customer info
+    await provider.clearCart();
+
+    print("DEBUG: Load Order - fisNo: ${provider.fisNo}, customerKod: ${provider.customerKod}, customerName: ${provider.customerName}");
+
+    // ✅ OPTIMIZATION: Add all items in batch without triggering notifyListeners each time
     for (var s in satirlar) {
       final stokKodu = s['StokKodu']?.toString() ?? '';
-      final product = productRows.firstWhere(
-        (p) => p['stokKodu'] == stokKodu,
-        orElse: () => {},
-      );
+      final product = productMap[stokKodu] ?? {};
 
       final double miktar = (s['Miktar'] is num)
           ? s['Miktar'].toDouble()
@@ -235,6 +283,11 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
       );
     }
 
+    // ✅ KRITIK: Force immediate save to database after loading all items
+    // This ensures the cart persists even if app is closed before debounce timer fires
+    print("DEBUG: Load Order - Forcing immediate database save (${satirlar.length} items loaded)");
+    await provider.forceSaveToDatabase();
+
     if (matchingId != null) {
       await db.delete('PendingSales', where: 'id = ?', whereArgs: [matchingId]);
     }
@@ -242,14 +295,28 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
     final activityRepository = Provider.of<ActivityRepository>(context, listen: false);
     await activityRepository.removeActivityByOrderNo(order.no);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'order.products_loaded'.tr(args: [satirlar.length.toString()]),
+    // ✅ Navigate to cart screen (invoice2_activity)
+    if (mounted) {
+      // Find invoice2_activity import
+      final route = MaterialPageRoute(
+        builder: (_) => Invoice2Activity(),
+      );
+
+      // Pop current screen and push cart screen
+      Navigator.of(context).pop();
+      Navigator.of(context).push(route);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'order.products_loaded'.tr(args: [satirlar.length.toString()]),
+          ),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
         ),
-        backgroundColor: Colors.green,
-      ),
-    );
+      );
+    }
   }
 
   Widget _buildInfoRow(String label, String value) {

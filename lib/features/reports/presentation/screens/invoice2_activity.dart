@@ -46,14 +46,44 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
   @override
   void initState() {
     super.initState();
-    // ✅ Sayfa ilk açıldığında FisNo'yu oluştur ve cart'ı temizle (sadece 1 kez)
+    // ✅ Sayfa açıldığında mevcut siparişi kontrol et
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_fisNoGenerated) {
-        await _generateFisNo();
-        await _clearCart();  // Yeni sipariş için cart'ı temizle
+        await _initializeOrder();
         _fisNoGenerated = true;
       }
     });
+  }
+
+  /// Sipariş başlatma - Mevcut siparişi kontrol et veya yeni sipariş oluştur
+  Future<void> _initializeOrder() async {
+    try {
+      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+      final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+
+      // ✅ ÖNCE: CartProvider'da fisNo varsa (Load Order yapılmış veya mevcut sipariş varsa), devam et
+      if (cartProvider.fisNo.isNotEmpty) {
+        print('📦 Mevcut siparişe devam ediliyor - FisNo: ${cartProvider.fisNo}, Ürün sayısı: ${cartProvider.items.length}');
+        // OrderInfoProvider'ı mevcut fisNo ile senkronize et
+        orderInfoProvider.orderNo = cartProvider.fisNo;
+
+        // ✅ KRITIK: setState ile UI'ı güncelle
+        if (mounted) {
+          setState(() {
+            orderNo = cartProvider.fisNo;
+          });
+        }
+        return;
+      }
+
+      // ✅ fisNo yoksa, yeni sipariş başlat
+      print('🆕 Yeni sipariş başlatılıyor...');
+      await _generateFisNo();
+      await _clearCart();  // Yeni sipariş için cart'ı temizle
+    } catch (e) {
+      print('⚠️ Sipariş başlatma hatası: $e');
+    }
   }
 
   /// Yeni sipariş için cart'ı temizler ve fisNo set eder
