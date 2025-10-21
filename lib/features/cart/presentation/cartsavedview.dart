@@ -28,24 +28,32 @@ class _CartListPageState extends State<CartListPage> {
     DatabaseHelper dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
     final customerRows = await db.query('CustomerBalance');
-    final allItems = await db.query('cart_items'); // Get cart items directly
 
-    // Group by customer
+    // ✅ SADECE henüz Place Order yapılmamış siparişleri getir (isPlaced=0 veya NULL)
+    // isPlaced=1 olanlar zaten PendingSales'e kaydedilmiş ve artık edit edilemez
+    final allItems = await db.query(
+      'cart_items',
+      where: 'isPlaced IS NULL OR isPlaced = ?',
+      whereArgs: [0],
+    );
+
+    // Group by fisNo (order number)
     final Map<String, List<Map<String, dynamic>>> grouped = {};
     for (final item in allItems) {
-      // Get customer code/name from database
+      // Get fisNo and customer info
+      final fisNo = item['fisNo']?.toString().trim() ?? 'No Order Number';
       final customerData = item['customerName']?.toString().trim();
 
       String displayName;
       if (customerData?.isEmpty ?? true) {
-        displayName = 'saved_carts.unknown_customer'.tr();
+        displayName = '$fisNo - ${'saved_carts.unknown_customer'.tr()}';
       } else if (customerData == 'Unknown Customer') {
-        displayName = 'saved_carts.unknown_customer'.tr();
+        displayName = '$fisNo - ${'saved_carts.unknown_customer'.tr()}';
       } else {
         // Check if it's already a customer name like "RELMA LTD (L)"
         if (customerData!.contains('(') && customerData.contains(')')) {
           // Already formatted as name, use as is
-          displayName = customerData;
+          displayName = '$fisNo - $customerData';
         } else {
           // Try to find customer by code to get the name
           final customer = customerRows.firstWhere(
@@ -54,11 +62,11 @@ class _CartListPageState extends State<CartListPage> {
           );
 
           if (customer.isNotEmpty && customer['unvan'] != null) {
-            // Show both name and code: "Customer Name (CODE123)"
-            displayName = '${customer['unvan']} ($customerData)';
+            // Show fisNo + Customer Name (CODE)
+            displayName = '$fisNo - ${customer['unvan']} ($customerData)';
           } else {
-            // If customer not found, just show the code
-            displayName = customerData;
+            // If customer not found, show fisNo + code
+            displayName = '$fisNo - $customerData';
           }
         }
       }
@@ -86,7 +94,12 @@ class _CartListPageState extends State<CartListPage> {
       final price = (item['birimFiyat'] is num)
           ? item['birimFiyat'].toDouble()
           : double.tryParse(item['birimFiyat'].toString()) ?? 0.0;
-      total += quantity * price;
+      final vat = (item['vat'] is num)
+          ? item['vat'].toDouble()
+          : double.tryParse(item['vat'].toString()) ?? 0.0;
+
+      // Calculate total with VAT
+      total += quantity * price * (1 + vat / 100);
     }
     return total;
   }
@@ -188,7 +201,12 @@ class _CartListPageState extends State<CartListPage> {
     final price = (item['birimFiyat'] is num)
         ? item['birimFiyat'].toDouble()
         : double.tryParse(item['birimFiyat'].toString()) ?? 0.0;
-    final total = quantity * price;
+    final vat = (item['vat'] is num)
+        ? item['vat'].toDouble()
+        : double.tryParse(item['vat'].toString()) ?? 0.0;
+
+    // Calculate total with VAT
+    final total = quantity * price * (1 + vat / 100);
     final unitType = item['birimTipi']?.toString() ?? 'Unit';
 
     // Birim tipine göre fiyat etiketi belirle

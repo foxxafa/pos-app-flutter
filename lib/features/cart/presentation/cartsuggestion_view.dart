@@ -517,7 +517,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                   ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
                   : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
 
-              cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+              // Set both customer name (for display) and customer kod (for database)
+              cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+              cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
               cartProvider.addOrUpdateItem(
                 urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, urunBarcode: product.barcode1,
                 adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, miktar: 0, iskonto: cartItem.iskonto,
@@ -574,7 +576,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
         }
 
-        cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
         cartProvider.addOrUpdateItem(
           stokKodu: product.stokKodu,
           urunAdi: product.urunAdi,
@@ -644,7 +647,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
               if (value.isEmpty) {
                 priceController.text = originalPrice.toStringAsFixed(2);
-                cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+                cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                 cartProvider.addOrUpdateItem(
                   stokKodu: product.stokKodu,
                   miktar: 0,
@@ -671,7 +675,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               final discountedPrice = originalPrice - discountAmount;
               priceController.text = discountedPrice.toStringAsFixed(2);
 
-              cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+              cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
               cartProvider.addOrUpdateItem(
                 stokKodu: product.stokKodu,
                 miktar: 0,
@@ -722,7 +727,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           icon: Icons.remove,
           color: Theme.of(context).colorScheme.error,
           onPressed: currentMiktar > 0 ? () {
-            cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
             cartProvider.addOrUpdateItem(
                 urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: 0, miktar: -1,
                 iskonto: cartItem?.iskonto ?? 0, birimTipi: birimTipi, urunBarcode: product.barcode1,
@@ -760,7 +766,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                       ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
                       : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
 
-                  cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+                  cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                   cartProvider.addOrUpdateItem(
                     urunAdi: product.urunAdi,
                     stokKodu: product.stokKodu,
@@ -791,7 +798,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
                 : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
 
-            cartProvider.customerName = customerProvider.selectedCustomer!.kod!;
+            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
             cartProvider.addOrUpdateItem(
                 urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, miktar: 1,
                 iskonto: cartItem?.iskonto ?? 0, birimTipi: birimTipi, urunBarcode: product.barcode1,

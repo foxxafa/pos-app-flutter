@@ -536,6 +536,8 @@ class CartRepositoryImpl implements CartRepository {
       final db = await dbHelper.database;
       await db.insert('cart_items', {
         'customerName': customerName,
+        'fisNo': itemData['fisNo'],  // ✅ KRITIK: fisNo ekle
+        'customerKod': itemData['customerKod'],  // ✅ KRITIK: customerKod ekle
         'stokKodu': itemData['stokKodu'],
         'urunAdi': itemData['urunAdi'],
         'birimFiyat': itemData['birimFiyat'],

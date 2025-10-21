@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 4;  // Version artırıldı (isPlaced kolonu için)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -36,6 +36,7 @@ class DatabaseHelper {
       path,
       version: _databaseVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
       onOpen: (db) {
         debugPrint('Database opened successfully');
       },
@@ -46,6 +47,34 @@ class DatabaseHelper {
     debugPrint('Creating database tables...');
     await _createAllTables(db);
     debugPrint('Database tables created successfully');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    debugPrint('Upgrading database from version $oldVersion to $newVersion');
+
+    if (oldVersion < 2) {
+      // Version 2: cart_items tablosuna fisNo kolonu ekle
+      await db.execute('ALTER TABLE cart_items ADD COLUMN fisNo TEXT');
+      debugPrint('Added fisNo column to cart_items table');
+    }
+
+    if (oldVersion < 3) {
+      // Version 3: cart_items tablosuna customerKod kolonu ekle
+      await db.execute('ALTER TABLE cart_items ADD COLUMN customerKod TEXT');
+      debugPrint('Added customerKod column to cart_items table');
+
+      // Mevcut customerName verilerini customerKod'a kopyala (geçiş için)
+      // Not: customerName hala mevcut ama artık kullanılmayacak
+      debugPrint('Migrating customerName data to customerKod...');
+    }
+
+    if (oldVersion < 4) {
+      // Version 4: cart_items tablosuna isPlaced kolonu ekle (sipariş verildi mi?)
+      await db.execute('ALTER TABLE cart_items ADD COLUMN isPlaced INTEGER DEFAULT 0');
+      debugPrint('Added isPlaced column to cart_items table');
+      // 0 = Henüz Place Order yapılmadı (edit edilebilir)
+      // 1 = Place Order yapıldı (read-only, sadece görüntüleme)
+    }
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -111,7 +140,10 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS cart_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fisNo TEXT,
         customerName TEXT,
+        customerKod TEXT,
+        isPlaced INTEGER DEFAULT 0,
         stokKodu TEXT,
         urunAdi TEXT,
         birimFiyat REAL,

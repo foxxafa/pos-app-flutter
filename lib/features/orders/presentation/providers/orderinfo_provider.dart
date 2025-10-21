@@ -31,4 +31,11 @@ class OrderInfoProvider extends ChangeNotifier {
     deliveryDate = DateFormat('dd.MM.yyyy').format(DateTime.now());
     notifyListeners();
   }
+
+  /// Generate a new unique order number (fisNo)
+  /// Format: MO + timestamp (last 8 digits of milliseconds since epoch)
+  void generateNewOrderNo() {
+    orderNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+    notifyListeners();
+  }
 }

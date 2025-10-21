@@ -478,6 +478,7 @@ class _CartView2State extends State<CartView2> {
                                                             }
                                                             
                                                             final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.addOrUpdateItem(
                                                               urunAdi: item.urunAdi,
@@ -565,6 +566,7 @@ class _CartView2State extends State<CartView2> {
 
                                                             // Provider'ı güncelle
                                                             final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.addOrUpdateItem(
                                                               stokKodu: item.stokKodu,
@@ -665,6 +667,7 @@ class _CartView2State extends State<CartView2> {
                                                               
                                                               // Provider'ı 0 indirim ile güncelle
                                                               final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                              cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                               cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                               cartProvider.addOrUpdateItem(
                                                                 urunAdi: item.urunAdi,
@@ -705,6 +708,7 @@ class _CartView2State extends State<CartView2> {
 
                                                             // Provider'ı güncelle
                                                             final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                             cartProvider.addOrUpdateItem(
                                                               urunAdi: item.urunAdi,
@@ -762,6 +766,7 @@ class _CartView2State extends State<CartView2> {
                                                           cartProvider.removeItem(stokKodu, item.birimTipi);
                                                         } else {
                                                           final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                          cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                           cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                           cartProvider.addOrUpdateItem(
                                                             urunAdi: item.urunAdi,
@@ -818,6 +823,7 @@ class _CartView2State extends State<CartView2> {
                                                         final difference = newMiktar - item.miktar;
                                                         if (difference != 0) {
                                                           final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                          cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                           cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                           cartProvider.addOrUpdateItem(
                                                             urunAdi: item.urunAdi,
@@ -857,6 +863,7 @@ class _CartView2State extends State<CartView2> {
                                                       constraints: const BoxConstraints(),
                                                       onPressed: () {
                                                         final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+                                                        cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
                                                         cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
                                                         cartProvider.addOrUpdateItem(
                                                           urunAdi: item.urunAdi,
@@ -1051,9 +1058,12 @@ class _CartView2State extends State<CartView2> {
                           );
                           final customer = customerProvider.selectedCustomer;
 
-                          // Set customer name for saved cart
+                          // Set customer name and kod for saved cart
                           if (customer?.unvan != null) {
                             cartProvider.customerName = customer!.unvan!;
+                          }
+                          if (customer?.kod != null) {
+                            cartProvider.customerKod = customer!.kod!;
                           }
 
                           if (customer == null) {
@@ -1082,8 +1092,10 @@ class _CartView2State extends State<CartView2> {
 
                           final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
 
+                          final fisNo = orderInfoProvider.orderNo;
+
                           final fisModel = FisModel(
-                            fisNo: orderInfoProvider.orderNo,
+                            fisNo: fisNo,
                             fistarihi: orderInfoProvider.paymentDate,
                             musteriId: customerProvider.selectedCustomer!.kod!,
                             toplamtutar: cartProvider.toplamTutar,
@@ -1094,6 +1106,10 @@ class _CartView2State extends State<CartView2> {
                             deliveryDate: orderInfoProvider.deliveryDate,
                             comment: orderInfoProvider.comment,
                           );
+
+                          // FisNo ve customerKod'u cart provider'a set et (cart_items'a kaydedilmek için)
+                          cartProvider.fisNo = fisNo;
+                          cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
 
                           // final orderController = OrderController(); // İleride kullanılacak
 
@@ -1128,10 +1144,25 @@ class _CartView2State extends State<CartView2> {
                             );
                             print("Order placed\n${fisModel.toFormattedString()}\Satırlar:\n$cartString");
 
-                            // ✅ ÖNCE sepeti temizle (navigation'dan ÖNCE!)
-                            print("🧹 Clearing cart...");
-                            await cartProvider.clearCart();
-                            print("✅ Cart cleared from provider");
+                            // ✅ Bu fisNo'ya ait cart_items kayıtlarını isPlaced=1 olarak işaretle (artık edit edilemez)
+                            print("📌 Marking cart_items as placed (isPlaced=1) for fisNo: $fisNo");
+                            await db.update(
+                              'cart_items',
+                              {'isPlaced': 1},
+                              where: 'fisNo = ?',
+                              whereArgs: [fisNo],
+                            );
+                            print("✅ Cart items marked as placed (read-only)");
+
+                            // ✅ Şimdi sadece memory'den temizle (database'deki kayıt korunur - Saved Carts'ta görünsün)
+                            print("🧹 Clearing cart from memory only (keeping database record for Saved Carts)...");
+                            cartProvider.clearCartMemoryOnly();
+                            print("✅ Cart cleared from memory (database kept)");
+
+                            // ✅ YENİ fisNo oluştur (bir sonraki sipariş için)
+                            print("🆕 Generating new fisNo for next order...");
+                            orderInfoProvider.generateNewOrderNo();
+                            print("✅ New fisNo generated: ${orderInfoProvider.orderNo}");
 
                             // UI state'ini de temizle
                             _clearUIState();

@@ -96,6 +96,20 @@ class CartProvider extends ChangeNotifier {
 
   String get customerName => _customerName;
 
+  String _customerKod = '';
+  set customerKod(String value) {
+    _customerKod = value;
+  }
+
+  String get customerKod => _customerKod;
+
+  String _fisNo = '';
+  set fisNo(String value) {
+    _fisNo = value;
+  }
+
+  String get fisNo => _fisNo;
+
   int getIskonto(String stokKodu, [String? birimTipi]) {
     if (birimTipi != null) {
       final cartKey = '${stokKodu}_$birimTipi';
@@ -170,6 +184,19 @@ class CartProvider extends ChangeNotifier {
     int birimKey1 = 0,
     int birimKey2 = 0,
   }) {
+    // ✅ Eğer fisNo boşsa ve sepet boşsa, yeni fisNo oluştur
+    if ((_fisNo.isEmpty || _fisNo == '') && _items.isEmpty) {
+      _fisNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}';
+      print("🆕 NEW fisNo generated in CartProvider: $_fisNo");
+    }
+
+    // ⚠️ KRITIK: customerKod set edilmemişse UYARI
+    if (_customerKod.isEmpty && _customerName.isNotEmpty) {
+      print("⚠️ CRITICAL: addOrUpdateItem called but customerKod is empty! customerName='$_customerName'");
+      print("⚠️ Please ensure cartProvider.customerKod is set BEFORE calling addOrUpdateItem!");
+      print("⚠️ Stack trace: ${StackTrace.current}");
+    }
+
     // Sepet anahtarı: stokKodu + birimTipi (aynı ürünün farklı birimleri ayrı item olacak)
     final cartKey = '${stokKodu}_$birimTipi';
 
@@ -251,6 +278,14 @@ class CartProvider extends ChangeNotifier {
     print("DEBUG: CartProvider notifyListeners() completed");
   }
 
+  /// Sadece memory'den temizle, database kayıtlarını koru
+  void clearCartMemoryOnly() {
+    print("DEBUG: CartProvider.clearCartMemoryOnly() called - items before clear: ${_items.length}");
+    _items.clear();
+    print("DEBUG: CartProvider memory cleared - database kept intact");
+    notifyListeners();
+  }
+
   @override
   void notifyListeners() {
     _saveCartToDatabase().catchError((error) {
@@ -260,22 +295,36 @@ class CartProvider extends ChangeNotifier {
   }
 
   Future<void> _saveCartToDatabase() async {
+    // Use actual customer kod and fisNo
+    String actualCustomerKod = _customerKod.isEmpty ? '' : _customerKod;
+    String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
+    String actualFisNo = _fisNo.isEmpty ? '' : _fisNo;
+
+    // ⚠️ WARNING: If customerKod is empty but customerName has a code-like value, it means
+    // the calling code forgot to set customerKod. Let's fix it here temporarily.
+    if (actualCustomerKod.isEmpty && actualCustomerName.isNotEmpty && !actualCustomerName.contains('Unknown')) {
+      // Check if customerName looks like a code (short, no spaces, no special chars except dash)
+      if (actualCustomerName.length < 20 && !actualCustomerName.contains(' ') && !actualCustomerName.contains('(')) {
+        print("⚠️ WARNING: customerKod is empty but customerName='$actualCustomerName' looks like a code. Using it as customerKod.");
+        actualCustomerKod = actualCustomerName;
+      }
+    }
+
+    // Debug: Print what we're saving
+    print("DEBUG _saveCartToDatabase: customerKod = '$actualCustomerKod', customerName = '$actualCustomerName', fisNo = '$actualFisNo', items count = ${_items.length}");
+
     // Use repository if available, otherwise fall back to DatabaseHelper
     if (_cartRepository != null) {
-      // Use actual customer name instead of empty string
-      String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
-
-      // Debug: Print what we're saving
-      print("DEBUG _saveCartToDatabase (Repository): customerName = '$actualCustomerName', items count = ${_items.length}");
-
       try {
-        // Clear existing items for this customer
+        // Clear existing items for this order (fisNo + customer)
         await _cartRepository.clearCartByCustomer(actualCustomerName);
         print("DEBUG _saveCartToDatabase: clearCartByCustomer completed for '$actualCustomerName'");
 
-        // Insert all current cart items
+        // Insert all current cart items with fisNo and customerKod
         for (final item in _items.values) {
           await _cartRepository.insertCartItemForCustomer({
+            'fisNo': actualFisNo,
+            'customerKod': actualCustomerKod,
             'stokKodu': item.stokKodu,
             'urunAdi': item.urunAdi,
             'birimFiyat': item.birimFiyat,
@@ -290,21 +339,40 @@ class CartProvider extends ChangeNotifier {
             'kutuFiyati': item.kutuFiyati,
           }, actualCustomerName);
         }
-        print("DEBUG _saveCartToDatabase: ${_items.length} items inserted for '$actualCustomerName'");
+        print("DEBUG _saveCartToDatabase: ${_items.length} items inserted for customerKod='$actualCustomerKod' (FisNo: $actualFisNo)");
       } catch (e) {
         print("ERROR _saveCartToDatabase: $e");
         throw e;
       }
     } else {
       // Fallback to DatabaseHelper for backward compatibility
-      String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
-      print("DEBUG _saveCartToDatabase (DatabaseHelper fallback): customerName = '$actualCustomerName', items count = ${_items.length}");
+      print("DEBUG _saveCartToDatabase (DatabaseHelper fallback): customerKod = '$actualCustomerKod', fisNo = '$actualFisNo', items count = ${_items.length}");
 
       final dbHelper = DatabaseHelper();
+
+      // Clear existing items for this customer (using customerName for backward compatibility)
       await dbHelper.clearCartItemsByCustomer(actualCustomerName);
 
+      // Insert with fisNo and customerKod
+      final db = await dbHelper.database;
       for (final item in _items.values) {
-        await dbHelper.insertCartItem(item, actualCustomerName);
+        await db.insert('cart_items', {
+          'fisNo': actualFisNo,
+          'customerKod': actualCustomerKod,
+          'customerName': actualCustomerName, // Keep for backward compatibility
+          'stokKodu': item.stokKodu,
+          'urunAdi': item.urunAdi,
+          'birimFiyat': item.birimFiyat,
+          'miktar': item.miktar,
+          'urunBarcode': item.urunBarcode,
+          'iskonto': item.iskonto,
+          'birimTipi': item.birimTipi,
+          'durum': item.durum,
+          'imsrc': item.imsrc,
+          'vat': item.vat,
+          'adetFiyati': item.adetFiyati,
+          'kutuFiyati': item.kutuFiyati,
+        });
       }
     }
   }
@@ -331,7 +399,10 @@ class CartProvider extends ChangeNotifier {
     }
 
     _items.clear();
-    _customerName = customerName;
+
+    // ⚠️ DO NOT override customerName here! It should be set by SalesCustomerProvider.setCustomer()
+    // The parameter 'customerName' is only used for database query (backward compatibility)
+    // _customerName = customerName;  // ❌ REMOVED - causes customerName to be overwritten with CODE
 
     for (final item in cartData) {
       final cartItem = CartItem(

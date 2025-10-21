@@ -7,6 +7,7 @@ import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 class StatementPdfView extends StatefulWidget {
   const StatementPdfView({super.key});
@@ -53,7 +54,7 @@ class _StatementPdfViewState extends State<StatementPdfView> {
       if (response.statusCode == 200) {
         // Get temporary directory
         final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/statement_$customerCode.pdf');
+        final file = File('${dir.path}/document_$customerCode.pdf');
 
         // Write PDF to file
         await file.writeAsBytes(response.bodyBytes);
@@ -76,6 +77,31 @@ class _StatementPdfViewState extends State<StatementPdfView> {
     }
   }
 
+  Future<void> _sharePdf() async {
+    if (_pdfPath == null) return;
+
+    try {
+      final customer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
+      final customerCode = customer?.kod ?? 'unknown';
+
+      await Share.shareXFiles(
+        [XFile(_pdfPath!)],
+        text: 'document_$customerCode',
+        subject: 'document_$customerCode',
+      );
+    } catch (e) {
+      print('❌ Error sharing PDF: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to share PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -87,9 +113,9 @@ class _StatementPdfViewState extends State<StatementPdfView> {
         actions: [
           if (_pdfPath != null)
             IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _downloadAndDisplayPdf,
-              tooltip: 'Refresh',
+              icon: const Icon(Icons.share),
+              onPressed: _sharePdf,
+              tooltip: 'Share',
             ),
         ],
       ),

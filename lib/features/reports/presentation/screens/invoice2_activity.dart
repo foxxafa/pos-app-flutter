@@ -5,6 +5,7 @@ import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/orders/presentation/providers/orderinfo_provider.dart';
 import 'package:pos_app/features/cart/presentation/cart_view.dart';
+import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/core/utils/fisno_generator.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:provider/provider.dart';
@@ -45,13 +46,40 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
   @override
   void initState() {
     super.initState();
-    // ✅ Sayfa ilk açıldığında FisNo'yu oluştur (sadece 1 kez)
+    // ✅ Sayfa ilk açıldığında FisNo'yu oluştur ve cart'ı temizle (sadece 1 kez)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_fisNoGenerated) {
         await _generateFisNo();
+        await _clearCart();  // Yeni sipariş için cart'ı temizle
         _fisNoGenerated = true;
       }
     });
+  }
+
+  /// Yeni sipariş için cart'ı temizler ve fisNo set eder
+  Future<void> _clearCart() async {
+    try {
+      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+      final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+
+      // Müşteri ve fisNo bilgilerini cart provider'a set et
+      final customerCode = customerProvider.selectedCustomer?.kod ?? 'Unknown Customer';
+      final customerName = customerProvider.selectedCustomer?.unvan ?? customerCode;
+      final fisNo = orderInfoProvider.orderNo;
+
+      // ✅ DOĞRU: Hem customerKod hem customerName'i set et
+      cartProvider.customerKod = customerCode;
+      cartProvider.customerName = customerName;  // unvan kullan, kod değil!
+      cartProvider.fisNo = fisNo;
+
+      // Cart'ı sadece memory'den temizle (yeni sipariş için boş başlat)
+      // Database'deki önceki siparişler korunur (Saved Carts'ta görünür)
+      cartProvider.clearCartMemoryOnly();
+      print('✅ Cart memory temizlendi - Yeni sipariş başlatıldı (Kod: $customerCode, Name: $customerName, FisNo: $fisNo)');
+    } catch (e) {
+      print('⚠️ Cart temizleme hatası: $e');
+    }
   }
 
   /// FisNo üretir ve OrderInfoProvider'a kaydeder
