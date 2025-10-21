@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 4;  // Version artırıldı (isPlaced kolonu için)
+  static const _databaseVersion = 5;  // Version artırıldı (miktar kolonu için)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -75,6 +75,12 @@ class DatabaseHelper {
       // 0 = Henüz Place Order yapılmadı (edit edilebilir)
       // 1 = Place Order yapıldı (read-only, sadece görüntüleme)
     }
+
+    if (oldVersion < 5) {
+      // Version 5: Product tablosuna miktar (qty) kolonu ekle
+      await db.execute('ALTER TABLE Product ADD COLUMN miktar REAL');
+      debugPrint('Added miktar column to Product table');
+    }
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -113,7 +119,8 @@ class DatabaseHelper {
         birimKey2 TEXT,
         aktif INTEGER,
         imsrc TEXT,
-        sortOrder INTEGER
+        sortOrder INTEGER,
+        miktar REAL
       )
     ''');
 

@@ -18,6 +18,7 @@ class ProductModel {
   final int birimKey2;
   final int aktif;
   final String? imsrc; // Yeni alan
+  final double? miktar; // Stok miktarı
 
   ProductModel({
     this.id,
@@ -39,6 +40,7 @@ class ProductModel {
     required this.birimKey2,
     required this.aktif,
     this.imsrc, // Yeni alan
+    this.miktar, // Stok miktarı
   });
 
   /// Banner gösterilip gösterilmeyeceğini belirleyen koşul
@@ -75,6 +77,7 @@ class ProductModel {
       birimKey2: json['BirimKey2'] is int ? json['BirimKey2'] : int.tryParse(json['BirimKey2']?.toString() ?? '0') ?? 0,
       aktif: json['Aktif'] ?? 0,
       imsrc: json['imsrc'], // Yeni alan
+      miktar: json['miktar'] != null ? double.tryParse(json['miktar'].toString()) : null, // Stok miktarı
     );
   }
 
@@ -99,6 +102,7 @@ class ProductModel {
       'BirimKey2': birimKey2,
       'Aktif': aktif,
       'imsrc': imsrc, // Yeni alan
+      'miktar': miktar, // Stok miktarı
     };
   }
 
@@ -123,6 +127,7 @@ class ProductModel {
       'birimKey2': birimKey2,
       'aktif': aktif,
       'imsrc': imsrc, // Yeni alan
+      'miktar': miktar, // Stok miktarı
     };
   }
 
@@ -147,6 +152,7 @@ class ProductModel {
       birim2: map['birim2']?.toString() ?? '',
       birimKey2: map['birimKey2'] is int ? map['birimKey2'] : int.tryParse(map['birimKey2']?.toString() ?? '0') ?? 0,
       imsrc: map['imsrc']?.toString(), // Yeni alan
+      miktar: map['miktar'] != null ? double.tryParse(map['miktar'].toString()) : null, // Stok miktarı
     );
   }
 }

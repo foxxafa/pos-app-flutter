@@ -873,39 +873,63 @@ class ProductImage extends StatelessWidget {
   });
 
   void _showProductInfoDialog(BuildContext context) {
+    final qty = (product.miktar ?? 0).toInt();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(product.urunAdi),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (product.imsrc != null)
-              FutureBuilder<String?>(
-                future: _getLocalImagePath(product.imsrc!),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return SizedBox(width: 40.w, height: 40.w, child: const Center(child: CircularProgressIndicator()));
-                  }
-                  if (snapshot.hasData && snapshot.data != null) {
-                    return ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(File(snapshot.data!), width: 40.w, height: 40.w, fit: BoxFit.contain),
-                    );
-                  }
-                  return Icon(Icons.shopping_bag, size: 40.w);
-                },
-              )
-            else
-              Icon(Icons.shopping_bag, size: 40.w),
-            SizedBox(height: 2.h),
-            SelectableText("${'cart.barcodes'.tr()}: ${[product.barcode1, product.barcode2, product.barcode3, product.barcode4].where((b) => b.trim().isNotEmpty).join(', ')}"),
-            Text("${'cart.code'.tr()}= ${product.stokKodu}"),
-            Text("${'cart.unit_price'.tr()}= ${product.adetFiyati}"),
-            Text("${'cart.box_price'.tr()}= ${product.kutuFiyati}"),
-            Text("${'cart.vat'.tr()}= ${product.vat}"),
-          ],
+        title: Text(
+          product.urunAdi,
+          style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
+        ),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 80.w),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (product.imsrc != null)
+                  FutureBuilder<String?>(
+                    future: _getLocalImagePath(product.imsrc!),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return SizedBox(
+                          height: 50.w,
+                          child: const Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snapshot.hasData && snapshot.data != null) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            File(snapshot.data!),
+                            fit: BoxFit.contain,
+                          ),
+                        );
+                      }
+                      return Center(
+                        child: Icon(Icons.shopping_bag, size: 50.w, color: Colors.grey),
+                      );
+                    },
+                  )
+                else
+                  Center(
+                    child: Icon(Icons.shopping_bag, size: 50.w, color: Colors.grey),
+                  ),
+                SizedBox(height: 2.h),
+                Text("${'cart.code'.tr()}: ${product.stokKodu}", style: TextStyle(fontSize: 16.sp)),
+                SizedBox(height: 1.h),
+                Text("${'cart.unit_price'.tr()}: ${product.adetFiyati}", style: TextStyle(fontSize: 16.sp)),
+                SizedBox(height: 1.h),
+                Text("${'cart.box_price'.tr()}: ${product.kutuFiyati}", style: TextStyle(fontSize: 16.sp)),
+                SizedBox(height: 1.h),
+                Text("${'cart.vat'.tr()}: ${product.vat}", style: TextStyle(fontSize: 16.sp)),
+                SizedBox(height: 1.h),
+                Text("Qty: $qty", style: TextStyle(fontSize: 16.sp)),
+              ],
+            ),
+          ),
         ),
         actions: [
           TextButton(
@@ -934,7 +958,8 @@ class ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final showBanner = product.shouldShowSuspendedBanner;
+    // Banner'ı miktar 0 veya negatif olan ürünlerde göster
+    final showBanner = (product.miktar ?? 0) <= 0;
 
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
@@ -979,10 +1004,21 @@ class ProductImage extends StatelessWidget {
               ],
             ),
           ),
-          Text("${'cart.stock'.tr()}: 0/0"),
+          Text(
+            _getQuantityText(product.miktar),
+            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
+          ),
         ],
       ),
     );
+  }
+
+  String _getQuantityText(double? miktar) {
+    if (miktar == null) return "Qty: 0";
+    final qty = miktar.toInt();
+    if (qty > 99) return "Qty: 99+";
+    if (qty < -99) return "Qty: 99-";
+    return "Qty: $qty";
   }
 }
 

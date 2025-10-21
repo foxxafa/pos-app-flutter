@@ -678,7 +678,7 @@ class _RefundCartViewState extends State<RefundCartView> {
         }
 
         if (!_priceControllers.containsKey(key)) {
-          final selectedType = getBirimTipiFromProduct(product);
+          final selectedType = _birimTipiMap[key] ?? getBirimTipiFromProduct(product) ?? 'Unit';
           // Check if item exists in provider (cart)
           final cartPrice = provider.getBirimFiyat(key);
 
@@ -687,7 +687,7 @@ class _RefundCartViewState extends State<RefundCartView> {
             final originalPrice = selectedType == 'Unit'
                 ? double.tryParse(product.adetFiyati.toString()) ?? 0
                 : double.tryParse(product.kutuFiyati.toString()) ?? 0;
-            // Ekranda %70'lik fiyat gösterilir
+            // ✅ Ekranda %70'lik fiyat gösterilir (her durumda)
             return originalPrice * 0.7;
           })();
           _priceControllers[key] = TextEditingController(text: priceToUse.toStringAsFixed(2));
