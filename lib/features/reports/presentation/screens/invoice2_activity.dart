@@ -62,8 +62,20 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
       final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
       final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
 
-      // ✅ ÖNCE: CartProvider'da fisNo varsa (Load Order yapılmış veya mevcut sipariş varsa), devam et
+      final currentCustomerKod = customerProvider.selectedCustomer?.kod ?? '';
+
+      // ✅ ÖNCE: CartProvider'da fisNo varsa kontrol et
       if (cartProvider.fisNo.isNotEmpty) {
+        // ✅ KRITIK: Müşteri değişti mi kontrol et
+        if (cartProvider.customerKod != currentCustomerKod) {
+          print('⚠️ Müşteri değişti! Eski: ${cartProvider.customerKod}, Yeni: $currentCustomerKod');
+          print('🆕 Yeni müşteri için yeni sipariş başlatılıyor...');
+          await _generateFisNo();
+          await _clearCart();
+          return;
+        }
+
+        // ✅ Müşteri aynı - mevcut siparişe devam et
         print('📦 Mevcut siparişe devam ediliyor - FisNo: ${cartProvider.fisNo}, Ürün sayısı: ${cartProvider.items.length}');
         // OrderInfoProvider'ı mevcut fisNo ile senkronize et
         orderInfoProvider.orderNo = cartProvider.fisNo;

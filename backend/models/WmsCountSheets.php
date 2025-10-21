@@ -19,6 +19,7 @@ use Yii;
  * @property string $created_at
  * @property string|null $updated_at
  * @property string|null $doc_no
+ * @property int $active
  *
  * @property Employees $employee
  */
@@ -47,8 +48,10 @@ class WmsCountSheets extends \yii\db\ActiveRecord
         return [
             [['notes', 'complete_date', 'updated_at', 'doc_no'], 'default', 'value' => null],
             [['status'], 'default', 'value' => 'in_progress'],
+            [['active'], 'default', 'value' => 1],
             [['operation_unique_id', 'sheet_number', 'employee_id', 'warehouse_code', 'start_date'], 'required'],
             [['employee_id'], 'integer'],
+            [['active'], 'boolean'],
             [['status', 'notes'], 'string'],
             [['start_date', 'complete_date', 'created_at', 'updated_at'], 'safe'],
             [['operation_unique_id', 'sheet_number'], 'string', 'max' => 100],
@@ -78,6 +81,7 @@ class WmsCountSheets extends \yii\db\ActiveRecord
             'created_at' => 'Created At',
             'updated_at' => 'Updated At',
             'doc_no' => 'Doc No',
+            'active' => 'Active',
         ];
     }
 
@@ -136,5 +140,23 @@ class WmsCountSheets extends \yii\db\ActiveRecord
     public function setStatusToCompleted()
     {
         $this->status = self::STATUS_COMPLETED;
+    }
+
+    /**
+     * @return bool
+     */
+    public function isActive()
+    {
+        return $this->active == 1;
+    }
+
+    public function setActive()
+    {
+        $this->active = 1;
+    }
+
+    public function setInactive()
+    {
+        $this->active = 0;
     }
 }

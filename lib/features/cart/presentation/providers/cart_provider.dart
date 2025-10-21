@@ -478,6 +478,11 @@ class CartProvider extends ChangeNotifier {
         _customerKod = loadedCustomerKod;
         print("DEBUG loadCartFromDatabase: Loaded existing customerKod: $_customerKod");
       }
+    } else {
+      // ✅ KRITIK: Eğer bu müşteri için hiç draft sipariş yoksa, fisNo'yu temizle
+      // Böylece yeni müşteri için yeni fisNo üretilecek
+      print("DEBUG loadCartFromDatabase: No items found - clearing fisNo to allow new order generation");
+      _fisNo = '';
     }
 
     for (final item in cartData) {

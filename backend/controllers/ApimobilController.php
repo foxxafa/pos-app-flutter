@@ -260,7 +260,7 @@ class ApimobilController extends Controller
         if($this->getApikey( $apiKey )){
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
-               UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc
+               UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc, qty as miktar
             FROM urunler WHERE aktif=1 and created_at > :time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
             foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
@@ -285,7 +285,7 @@ class ApimobilController extends Controller
         if($this->getApikey( $apiKey )){
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
-               UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc
+               UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc, qty as miktar
             FROM urunler WHERE aktif=1 and updated_at > :time and created_at<:time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
               foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
@@ -459,7 +459,17 @@ class ApimobilController extends Controller
             file_put_contents($filePath, "8. Transaction commit edildi.\n", FILE_APPEND);
 
             file_put_contents($filePath, "9. Dia::siparisgondermobil çağrılıyor...\n", FILE_APPEND);
-            Dia::siparisgondermobil($fis, 2, $filePath);
+             $sonuc = null;
+            for ($say = 1; $say <= 3; $say++) {
+                try {
+                    $sonuc = Dia::siparisgondermobil($fis, 2, $filePath);
+                    if ($sonuc == 1) break;
+                } catch (\Throwable $e) {
+                    // log vs.
+                }
+                usleep(300000);
+            }
+
             file_put_contents($filePath, "10. Dia::siparisgondermobil çağrıldı.\n", FILE_APPEND);
 
             file_put_contents($filePath, "11. Başarılı yanıt dönülüyor.\n--- actionSatis LOG SON ---\n", FILE_APPEND);
@@ -474,6 +484,9 @@ class ApimobilController extends Controller
             $transaction->rollBack();
             return ['IsSuccessStatusCode'=>false,'status' => 'error', 'message' => $e->getMessage()];
         }
+    }
+    public function actionGetekstre($carikod,$tarih="2025-01-01",$detay=1){
+        return Dia::getEkstre($carikod,$tarih,$detay);
     }
     public function actionMusterilistesi(){
         $this->layout = false;
