@@ -81,7 +81,19 @@ class ApiConfig {
       },
     ));
 
-    // Debug logging
+    // API Key interceptor - ÖNCE Authorization ekle
+    dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) async {
+        final prefs = await SharedPreferences.getInstance();
+        final apiKey = prefs.getString('api_key');
+        if (apiKey != null) {
+          options.headers['Authorization'] = 'Bearer $apiKey';
+        }
+        return handler.next(options);
+      },
+    ));
+
+    // Debug logging - SONRA logla (Authorization header'ı görmek için)
     if (kDebugMode) {
       dio.interceptors.add(LogInterceptor(
         request: true,
@@ -93,18 +105,6 @@ class ApiConfig {
         logPrint: (obj) => debugPrint(obj.toString()),
       ));
     }
-
-    // API Key interceptor
-    dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) async {
-        final prefs = await SharedPreferences.getInstance();
-        final apiKey = prefs.getString('api_key');
-        if (apiKey != null) {
-          options.headers['Authorization'] = 'Bearer $apiKey';
-        }
-        return handler.next(options);
-      },
-    ));
 
     return dio;
   }

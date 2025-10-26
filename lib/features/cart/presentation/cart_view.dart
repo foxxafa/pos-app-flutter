@@ -78,6 +78,26 @@ class _CartViewState extends State<CartView> {
     });
   }
 
+  // ❌ didChangeDependencies KALDIRILDI - çok sık çağrılıyordu ve sayacı bozuyordu
+  // Cleanup şimdi sadece gerekli yerlerde manuel olarak çağrılacak
+
+  void _cleanupScanCounters() {
+    // Sepetteki ürünlerin stokKodu'larını al
+    final provider = Provider.of<CartProvider>(context, listen: false);
+    final cartItemKeys = provider.items.keys.toSet();
+
+    // Scan sayacında olup sepette olmayan ürünleri bul ve temizle
+    final keysToRemove = _productScanCount.keys.where((key) => !cartItemKeys.contains(key)).toList();
+
+    if (keysToRemove.isNotEmpty) {
+      print('🧹 _cleanupScanCounters: Removing scan counters for: $keysToRemove');
+      print('🧹 Current cart items: $cartItemKeys');
+      for (final key in keysToRemove) {
+        _productScanCount.remove(key);
+      }
+    }
+  }
+
   void _setupAudioPlayer() async {
     _audioPlayer.setVolume(0.8); // %80 sabit ses seviyesi
 
@@ -309,20 +329,26 @@ class _CartViewState extends State<CartView> {
     // Bu ürünün kaç kez okutulduğunu kontrol et
     final currentCount = _productScanCount[stokKodu] ?? 0;
 
+    // ✅ CRITICAL: Sayacı HEMEN artır (ses çalmadan önce!)
+    // Bu race condition'ı önler (ard arda hızlı okutunca sayaç doğru artar)
+    _productScanCount[stokKodu] = currentCount + 1;
+
+    // 🐛 DEBUG
+    print('🔊 playBeepForProduct($stokKodu): count=$currentCount → ${_productScanCount[stokKodu]}');
+
     // İlk okutma (currentCount == 0): beepk.mp3
     // Sonraki tüm okutmalar: boopk.mp3
     if (currentCount == 0) {
       // İlk okutma - beepk.mp3
+      print('🔊 Playing BEEPK (first scan)');
       await _audioPlayerBeepK.stop();
       await _audioPlayerBeepK.resume();
     } else {
       // Sonraki okutmalar - boopk.mp3
+      print('🔊 Playing BOOPK (repeat scan)');
       await _audioPlayerBoopK.stop();
       await _audioPlayerBoopK.resume();
     }
-
-    // Sayacı artır (setState olmadan!)
-    _productScanCount[stokKodu] = currentCount + 1;
   }
 
   void _onBarcodeScanned(String barcode) {
@@ -641,23 +667,11 @@ class _CartViewState extends State<CartView> {
   Widget _buildShoppingCartIcon(int itemCount, int totalQuantity) {
     return GestureDetector(
       onTap: () async {
-        // CartView2'ye gitmeden önce mevcut sepetteki ürünleri kaydet
-        final currentCartItems = Provider.of<CartProvider>(context, listen: false).items.keys.toSet();
-
         // CartView2'ye git
         await Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2()));
 
-        // CartView2'den döndükten sonra, sepetten çıkarılan ürünlerin scan sayacını temizle
-        final updatedCartItems = Provider.of<CartProvider>(context, listen: false).items.keys.toSet();
-        final removedItems = currentCartItems.difference(updatedCartItems);
-
-        if (removedItems.isNotEmpty) {
-          setState(() {
-            for (final stokKodu in removedItems) {
-              _productScanCount.remove(stokKodu);
-            }
-          });
-        }
+        // CartView2'den döndükten sonra scan sayacını temizle
+        _cleanupScanCounters();
       },
       behavior: HitTestBehavior.translucent,
       child: Container(
@@ -790,6 +804,10 @@ class _CartViewState extends State<CartView> {
           onQuantityChanged: (newQuantity) {
             setState(() {
               _quantityMap[key] = newQuantity;
+              // ✅ Miktar 0'a düştüğünde scan sayacını temizle
+              if (newQuantity <= 0) {
+                _productScanCount.remove(key);
+              }
             });
           },
           updateQuantityFromTextField: (value) => _updateQuantityFromTextField(key, value, product),
@@ -1821,11 +1839,6 @@ class _ProductDetailsState extends State<ProductDetails> {
 
             widget.onQuantityChanged(newQuantity);
             widget.quantityController.text = '$newQuantity';
-
-            // ✅ Ürün sepetten tamamen çıkarıldıysa scan sayacını sıfırla
-            if (newQuantity <= 0 && context.findAncestorStateOfType<_CartViewState>() != null) {
-              context.findAncestorStateOfType<_CartViewState>()!._productScanCount.remove(widget.product.stokKodu);
-            }
           }
               : null,
           borderRadius: BorderRadius.circular(4),

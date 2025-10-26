@@ -426,27 +426,10 @@ class CustomerRepositoryImpl implements CustomerRepository {
   Future<void> fetchAndStoreCustomers() async {
     if (await networkInfo.isConnected) {
       try {
-        // Get API key from database
-        final db = await dbHelper.database;
-        final result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
-
-        if (result.isEmpty) {
-          throw Exception('No API Key found');
-        }
-
-        final savedApiKey = result.first['apikey'] as String;
-
         // STEP 1: Get total customer count
+        // Authorization header otomatik olarak interceptor tarafından eklenir
         print('🔄 Müşteri sayısı getiriliyor...');
-        final countResponse = await dio.get(
-          ApiConfig.customerCountsUrl,
-          options: Options(
-            headers: {
-              'Authorization': 'Bearer $savedApiKey',
-              'Accept': 'application/json',
-            },
-          ),
-        );
+        final countResponse = await dio.get(ApiConfig.customerCountsUrl);
 
         if (countResponse.statusCode != 200 || countResponse.data['status'] != 1) {
           throw Exception('Müşteri sayısı alınamadı');
@@ -463,17 +446,13 @@ class CustomerRepositoryImpl implements CustomerRepository {
         while (true) {
           print('📥 Sayfa $page indiriliyor...');
 
+          // Authorization header otomatik olarak interceptor tarafından eklenir
           final response = await dio.get(
             ApiConfig.musteriListesiUrl,
             queryParameters: {
               'page': page,
               'limit': pageSize,
             },
-            options: Options(
-              headers: {
-                'Authorization': 'Bearer $savedApiKey',
-              },
-            ),
           );
 
           if (response.statusCode == 200) {
@@ -502,6 +481,7 @@ class CustomerRepositoryImpl implements CustomerRepository {
 
         // STEP 3: Clear and insert all customers
         print('💾 Müşteriler veritabanına kaydediliyor...');
+        final db = await dbHelper.database;
         await db.delete('CustomerBalance');
 
         final batch = db.batch();
@@ -545,27 +525,12 @@ class CustomerRepositoryImpl implements CustomerRepository {
       final formatter = DateFormat('dd.MM.yyyy HH:mm:ss');
       String formattedDate = formatter.format(date);
 
-      final db = await dbHelper.database;
-      List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
-
-      if (result.isEmpty) {
-        print('❌ No API Key found.');
-        return null;
-      }
-
-      String savedApiKey = result.first['apikey'];
-
       print('🔄 Fetching new customers since: $formattedDate');
 
+      // Authorization header otomatik olarak interceptor tarafından eklenir
       final response = await dio.get(
         '${ApiConfig.indexPhpBase}?r=apimobil/getnewcustomer',
         queryParameters: {'time': formattedDate},
-        options: Options(
-          headers: {
-            'Authorization': 'Bearer $savedApiKey',
-            'Accept': 'application/json',
-          },
-        ),
       );
 
       if (response.statusCode == 200) {

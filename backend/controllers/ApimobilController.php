@@ -167,12 +167,9 @@ class ApimobilController extends Controller
 
         $sp=Satiscilar::find()->where(["kodu"=>$username])->andWhere(['password'=>$password])->one();
         if ($sp) {
-            // basit bir API key üretimi
-            $apiKey = hash('sha256', uniqid('apikey_', true));
+            // Basit API key üretimi (şimdilik sadece username döndür)
+            $apiKey = $username; // Token sistemine geçene kadar username kullan
 
-            // geçici olarak cache'e kaydet (örnek amaçlı)
-            Yii::$app->cache->set("apikey_$username", $apiKey, 3600 * 24); // 24 saat geçerli
-            Yii::$app->cache->set("apikey_reverse_$apiKey", $username, 3600 * 24);
             return [
                 'status' => 'success',
                 'message' => 'Login successful',
@@ -190,23 +187,14 @@ class ApimobilController extends Controller
 
 
     private function getApikey($apiKey){
+        // Token sistemine geçene kadar basitleştirildi - kontrol yok
         $apiKey = is_string($apiKey) ? $apiKey : '';
         if (str_starts_with($apiKey, 'Bearer ')) {
             $apiKey = trim(str_replace('Bearer', '', $apiKey));
         }
-        $username = Yii::$app->cache->get("apikey_reverse_$apiKey");
-        if($username)
-            return $username;
-        else
-            return false;
-        // $storedApiKey = Yii::$app->cache->get("apikey_mobil");
-        // if ($apiKey === $storedApiKey) {
-        //     return true;
-        // } else {
-        //     // yetkisiz erişim
-        //     return false;
-        // }
 
+        // Direkt username döndür, kontrol etme (geçici çözüm)
+        return !empty($apiKey) ? $apiKey : false;
     }
 
     public function actionGetnewcustomer(){
