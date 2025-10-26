@@ -84,8 +84,10 @@ abstract class CartRepository {
 
   // ============= Customer-based Cart Methods (for CartProvider) =============
 
-  /// Clear cart items by customer name
-  Future<void> clearCartByCustomer(String customerName);
+  /// Clear cart items by customer name (optionally filtered by fisNo and customerKod)
+  /// If fisNo and customerKod are provided, only clears that specific cart
+  /// Otherwise, clears all active carts for the customer
+  Future<void> clearCartByCustomer(String customerName, {String? fisNo, String? customerKod});
 
   /// Get cart items by customer name
   Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerName);

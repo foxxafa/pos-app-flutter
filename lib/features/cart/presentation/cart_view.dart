@@ -45,6 +45,7 @@ class _CartViewState extends State<CartView> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   final AudioPlayer _audioPlayerBeepK = AudioPlayer(); // beepk.mp3 için ayrı player
   final AudioPlayer _audioPlayerBoopK = AudioPlayer(); // boopk.mp3 için ayrı player
+  final AudioPlayer _audioPlayerDit = AudioPlayer(); // dit.mp3 için ayrı player (suspended ürünler)
   final ScrollController _scrollController = ScrollController();
 
   List<ProductModel> _allProducts = [];
@@ -104,14 +105,17 @@ class _CartViewState extends State<CartView> {
     // ⚡ Ses dosyalarını önceden yükle (preload) - performans için kritik!
     _audioPlayerBeepK.setVolume(0.8);
     _audioPlayerBoopK.setVolume(0.8);
+    _audioPlayerDit.setVolume(0.8);
 
     // Ses dosyalarını hafızaya yükle
     await _audioPlayerBeepK.setSource(AssetSource('beepk.mp3'));
     await _audioPlayerBoopK.setSource(AssetSource('boopk.mp3'));
+    await _audioPlayerDit.setSource(AssetSource('ditdit.mp3')); // Suspended ürünler için
 
     // ReleaseMode.stop: Ses bitince durur, tekrar çalmaya hazır olur
     _audioPlayerBeepK.setReleaseMode(ReleaseMode.stop);
     _audioPlayerBoopK.setReleaseMode(ReleaseMode.stop);
+    _audioPlayerDit.setReleaseMode(ReleaseMode.stop);
   }
 
   @override
@@ -129,6 +133,7 @@ class _CartViewState extends State<CartView> {
     _audioPlayer.dispose();
     _audioPlayerBeepK.dispose();
     _audioPlayerBoopK.dispose();
+    _audioPlayerDit.dispose();
     // 🔑 Hardware keyboard listener kaldır
     HardwareKeyboard.instance.removeHandler(_scannerHandler);
     super.dispose();
@@ -324,16 +329,35 @@ class _CartViewState extends State<CartView> {
   }
 
   /// Her ürün için sıralı ses çalar
-  /// İlk okutma: beepk.mp3, sonraki tüm okutmalar: boopk.mp3
+  /// SUSPENDED ürünler (miktar <= 0): HER ZAMAN dit.mp3
+  /// Normal ürünler - İlk okutma: beepk.mp3, sonraki tüm okutmalar: boopk.mp3
   Future<void> playBeepForProduct(String stokKodu) async {
-    // Bu ürünün kaç kez okutulduğunu kontrol et
+    // ✅ Önce ürünü bul ve suspended kontrolü yap
+    final product = _allProducts.cast<ProductModel?>().firstWhere(
+      (p) => p?.stokKodu == stokKodu,
+      orElse: () => null,
+    );
+
+    final isSuspended = (product?.miktar ?? 0) <= 0;
+
+    // 🐛 DEBUG
+    print('🔊 playBeepForProduct($stokKodu): isSuspended=$isSuspended, miktar=${product?.miktar}');
+
+    // ⚠️ SUSPENDED ÜRÜN: HER ZAMAN dit.mp3 çal
+    if (isSuspended) {
+      print('🔊 Playing DIT (SUSPENDED product)');
+      await _audioPlayerDit.stop();
+      await _audioPlayerDit.resume();
+      return; // Suspended ürünler için sayaç kullanmıyoruz
+    }
+
+    // ✅ NORMAL ÜRÜN: Sayaç mantığı ile beepk/boopk çal
     final currentCount = _productScanCount[stokKodu] ?? 0;
 
     // ✅ CRITICAL: Sayacı HEMEN artır (ses çalmadan önce!)
     // Bu race condition'ı önler (ard arda hızlı okutunca sayaç doğru artar)
     _productScanCount[stokKodu] = currentCount + 1;
 
-    // 🐛 DEBUG
     print('🔊 playBeepForProduct($stokKodu): count=$currentCount → ${_productScanCount[stokKodu]}');
 
     // İlk okutma (currentCount == 0): beepk.mp3

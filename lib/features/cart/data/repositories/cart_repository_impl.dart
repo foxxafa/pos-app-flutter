@@ -502,14 +502,29 @@ class CartRepositoryImpl implements CartRepository {
   // ============= Customer-based Cart Methods (for CartProvider) =============
 
   @override
-  Future<void> clearCartByCustomer(String customerName) async {
+  Future<void> clearCartByCustomer(String customerName, {String? fisNo, String? customerKod}) async {
     try {
       final db = await dbHelper.database;
-      await db.delete(
-        'cart_items',
-        where: 'customerName = ?',
-        whereArgs: [customerName],
-      );
+      // ✅ SADECE aktif sepet kayıtlarını sil (isPlaced=0 veya NULL)
+      // Placed orders'ı (isPlaced=1) koru!
+
+      // ✅ FisNo ve customerKod ile filtrele (aynı müşterinin birden fazla sepeti olabilir!)
+      if (fisNo != null && fisNo.isNotEmpty && customerKod != null && customerKod.isNotEmpty) {
+        await db.delete(
+          'cart_items',
+          where: 'customerKod = ? AND fisNo = ? AND (isPlaced IS NULL OR isPlaced = ?)',
+          whereArgs: [customerKod, fisNo, 0],
+        );
+        print('DEBUG clearCartByCustomer: Cleared cart for customerKod=$customerKod, fisNo=$fisNo');
+      } else {
+        // Fallback: customerName ile sil (eski davranış - tüm sepetleri siler)
+        await db.delete(
+          'cart_items',
+          where: 'customerName = ? AND (isPlaced IS NULL OR isPlaced = ?)',
+          whereArgs: [customerName, 0],
+        );
+        print('DEBUG clearCartByCustomer: Cleared ALL carts for customerName=$customerName (no fisNo specified)');
+      }
     } catch (e) {
       throw Exception('Failed to clear cart for customer: $e');
     }

@@ -444,13 +444,28 @@ class DatabaseHelper {
 
   // ============= Cart Helper Methods (from CartDatabaseHelper) =============
 
-  Future<void> clearCartItemsByCustomer(String customerName) async {
+  Future<void> clearCartItemsByCustomer(String customerName, {String? fisNo, String? customerKod}) async {
     final db = await database;
-    await db.delete(
-      'cart_items',
-      where: 'customerName = ?',
-      whereArgs: [customerName],
-    );
+    // ✅ SADECE aktif sepet kayıtlarını sil (isPlaced=0 veya NULL)
+    // Placed orders'ı (isPlaced=1) koru!
+
+    // ✅ FisNo ve customerKod ile filtrele (aynı müşterinin birden fazla sepeti olabilir!)
+    if (fisNo != null && fisNo.isNotEmpty && customerKod != null && customerKod.isNotEmpty) {
+      await db.delete(
+        'cart_items',
+        where: 'customerKod = ? AND fisNo = ? AND (isPlaced IS NULL OR isPlaced = ?)',
+        whereArgs: [customerKod, fisNo, 0],
+      );
+      print('DEBUG clearCartItemsByCustomer: Cleared cart for customerKod=$customerKod, fisNo=$fisNo');
+    } else {
+      // Fallback: customerName ile sil (eski davranış - tüm sepetleri siler)
+      await db.delete(
+        'cart_items',
+        where: 'customerName = ? AND (isPlaced IS NULL OR isPlaced = ?)',
+        whereArgs: [customerName, 0],
+      );
+      print('DEBUG clearCartItemsByCustomer: Cleared ALL carts for customerName=$customerName (no fisNo specified)');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getCartItemsByCustomer(String customerIdentifier) async {

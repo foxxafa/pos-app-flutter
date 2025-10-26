@@ -332,14 +332,41 @@ class CartProvider extends ChangeNotifier {
       return;
     }
 
-    // ✅ If cart is empty, don't clear database - just skip save
-    // This preserves placed orders (isPlaced=1) and Saved Carts
+    _isSavingToDatabase = true;
+
+    // ✅ If cart is empty, CLEAR database for this customer (but preserve placed orders)
     if (_items.isEmpty) {
-      print("DEBUG _saveCartToDatabase: Skipping save - cart is empty (preserving placed orders and Saved Carts)");
+      print("DEBUG _saveCartToDatabase: Cart is empty - clearing database for current customer");
+      try {
+        String actualCustomerName = _customerName.isEmpty ? 'Unknown Customer' : _customerName;
+        String actualCustomerKod = _customerKod.isEmpty ? '' : _customerKod;
+        String actualFisNo = _fisNo.isEmpty ? '' : _fisNo;
+
+        if (_cartRepository != null) {
+          // ✅ FisNo ve customerKod ile sil (sadece bu sepeti temizle)
+          await _cartRepository.clearCartByCustomer(
+            actualCustomerName,
+            fisNo: actualFisNo,
+            customerKod: actualCustomerKod,
+          );
+          print("DEBUG _saveCartToDatabase: Database cleared for customerKod='$actualCustomerKod', fisNo='$actualFisNo'");
+        } else {
+          final dbHelper = DatabaseHelper();
+          // ✅ FisNo ve customerKod ile sil (sadece bu sepeti temizle)
+          await dbHelper.clearCartItemsByCustomer(
+            actualCustomerName,
+            fisNo: actualFisNo,
+            customerKod: actualCustomerKod,
+          );
+          print("DEBUG _saveCartToDatabase: Database cleared (fallback) for customerKod='$actualCustomerKod', fisNo='$actualFisNo'");
+        }
+      } catch (e) {
+        print("ERROR _saveCartToDatabase: Failed to clear database: $e");
+      }
+
+      _isSavingToDatabase = false;
       return;
     }
-
-    _isSavingToDatabase = true;
 
     try {
       // Use actual customer kod and fisNo
@@ -362,9 +389,13 @@ class CartProvider extends ChangeNotifier {
 
       // Use repository if available, otherwise fall back to DatabaseHelper
       if (_cartRepository != null) {
-        // Clear existing items for this order (fisNo + customer)
-        await _cartRepository.clearCartByCustomer(actualCustomerName);
-        print("DEBUG _saveCartToDatabase: clearCartByCustomer completed for '$actualCustomerName'");
+        // ✅ Clear existing items for THIS SPECIFIC CART (fisNo + customerKod)
+        await _cartRepository.clearCartByCustomer(
+          actualCustomerName,
+          fisNo: actualFisNo,
+          customerKod: actualCustomerKod,
+        );
+        print("DEBUG _saveCartToDatabase: clearCartByCustomer completed for customerKod='$actualCustomerKod', fisNo='$actualFisNo'");
 
         // Insert all current cart items with fisNo and customerKod
         for (final item in _items.values) {
@@ -392,8 +423,12 @@ class CartProvider extends ChangeNotifier {
 
         final dbHelper = DatabaseHelper();
 
-        // Clear existing items for this customer (using customerName for backward compatibility)
-        await dbHelper.clearCartItemsByCustomer(actualCustomerName);
+        // ✅ Clear existing items for THIS SPECIFIC CART (fisNo + customerKod)
+        await dbHelper.clearCartItemsByCustomer(
+          actualCustomerName,
+          fisNo: actualFisNo,
+          customerKod: actualCustomerKod,
+        );
 
         // Insert with fisNo and customerKod
         final db = await dbHelper.database;
