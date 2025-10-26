@@ -52,6 +52,17 @@ class ApiConfig {
   static String get musteriUrunleriUrl => getFullUrl('/index.php?r=apimobil/musteriurunleri');
   static String get iademusterileriUrl => getFullUrl('/index.php?r=apimobil/iademusterileri');
 
+  // Unit (Birimler) and Barcode endpoints
+  static String get birimCountsUrl => getFullUrl('/index.php?r=apimobil/birimcounts');
+  static String get birimlerListesiUrl => getFullUrl('/index.php?r=apimobil/birimlerlistesi');
+  static String get getNewBirimlerUrl => getFullUrl('/index.php?r=apimobil/getnewbirimler');
+
+  // Product count endpoint
+  static String get productCountsUrl => getFullUrl('/index.php?r=apimobil/productcounts');
+
+  // Customer count endpoint
+  static String get customerCountsUrl => getFullUrl('/index.php?r=apimobil/customercounts');
+
   // Generic index.php base
   static String get indexPhpBase => getFullUrl('/index.php');
 

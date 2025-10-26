@@ -8,6 +8,8 @@ import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
+import 'package:pos_app/features/products/domain/entities/birim_model.dart';
+import 'package:pos_app/features/products/domain/repositories/unit_repository.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/core/services/scanner_service.dart';
@@ -54,6 +56,8 @@ class _CartViewState extends State<CartView> {
   final Map<String, int> _quantityMap = {};
   final Map<String, TextEditingController> _quantityControllers = {};
   final Map<String, int> _productScanCount = {}; // Her ürünün kaç kez okutulduğunu takip eder
+  final Map<String, List<BirimModel>> _productBirimlerMap = {}; // Her ürün için birimler
+  final Map<String, BirimModel?> _selectedBirimMap = {}; // Her ürün için seçili birim
 
   Timer? _imageDownloadTimer;
 
@@ -111,6 +115,38 @@ class _CartViewState extends State<CartView> {
   }
 
   // --- Product & Data Loading ---
+  Future<void> _loadBirimlerForProduct(ProductModel product) async {
+    final key = product.stokKodu;
+    if (_productBirimlerMap.containsKey(key)) return; // Already loaded
+
+    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+    final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+
+    if (mounted) {
+      setState(() {
+        _productBirimlerMap[key] = birimler;
+        // Set default selected birim (first one, or based on birimKey1/birimKey2)
+        if (birimler.isNotEmpty) {
+          final isBox = _isBoxMap[key] ?? false;
+          // Try to find the birim matching birimKey1 or birimKey2
+          BirimModel? defaultBirim;
+          if (isBox && product.birimKey2 != 0) {
+            defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+              (b) => b?.key == product.birimKey2.toString(),
+              orElse: () => null,
+            );
+          } else if (!isBox && product.birimKey1 != 0) {
+            defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+              (b) => b?.key == product.birimKey1.toString(),
+              orElse: () => null,
+            );
+          }
+          _selectedBirimMap[key] = defaultBirim ?? birimler.first;
+        }
+      });
+    }
+  }
+
   Future<void> _loadProducts() async {
     // İlk frame'de loading göster
     if (mounted) {
@@ -453,6 +489,8 @@ class _CartViewState extends State<CartView> {
 
     if (newQuantity <= 0) {
       provider.removeItem(key, birimTipi);
+      // ✅ Ürün sepetten çıkarıldığında scan sayacını sıfırla
+      _productScanCount.remove(key);
     } else {
       final fiyat = isBox
           ? double.tryParse(product.kutuFiyati.toString()) ?? 0
@@ -602,7 +640,25 @@ class _CartViewState extends State<CartView> {
 
   Widget _buildShoppingCartIcon(int itemCount, int totalQuantity) {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2())),
+      onTap: () async {
+        // CartView2'ye gitmeden önce mevcut sepetteki ürünleri kaydet
+        final currentCartItems = Provider.of<CartProvider>(context, listen: false).items.keys.toSet();
+
+        // CartView2'ye git
+        await Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2()));
+
+        // CartView2'den döndükten sonra, sepetten çıkarılan ürünlerin scan sayacını temizle
+        final updatedCartItems = Provider.of<CartProvider>(context, listen: false).items.keys.toSet();
+        final removedItems = currentCartItems.difference(updatedCartItems);
+
+        if (removedItems.isNotEmpty) {
+          setState(() {
+            for (final stokKodu in removedItems) {
+              _productScanCount.remove(stokKodu);
+            }
+          });
+        }
+      },
       behavior: HitTestBehavior.translucent,
       child: Container(
         width: 18.w,
@@ -691,6 +747,11 @@ class _CartViewState extends State<CartView> {
           _quantityControllers[key] = TextEditingController(text: provider.getmiktar(key, birimTipi).toString());
         }
 
+        // Load birimler for this product if not loaded
+        if (!_productBirimlerMap.containsKey(key)) {
+          _loadBirimlerForProduct(product);
+        }
+
         return ProductListItem(
           key: ValueKey(product.stokKodu),
           product: product,
@@ -704,6 +765,8 @@ class _CartViewState extends State<CartView> {
           discountFocusNode: _discountFocusNodes[key]!,
           isBox: _isBoxMap[key] ?? false,
           quantity: context.watch<CartProvider>().getmiktar(key, (_isBoxMap[key] ?? false) ? 'Box' : 'Unit'),
+          birimler: _productBirimlerMap[key] ?? [],
+          selectedBirim: _selectedBirimMap[key],
           onBirimTipiChanged: (isNowBox) {
             setState(() {
               _isBoxMap[key] = isNowBox;
@@ -717,6 +780,11 @@ class _CartViewState extends State<CartView> {
                   : (double.tryParse(product.adetFiyati.toString()) ?? 0);
               _priceControllers[key]?.text = productFiyat.toStringAsFixed(2);
               _discountControllers[key]?.text = provider.getIskonto(key).toString();
+            });
+          },
+          onBirimChanged: (BirimModel? newBirim) {
+            setState(() {
+              _selectedBirimMap[key] = newBirim;
             });
           },
           onQuantityChanged: (newQuantity) {
@@ -753,7 +821,10 @@ class ProductListItem extends StatefulWidget {
   final FocusNode discountFocusNode;
   final bool isBox;
   final int quantity;
+  final List<BirimModel> birimler;
+  final BirimModel? selectedBirim;
   final ValueChanged<bool> onBirimTipiChanged;
+  final ValueChanged<BirimModel?> onBirimChanged;
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
   final VoidCallback formatPriceField;
@@ -772,7 +843,10 @@ class ProductListItem extends StatefulWidget {
     required this.discountFocusNode,
     required this.isBox,
     required this.quantity,
+    required this.birimler,
+    required this.selectedBirim,
     required this.onBirimTipiChanged,
+    required this.onBirimChanged,
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
     required this.formatPriceField,
@@ -834,6 +908,7 @@ class _ProductListItemState extends State<ProductListItem> {
           ProductImage(
             imageFuture: widget.imageFuture,
             product: widget.product,
+            selectedBirim: widget.selectedBirim,
           ),
           SizedBox(width: 5.w),
           Expanded(
@@ -849,7 +924,10 @@ class _ProductListItemState extends State<ProductListItem> {
               quantityFocusNode: _quantityFocusNode, // Pass focus node down
               isBox: widget.isBox,
               quantity: anlikMiktar,
+              birimler: widget.birimler,
+              selectedBirim: widget.selectedBirim,
               onBirimTipiChanged: widget.onBirimTipiChanged,
+              onBirimChanged: widget.onBirimChanged,
               onQuantityChanged: widget.onQuantityChanged,
               updateQuantityFromTextField: widget.updateQuantityFromTextField,
               formatPriceField: widget.formatPriceField,
@@ -865,11 +943,13 @@ class _ProductListItemState extends State<ProductListItem> {
 class ProductImage extends StatelessWidget {
   final Future<String?>? imageFuture;
   final ProductModel product;
+  final BirimModel? selectedBirim;
 
   const ProductImage({
     super.key,
     this.imageFuture,
     required this.product,
+    this.selectedBirim,
   });
 
   void _showProductInfoDialog(BuildContext context) {
@@ -1015,6 +1095,16 @@ class ProductImage extends StatelessWidget {
 
   String _getQuantityText(double? miktar) {
     if (miktar == null) return "Qty: 0";
+
+    // If we have a selected birim, calculate stock for that unit
+    if (selectedBirim != null) {
+      final calculatedQty = selectedBirim!.calculateStockForUnit(miktar);
+      if (calculatedQty > 99) return "Qty: 99+";
+      if (calculatedQty < -99) return "Qty: 99-";
+      return "Qty: $calculatedQty ${selectedBirim!.displayName}";
+    }
+
+    // Fall back to default behavior (display base UNIT quantity)
     final qty = miktar.toInt();
     if (qty > 99) return "Qty: 99+";
     if (qty < -99) return "Qty: 99-";
@@ -1132,7 +1222,10 @@ class ProductDetails extends StatefulWidget {
   final FocusNode quantityFocusNode;
   final bool isBox;
   final int quantity;
+  final List<BirimModel> birimler;
+  final BirimModel? selectedBirim;
   final ValueChanged<bool> onBirimTipiChanged;
+  final ValueChanged<BirimModel?> onBirimChanged;
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
   final VoidCallback formatPriceField;
@@ -1151,7 +1244,10 @@ class ProductDetails extends StatefulWidget {
     required this.quantityFocusNode,
     required this.isBox,
     required this.quantity,
+    required this.birimler,
+    required this.selectedBirim,
     required this.onBirimTipiChanged,
+    required this.onBirimChanged,
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
     required this.formatPriceField,
@@ -1287,14 +1383,60 @@ class _ProductDetailsState extends State<ProductDetails> {
   }
 
   Widget _buildUnitSelector(BuildContext context) {
-    final hasUnit = widget.product.birimKey1 != 0;
-    final hasBox = widget.product.birimKey2 != 0;
-    final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
+    // Use actual birimler if available, otherwise fall back to old logic
+    if (widget.birimler.isEmpty) {
+      final hasUnit = widget.product.birimKey1 != 0;
+      final hasBox = widget.product.birimKey2 != 0;
+      final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
 
-    if (availableUnits <= 1) {
-      final unitText = hasUnit ? 'cart.unit'.tr() : (hasBox ? 'cart.box'.tr() : '-');
+      if (availableUnits <= 1) {
+        final unitText = hasUnit ? 'cart.unit'.tr() : (hasBox ? 'cart.box'.tr() : '-');
+        return Container(
+          height: 8.w,
+          alignment: Alignment.center,
+          padding: EdgeInsets.symmetric(horizontal: 2.w),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            unitText,
+            style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+          ),
+        );
+      }
+
       return Container(
-        height: 8.w, // Match button height
+        height: 8.w,
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: 2.w),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: DropdownButton<String>(
+          value: widget.getBirimTipi(),
+          isDense: true,
+          underline: Container(),
+          style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
+          items: [
+            if (hasUnit) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
+            if (hasBox) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
+          ],
+          onChanged: (val) {
+            if (val != null) {
+              widget.onBirimTipiChanged(val == 'Box');
+            }
+          },
+        ),
+      );
+    }
+
+    // Use actual birimler from database
+    if (widget.birimler.length == 1) {
+      final birim = widget.birimler.first;
+      return Container(
+        height: 8.w,
         alignment: Alignment.center,
         padding: EdgeInsets.symmetric(horizontal: 2.w),
         decoration: BoxDecoration(
@@ -1302,32 +1444,38 @@ class _ProductDetailsState extends State<ProductDetails> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          unitText,
+          birim.displayName,
           style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
         ),
       );
     }
 
     return Container(
-      height: 8.w, // Match button height
+      height: 8.w,
       alignment: Alignment.center,
       padding: EdgeInsets.symmetric(horizontal: 2.w),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: DropdownButton<String>(
-        value: widget.getBirimTipi(),
+      child: DropdownButton<BirimModel>(
+        value: widget.selectedBirim,
         isDense: true,
         underline: Container(),
         style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
-        items: [
-          if (hasUnit) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
-          if (hasBox) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
-        ],
-        onChanged: (val) {
-          if (val != null) {
-            widget.onBirimTipiChanged(val == 'Box');
+        items: widget.birimler.map((birim) {
+          return DropdownMenuItem<BirimModel>(
+            value: birim,
+            child: Text(birim.displayName),
+          );
+        }).toList(),
+        onChanged: (BirimModel? newBirim) {
+          if (newBirim != null) {
+            widget.onBirimChanged(newBirim);
+            // Also notify the old callback for compatibility
+            final birimAdi = newBirim.birimadi?.toLowerCase() ?? '';
+            final isBox = birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
+            widget.onBirimTipiChanged(isBox);
           }
         },
       ),
@@ -1673,6 +1821,11 @@ class _ProductDetailsState extends State<ProductDetails> {
 
             widget.onQuantityChanged(newQuantity);
             widget.quantityController.text = '$newQuantity';
+
+            // ✅ Ürün sepetten tamamen çıkarıldıysa scan sayacını sıfırla
+            if (newQuantity <= 0 && context.findAncestorStateOfType<_CartViewState>() != null) {
+              context.findAncestorStateOfType<_CartViewState>()!._productScanCount.remove(widget.product.stokKodu);
+            }
           }
               : null,
           borderRadius: BorderRadius.circular(4),

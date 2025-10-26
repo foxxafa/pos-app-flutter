@@ -9,6 +9,7 @@ import 'package:pos_app/core/sync/sync_service.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/features/products/domain/repositories/unit_repository.dart';
 import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/transactions/domain/repositories/transaction_repository.dart';
 import 'package:pos_app/features/transactions/domain/entities/cheque_model.dart';
@@ -99,6 +100,7 @@ class _SyncViewState extends State<SyncView> {
       orderRepository: Provider.of<OrderRepository>(context, listen: false),
       productRepository: Provider.of<ProductRepository>(context, listen: false),
       refundRepository: Provider.of<RefundRepository>(context, listen: false),
+      unitRepository: Provider.of<UnitRepository>(context, listen: false),
     );
   }
 

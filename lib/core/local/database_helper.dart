@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 5;  // Version artırıldı (miktar kolonu için)
+  static const _databaseVersion = 6;  // Version artırıldı (Birimler ve Barkodlar tabloları için)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -80,6 +80,49 @@ class DatabaseHelper {
       // Version 5: Product tablosuna miktar (qty) kolonu ekle
       await db.execute('ALTER TABLE Product ADD COLUMN miktar REAL');
       debugPrint('Added miktar column to Product table');
+    }
+
+    if (oldVersion < 6) {
+      // Version 6: Birimler ve Barkodlar tabloları ekleme
+      debugPrint('Creating Birimler and Barkodlar tables...');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS Birimler (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          birimadi TEXT,
+          birimkod TEXT,
+          carpan REAL DEFAULT 1.0,
+          fiyat1 REAL,
+          fiyat2 REAL,
+          fiyat3 REAL,
+          fiyat4 REAL,
+          fiyat5 REAL,
+          fiyat6 REAL,
+          fiyat7 REAL,
+          fiyat8 REAL,
+          fiyat9 REAL,
+          fiyat10 REAL,
+          _key TEXT,
+          _key_scf_stokkart TEXT,
+          StokKodu TEXT,
+          created_at TEXT,
+          updated_at TEXT
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS Barkodlar (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          _key TEXT,
+          _key_scf_stokkart_birimleri TEXT,
+          barkod TEXT,
+          turu TEXT,
+          created_at TEXT,
+          updated_at TEXT
+        )
+      ''');
+
+      debugPrint('Birimler and Barkodlar tables created successfully');
     }
   }
 
@@ -229,15 +272,6 @@ class DatabaseHelper {
       )
     ''');
 
-
-    // Update dates table
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS updateDates (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        update_time TEXT NOT NULL
-      )
-    ''');
-
     // Tahsilatlar table
     await db.execute('''
       CREATE TABLE IF NOT EXISTS tahsilatlar (
@@ -247,10 +281,51 @@ class DatabaseHelper {
       )
     ''');
 
+    // Birimler (Units) table - Ürün birimleri (UNIT, BOX, PALLET vb.)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS Birimler (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        birimadi TEXT,
+        birimkod TEXT,
+        carpan REAL DEFAULT 1.0,
+        fiyat1 REAL,
+        fiyat2 REAL,
+        fiyat3 REAL,
+        fiyat4 REAL,
+        fiyat5 REAL,
+        fiyat6 REAL,
+        fiyat7 REAL,
+        fiyat8 REAL,
+        fiyat9 REAL,
+        fiyat10 REAL,
+        _key TEXT,
+        _key_scf_stokkart TEXT,
+        StokKodu TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      )
+    ''');
+
+    // Barkodlar (Barcodes) table - Ürün barkodları
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS Barkodlar (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        _key TEXT,
+        _key_scf_stokkart_birimleri TEXT,
+        barkod TEXT,
+        turu TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      )
+    ''');
+
     // NOTE: AppState and refund_queue tables are created dynamically
     // at runtime in their respective services (sync_service.dart and
     // refund_repository_impl.dart) using CREATE TABLE IF NOT EXISTS.
     // This maintains backward compatibility with existing databases.
+
+    // NOTE: UpdateDates tablosu kaldırıldı - Artık son senkronizasyon zamanı
+    // SharedPreferences'ta 'last_sync_time' anahtarı ile saklanıyor (sync_service.dart)
   }
 
   // ============= CRUD Operations =============

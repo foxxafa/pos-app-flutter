@@ -10,12 +10,14 @@ import 'package:intl/intl.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/features/products/domain/repositories/unit_repository.dart';
 import 'package:pos_app/features/refunds/domain/repositories/refund_repository.dart';
 import 'package:pos_app/features/orders/domain/entities/order_model.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Core synchronization service that coordinates multiple repositories
 /// Handles data sync, image downloads, and pending operations
@@ -24,12 +26,14 @@ class SyncService {
   final OrderRepository? orderRepository;
   final ProductRepository? productRepository;
   final RefundRepository? refundRepository;
+  final UnitRepository? unitRepository;
 
   SyncService({
     this.customerRepository,
     this.orderRepository,
     this.productRepository,
     this.refundRepository,
+    this.unitRepository,
   });
 
   // CLEAN SYNC
@@ -47,19 +51,6 @@ class SyncService {
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
       // Customer tablosu kaldırıldı - artık kullanılmıyor
-
-    print('📋 UpdateDates tablosu kontrol ediliyor...');
-    var result = await db.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='updateDates';",
-    );
-    if (result.isEmpty) {
-      await db.execute('''
-        CREATE TABLE updateDates (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          update_time TEXT NOT NULL
-        )
-      ''');
-    }
 
     // Customer tablosu artık kullanılmıyor - CustomerBalance kullanılıyor
     //eskiyi silme işlemi
@@ -86,10 +77,22 @@ class SyncService {
 
     // await SyncCustomers(DateTime(2024, 5, 1, 15, 55, 30)); // Customer sync devre dışı
 
+    // Birimler ve Barkodlar senkronizasyonu
+    if (unitRepository != null) {
+      print('📦 Birimler ve Barkodlar senkronizasyonu başlatılıyor...');
+      await unitRepository!.clearAllBirimler();
+      await unitRepository!.clearAllBarkodlar();
+      final success = await unitRepository!.fetchAndStoreBirimler();
+      if (success) {
+        print('✅ Birimler ve Barkodlar senkronizasyonu tamamlandı');
+      } else {
+        print('⚠️ Birimler ve Barkodlar senkronizasyonu başarısız');
+      }
+    }
+
     print('⏰ Son güncelleme zamanı kaydediliyor...');
     //update sonu son update saati güncelleme
-    String nowString = DateFormat('dd.MM.yyyy HH:mm:ss').format(DateTime.now());
-    await db.insert('updateDates', {'update_time': nowString});
+    await saveLastUpdateTime(DateTime.now());
     print('✅ Clean Sync tamamlandı!');
 
     // Sync tamamlandıktan sonra resim indirmeyi başlat
@@ -104,34 +107,27 @@ class SyncService {
       await customerRepository!.fetchAndStoreCustomers();
     }
     await syncPendingRefunds();
-    //update sonu son update saati güncelleme
-    DatabaseHelper dbHelper = DatabaseHelper();
-    Database db = await dbHelper.database;
 
-    var result = await db.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='updateDates';",
-    );
-    if (result.isEmpty) {
-      await db.execute('''
-        CREATE TABLE updateDates (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          update_time TEXT NOT NULL
-        )
-      ''');
-    }
-
-    DateTime? lastUpdate = await getLastUpdateTime(db);
+    DateTime? lastUpdate = await getLastUpdateTime();
     print("last update $lastUpdate");
     //daha önce update edildi ve bu tarih kaydedildiyse
     if (lastUpdate != null) {
       await SyncProducts(lastUpdate);
       // await SyncCustomers(lastUpdate); // Customer sync devre dışı
 
+      // Birimler ve Barkodlar güncellemeleri
+      if (unitRepository != null) {
+        print('📦 Birimler ve Barkodlar güncellemeleri kontrol ediliyor...');
+        final success = await unitRepository!.fetchAndUpdateBirimler(lastUpdate);
+        if (success) {
+          print('✅ Birimler ve Barkodlar güncellendi');
+        } else {
+          print('⚠️ Birimler ve Barkodlar güncellemesi başarısız');
+        }
+      }
+
       //son update zamanı güncelleme
-      String nowString = DateFormat(
-        'dd.MM.yyyy HH:mm:ss',
-      ).format(DateTime.now());
-      await db.insert('updateDates', {'update_time': nowString});
+      await saveLastUpdateTime(DateTime.now());
       print('✅ Update Sync tamamlandı!');
 
       // Sync tamamlandıktan sonra resim indirmeyi başlat
@@ -472,20 +468,30 @@ class SyncService {
     debugPrint('📊 Sync Özeti: ✅ $successCount başarılı, ❌ $failedCount başarısız');
   }
 
-  // GET LAST UPDATE TIME
-  Future<DateTime?> getLastUpdateTime(Database db) async {
-    final List<Map<String, dynamic>> result = await db.query(
-      'updateDates',
-      orderBy: 'id DESC',
-      limit: 1,
-    );
+  // GET LAST UPDATE TIME - SharedPreferences kullanarak
+  Future<DateTime?> getLastUpdateTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timeString = prefs.getString('last_sync_time');
 
-    if (result.isNotEmpty) {
-      String updateTimeString = result.first['update_time'] as String;
-      final formatter = DateFormat('dd.MM.yyyy HH:mm:ss');
-      return formatter.parse(updateTimeString);
-    } else {
-      return null; // Tablo boşsa null döner
+      if (timeString != null) {
+        return DateTime.parse(timeString);
+      }
+      return null;
+    } catch (e) {
+      print('⚠️ Son güncelleme zamanı okunamadı: $e');
+      return null;
+    }
+  }
+
+  // SAVE LAST UPDATE TIME - SharedPreferences kullanarak
+  Future<void> saveLastUpdateTime(DateTime time) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_sync_time', time.toIso8601String());
+      print('✅ Son güncelleme zamanı kaydedildi: ${time.toIso8601String()}');
+    } catch (e) {
+      print('⚠️ Son güncelleme zamanı kaydedilemedi: $e');
     }
   }
 

@@ -223,64 +223,110 @@ class ProductRepositoryImpl implements ProductRepository {
       String savedApiKey = result.first['apikey'];
       print('Retrieved API Key: $savedApiKey');
 
-      final url = '${ApiConfig.indexPhpBase}?r=apimobil/getnewproducts&time=$formattedDate';
+      // STEP 1: Get total product count
+      print('🔄 Ürün sayısı getiriliyor...');
+      final countResponse = await dio.get(
+        ApiConfig.productCountsUrl,
+        options: Options(
+          headers: {
+            'Authorization': 'Bearer $savedApiKey',
+            'Accept': 'application/json',
+          },
+        ),
+      );
 
-      // Use Dio with retry logic
-      int maxRetries = 3;
-      int retryDelay = 5; // seconds
-
-      for (int attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-          print('📡 Ürün indirme denemesi $attempt/$maxRetries...');
-
-          final response = await dio.get(
-            url,
-            options: Options(
-              headers: {
-                'Authorization': 'Bearer $savedApiKey',
-                'Accept': 'application/json',
-              },
-              receiveTimeout: const Duration(minutes: 5),
-            ),
-          );
-
-          if (response.statusCode == 200) {
-            print('✅ HTTP response alındı: ${response.statusCode}');
-
-            final data = response.data;
-
-            if (data['status'] == 1) {
-              final List productsJson = data['customers'];
-              final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
-
-              print('✅ ${products.length} ürün başarıyla alındı');
-              return products;
-            } else {
-              print('❌ API status: ${data['status']} - Ürün bulunamadı');
-              return null;
-            }
-          } else {
-            print('❌ HTTP Error: ${response.statusCode}');
-
-            if (attempt == maxRetries) {
-              return null;
-            }
-          }
-        } catch (e) {
-          print('⚠️ Deneme $attempt başarısız: $e');
-
-          if (attempt == maxRetries) {
-            print('❌ Tüm denemeler başarısız oldu');
-            return null;
-          }
-
-          print('🔄 $retryDelay saniye bekleyip tekrar denenecek...');
-          await Future.delayed(Duration(seconds: retryDelay));
-          retryDelay *= 2; // Exponential backoff
-        }
+      if (countResponse.statusCode != 200 || countResponse.data['status'] != 1) {
+        print('❌ Ürün sayısı alınamadı');
+        return null;
       }
 
-      return null;
+      final productCount = countResponse.data['product_count'] as int;
+      print('📊 Toplam ürün sayısı: $productCount');
+
+      // STEP 2: Download products page by page
+      const pageSize = 5000;
+      int page = 1;
+      final allProducts = <ProductModel>[];
+
+      while (true) {
+        print('📥 Sayfa $page indiriliyor...');
+
+        // Use Dio with retry logic
+        int maxRetries = 3;
+        int retryDelay = 5; // seconds
+        bool pageSuccess = false;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            print('📡 Ürün indirme denemesi $attempt/$maxRetries...');
+
+            final response = await dio.get(
+              '${ApiConfig.indexPhpBase}?r=apimobil/getnewproducts',
+              queryParameters: {
+                'time': formattedDate,
+                'page': page,
+                'limit': pageSize,
+              },
+              options: Options(
+                headers: {
+                  'Authorization': 'Bearer $savedApiKey',
+                  'Accept': 'application/json',
+                },
+                receiveTimeout: const Duration(minutes: 5),
+              ),
+            );
+
+            if (response.statusCode == 200) {
+              print('✅ HTTP response alındı: ${response.statusCode}');
+
+              final data = response.data;
+
+              if (data['status'] == 1) {
+                final List productsJson = data['customers'] ?? [];
+
+                // Break if no more data
+                if (productsJson.isEmpty) {
+                  print('✅ Tüm sayfalar indirildi');
+                  pageSuccess = true;
+                  return allProducts;
+                }
+
+                final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
+                allProducts.addAll(products);
+
+                print('📥 Sayfa $page: ${products.length} ürün (Toplam: ${allProducts.length}/$productCount)');
+                pageSuccess = true;
+                page++;
+                break;
+              } else {
+                print('❌ API status: ${data['status']} - Ürün bulunamadı');
+                return allProducts.isNotEmpty ? allProducts : null;
+              }
+            } else {
+              print('❌ HTTP Error: ${response.statusCode}');
+
+              if (attempt == maxRetries) {
+                return allProducts.isNotEmpty ? allProducts : null;
+              }
+            }
+          } catch (e) {
+            print('⚠️ Deneme $attempt başarısız: $e');
+
+            if (attempt == maxRetries) {
+              print('❌ Tüm denemeler başarısız oldu');
+              return allProducts.isNotEmpty ? allProducts : null;
+            }
+
+            print('🔄 $retryDelay saniye bekleyip tekrar denenecek...');
+            await Future.delayed(Duration(seconds: retryDelay));
+            retryDelay *= 2; // Exponential backoff
+          }
+        }
+
+        if (!pageSuccess) {
+          return allProducts.isNotEmpty ? allProducts : null;
+        }
+      }
     } catch (e) {
       print('❌ getNewProduct error: $e');
       return null;

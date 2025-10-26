@@ -15,6 +15,8 @@ use app\models\Carihareketler;
 use app\models\Satiscilar;
 use app\models\Musteriler;
 use app\models\Urunler;
+use app\models\Birimler;
+use app\models\Barkodlar;
 use app\models\SatinAlmasiparisFis;
 /**
  * LocationsController implements the CRUD actions for Locations model.
@@ -67,7 +69,17 @@ class ApimobilController extends Controller
                 $action->id == 'bankatahsilat'||
                 $action->id == 'cektahsilat'||
                 $action->id == 'nakittahsilat' ||
-                $action->id == 'kredikartitahsilat' ) {
+                $action->id == 'kredikartitahsilat' ||
+                $action->id == 'musterilistesi' ||
+                $action->id == 'customercounts' ||
+                $action->id == 'productcounts' ||
+                $action->id == 'birimcounts' ||
+                $action->id == 'birimlerlistesi' ||
+                $action->id == 'getnewproducts' ||
+                $action->id == 'getupdatedproducts' ||
+                $action->id == 'getnewcustomer' ||
+                $action->id == 'getupdatedcustomer' ||
+                $action->id == 'getnewbirimler' ) {
             $this->enableCsrfValidation = false;
         }
         return parent::beforeAction($action);
@@ -197,11 +209,20 @@ class ApimobilController extends Controller
 
     }
 
-    public function actionGetnewcustomer($time){
+    public function actionGetnewcustomer(){
         $this->layout = false;
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
         $satisci=$this->getApikey( $apiKey );
+
+        $time = Yii::$app->request->get('time');
+        if (!$time) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'time parametresi eksik'
+            ];
+        }
 
         $dateString = str_replace('%20', ' ', $time);
         $date = \DateTime::createFromFormat('d.m.Y H:i:s', $dateString);
@@ -230,10 +251,20 @@ class ApimobilController extends Controller
 
     }
 
-   public function actionGetupdatedcustomer($time){
+   public function actionGetupdatedcustomer(){
         $this->layout = false;
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        $time = Yii::$app->request->get('time');
+        if (!$time) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'time parametresi eksik'
+            ];
+        }
+
         if($this->getApikey( $apiKey )){
             $stoklar=Yii::$app->db->createCommand('SELECT
             VergiNo, VergiDairesi, Adres, Telefon, Email, Kod,
@@ -252,22 +283,44 @@ class ApimobilController extends Controller
 
     }
 
-    public function actionGetnewproducts($time){
+    public function actionGetnewproducts(){
         $this->layout = false;
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
 
+        $time = Yii::$app->request->get('time');
+        if (!$time) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'time parametresi eksik'
+            ];
+        }
+
         if($this->getApikey( $apiKey )){
+            // Pagination parametreleri
+            $page = (int)Yii::$app->request->get('page', 1);
+            $limit = (int)Yii::$app->request->get('limit', 5000);
+            $offset = ($page - 1) * $limit;
+
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
                UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc, qty as miktar
-            FROM urunler WHERE aktif=1 and created_at > :time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
+            FROM urunler WHERE aktif=1 and created_at > :time
+            ORDER BY StokKodu ASC
+            LIMIT :limit OFFSET :offset', [
+                'time' => $this->convertToStandardDateTime($time),
+                ':limit' => $limit,
+                ':offset' => $offset
+            ])->queryAll();
             foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
                 $stok['KutuFiyati'] = (string) $stok['KutuFiyati'];
             }
             return [
                 "status"=>1,
+                "page"=>$page,
+                "limit"=>$limit,
                 "customers"=>$stoklar
              ];
         }
@@ -278,10 +331,20 @@ class ApimobilController extends Controller
             ];
 
     }
-    public function actionGetupdatedproducts($time){
+    public function actionGetupdatedproducts(){
         $this->layout = false;
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        $time = Yii::$app->request->get('time');
+        if (!$time) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'time parametresi eksik'
+            ];
+        }
+
         if($this->getApikey( $apiKey )){
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
@@ -493,24 +556,50 @@ class ApimobilController extends Controller
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
 
-        $jsonData = Yii::$app->request->getRawBody();
-        // $dataArray = json_decode($jsonData, true);
-        $filePath = Yii::getAlias('@app/runtime/musteritalep'.date("Ymdhis").'.txt');
+        // Debug log
+        \Yii::error("musterilistesi called with apiKey: " . $apiKey, 'api');
 
-        $satisci=$this->getApikey( $apiKey );
-        file_put_contents($filePath, $jsonData."APIKEY :".$apiKey." User :".$satisci);
+        $satisci = $this->getApikey($apiKey);
+
+        // Debug log
+        \Yii::error("getApikey returned: " . ($satisci ? $satisci : 'false'), 'api');
+
         if(!$satisci)
-            return  ['IsSuccessStatusCode'=>false,'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
+            return ['IsSuccessStatusCode'=>false, 'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
 
-        //$st=Satiscilar::find()->where(["kodu"=>$satisci])->one();
-        $connection = Yii::$app->getDb();
-        $command = $connection->createCommand("
-            SELECT
-                Unvan,VergiNo,VergiDairesi,Adres,Telefon,Email,Kod,postcode,city,contact,mobile, bakiye
-            From musteriler Where Aktif=1 and satiselemani=:st
-        ",[":st"=>$satisci]);
-        $result = $command->queryAll();
-        return $this->asJson($result);
+        // Pagination parametreleri
+        $page = (int)Yii::$app->request->get('page', 1);
+        $limit = (int)Yii::$app->request->get('limit', 5000);
+        $offset = ($page - 1) * $limit;
+
+        try {
+            $connection = Yii::$app->getDb();
+            $command = $connection->createCommand("
+                SELECT
+                    Unvan,VergiNo,VergiDairesi,Adres,Telefon,Email,Kod,postcode,city,contact,mobile, bakiye
+                From musteriler Where Aktif=1 and satiselemani=:st
+                ORDER BY MusteriId ASC
+                LIMIT :limit OFFSET :offset
+            ",[
+                ":st"=>$satisci,
+                ":limit"=>$limit,
+                ":offset"=>$offset
+            ]);
+            $result = $command->queryAll();
+
+            return [
+                'status' => 1,
+                'page' => $page,
+                'limit' => $limit,
+                'customers' => $result
+            ];
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Veri alınamadı: ' . $e->getMessage()
+            ];
+        }
     }
     public function actionMusteriurunleri($carikod){
         $connection = Yii::$app->getDb();
@@ -727,5 +816,287 @@ class ApimobilController extends Controller
         $result = $command->queryAll();
 
         return $this->asJson($result);
+    }
+
+    /**
+     * Birim ve barkod sayılarını döner
+     * GET: /apimobil/birimcounts
+     */
+    public function actionBirimcounts(){
+        $this->layout = false;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        if(!$this->getApikey($apiKey))
+            return ['IsSuccessStatusCode'=>false, 'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
+
+        try {
+            $connection = Yii::$app->getDb();
+
+            // Birim sayısını al
+            $birimCount = $connection->createCommand("SELECT COUNT(*) as count FROM birimler")->queryScalar();
+
+            // Barkod sayısını al
+            $barkodCount = $connection->createCommand("SELECT COUNT(*) as count FROM barkodlar")->queryScalar();
+
+            return [
+                'status' => 1,
+                'birimler_count' => (int)$birimCount,
+                'barkodlar_count' => (int)$barkodCount
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Veri alınamadı: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Product kayıt sayısını döner
+     * GET: /apimobil/productcounts
+     */
+    public function actionProductcounts(){
+        $this->layout = false;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        if(!$this->getApikey($apiKey))
+            return ['IsSuccessStatusCode'=>false, 'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
+
+        try {
+            $connection = Yii::$app->getDb();
+
+            // Aktif ürün sayısını al
+            $productCount = $connection->createCommand("SELECT COUNT(*) as count FROM urunler WHERE aktif=1")->queryScalar();
+
+            return [
+                'status' => 1,
+                'product_count' => (int)$productCount
+            ];
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Veri alınamadı: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Customer kayıt sayısını döner
+     * GET: /apimobil/customercounts
+     */
+    public function actionCustomercounts(){
+        $this->layout = false;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        $satisci = $this->getApikey($apiKey);
+        if(!$satisci)
+            return ['IsSuccessStatusCode'=>false, 'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
+
+        try {
+            $connection = Yii::$app->getDb();
+
+            // Satış elemanına ait aktif müşteri sayısını al
+            $customerCount = $connection->createCommand(
+                "SELECT COUNT(*) as count FROM musteriler WHERE Aktif=1 AND satiselemani=:st",
+                [":st" => $satisci]
+            )->queryScalar();
+
+            return [
+                'status' => 1,
+                'customer_count' => (int)$customerCount
+            ];
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Veri alınamadı: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Birimleri ve barkodları sayfalı şekilde döner
+     * GET: /apimobil/birimlerlistesi?page=1&limit=5000
+     */
+    public function actionBirimlerlistesi(){
+        $this->layout = false;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        if(!$this->getApikey($apiKey))
+            return ['IsSuccessStatusCode'=>false, 'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
+
+        // Pagination parametreleri
+        $page = (int)Yii::$app->request->get('page', 1);
+        $limit = (int)Yii::$app->request->get('limit', 5000);
+        $offset = ($page - 1) * $limit;
+
+        try {
+            $connection = Yii::$app->getDb();
+
+            // Birimleri çek
+            $birimlerCommand = $connection->createCommand("
+                SELECT
+                    id,
+                    birimadi,
+                    birimkod,
+                    carpan,
+                    fiyat1,
+                    fiyat2,
+                    fiyat3,
+                    fiyat4,
+                    fiyat5,
+                    fiyat6,
+                    fiyat7,
+                    fiyat8,
+                    fiyat9,
+                    fiyat10,
+                    _key,
+                    _key_scf_stokkart,
+                    StokKodu,
+                    created_at,
+                    updated_at
+                FROM birimler
+                ORDER BY id ASC
+                LIMIT :limit OFFSET :offset
+            ", [':limit' => $limit, ':offset' => $offset]);
+            $birimler = $birimlerCommand->queryAll();
+
+            // Barkodları çek
+            $barkodlarCommand = $connection->createCommand("
+                SELECT
+                    id,
+                    _key,
+                    _key_scf_stokkart_birimleri,
+                    barkod,
+                    turu,
+                    created_at,
+                    updated_at
+                FROM barkodlar
+                ORDER BY id ASC
+                LIMIT :limit OFFSET :offset
+            ", [':limit' => $limit, ':offset' => $offset]);
+            $barkodlar = $barkodlarCommand->queryAll();
+
+            return [
+                'status' => 1,
+                'page' => $page,
+                'limit' => $limit,
+                'birimler' => $birimler,
+                'barkodlar' => $barkodlar
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Veri alınamadı: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ];
+        }
+    }
+
+    /**
+     * Belirli bir tarihten sonra oluşturulan/güncellenen birimleri döner
+     * GET: /apimobil/getnewbirimler?time=01.05.2024 15:55:30
+     *
+     * Query Parameters:
+     *  - time: Tarih formatı "dd.MM.yyyy HH:mm:ss"
+     */
+    public function actionGetnewbirimler(){
+        $this->layout = false;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        if(!$this->getApikey($apiKey))
+            return ['IsSuccessStatusCode'=>false, 'status' => 'error', 'message' =>"Eksik veya Hatalı Apikey"];
+
+        $time = Yii::$app->request->get('time');
+        if (!$time) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'time parametresi eksik'
+            ];
+        }
+
+        $dateString = str_replace('%20', ' ', $time);
+        $date = \DateTime::createFromFormat('d.m.Y H:i:s', $dateString);
+
+        if ($date) {
+            $tarih = $date->format('Y-m-d H:i:s');
+        } else {
+            return [
+                "status" => 0,
+                "hata" => "Geçersiz tarih ve zaman formatı"
+            ];
+        }
+
+        try {
+            $connection = Yii::$app->getDb();
+
+            // Yeni birimleri çek
+            $birimlerCommand = $connection->createCommand("
+                SELECT
+                    id,
+                    birimadi,
+                    birimkod,
+                    carpan,
+                    fiyat1,
+                    fiyat2,
+                    fiyat3,
+                    fiyat4,
+                    fiyat5,
+                    fiyat6,
+                    fiyat7,
+                    fiyat8,
+                    fiyat9,
+                    fiyat10,
+                    _key,
+                    _key_scf_stokkart,
+                    StokKodu,
+                    created_at,
+                    updated_at
+                FROM birimler
+                WHERE created_at > :time OR updated_at > :time
+                ORDER BY id ASC
+            ", [':time' => $tarih]);
+            $birimler = $birimlerCommand->queryAll();
+
+            // Yeni barkodları çek
+            $barkodlarCommand = $connection->createCommand("
+                SELECT
+                    id,
+                    _key,
+                    _key_scf_stokkart_birimleri,
+                    barkod,
+                    turu,
+                    created_at,
+                    updated_at
+                FROM barkodlar
+                WHERE created_at > :time OR updated_at > :time
+                ORDER BY id ASC
+            ", [':time' => $tarih]);
+            $barkodlar = $barkodlarCommand->queryAll();
+
+            return [
+                'status' => 1,
+                'birimler' => $birimler,
+                'barkodlar' => $barkodlar
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Veri alınamadı: ' . $e->getMessage()
+            ];
+        }
     }
 }

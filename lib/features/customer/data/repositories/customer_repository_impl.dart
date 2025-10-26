@@ -436,40 +436,85 @@ class CustomerRepositoryImpl implements CustomerRepository {
 
         final savedApiKey = result.first['apikey'] as String;
 
-        // Fetch customers from server
-        final response = await dio.get(
-          ApiConfig.musteriListesiUrl,
+        // STEP 1: Get total customer count
+        print('🔄 Müşteri sayısı getiriliyor...');
+        final countResponse = await dio.get(
+          ApiConfig.customerCountsUrl,
           options: Options(
             headers: {
               'Authorization': 'Bearer $savedApiKey',
+              'Accept': 'application/json',
             },
           ),
         );
 
-        if (response.statusCode == 200) {
-          final List<dynamic> data = response.data is List
-              ? response.data
-              : (response.data['customers'] ?? []);
-
-          print('👥 ${data.length} müşteri alındı');
-
-          // Clear and insert all customers
-          await db.delete('CustomerBalance');
-
-          final batch = db.batch();
-          for (var json in data) {
-            batch.insert(
-              'CustomerBalance',
-              json,
-              conflictAlgorithm: ConflictAlgorithm.replace,
-            );
-          }
-          await batch.commit(noResult: true);
-
-          print('✅ Müşteri veritabanı güncellendi');
-        } else {
-          throw Exception('Veri alınamadı: ${response.statusCode}');
+        if (countResponse.statusCode != 200 || countResponse.data['status'] != 1) {
+          throw Exception('Müşteri sayısı alınamadı');
         }
+
+        final customerCount = countResponse.data['customer_count'] as int;
+        print('📊 Toplam müşteri sayısı: $customerCount');
+
+        // STEP 2: Download customers page by page
+        const pageSize = 5000;
+        int page = 1;
+        final allCustomers = <Map<String, dynamic>>[];
+
+        while (true) {
+          print('📥 Sayfa $page indiriliyor...');
+
+          final response = await dio.get(
+            ApiConfig.musteriListesiUrl,
+            queryParameters: {
+              'page': page,
+              'limit': pageSize,
+            },
+            options: Options(
+              headers: {
+                'Authorization': 'Bearer $savedApiKey',
+              },
+            ),
+          );
+
+          if (response.statusCode == 200) {
+            final data = response.data;
+
+            if (data['status'] == 1) {
+              final List<dynamic> customersData = data['customers'] ?? [];
+
+              // Break if no more data
+              if (customersData.isEmpty) {
+                print('✅ Tüm sayfalar indirildi');
+                break;
+              }
+
+              allCustomers.addAll(customersData.cast<Map<String, dynamic>>());
+
+              print('📥 Sayfa $page: ${customersData.length} müşteri (Toplam: ${allCustomers.length}/$customerCount)');
+              page++;
+            } else {
+              throw Exception('API returned status != 1');
+            }
+          } else {
+            throw Exception('Veri alınamadı: ${response.statusCode}');
+          }
+        }
+
+        // STEP 3: Clear and insert all customers
+        print('💾 Müşteriler veritabanına kaydediliyor...');
+        await db.delete('CustomerBalance');
+
+        final batch = db.batch();
+        for (var json in allCustomers) {
+          batch.insert(
+            'CustomerBalance',
+            json,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+        await batch.commit(noResult: true);
+
+        print('✅ ${allCustomers.length} müşteri veritabanına kaydedildi');
       } catch (e) {
         throw Exception('Failed to fetch and store customers: $e');
       }
@@ -509,12 +554,12 @@ class CustomerRepositoryImpl implements CustomerRepository {
       }
 
       String savedApiKey = result.first['apikey'];
-      final url = '${ApiConfig.indexPhpBase}?r=apimobil/getnewcustomer&time=$formattedDate';
 
-      print('🔄 Fetching new customers from: $url');
+      print('🔄 Fetching new customers since: $formattedDate');
 
       final response = await dio.get(
-        url,
+        '${ApiConfig.indexPhpBase}?r=apimobil/getnewcustomer',
+        queryParameters: {'time': formattedDate},
         options: Options(
           headers: {
             'Authorization': 'Bearer $savedApiKey',

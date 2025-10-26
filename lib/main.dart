@@ -13,6 +13,7 @@ import 'package:pos_app/core/widgets/startup_view.dart';
 // Repository interfaces
 import 'package:pos_app/features/auth/domain/repositories/auth_repository.dart';
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';
+import 'package:pos_app/features/products/domain/repositories/unit_repository.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/cart/domain/repositories/cart_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
@@ -24,6 +25,7 @@ import 'package:pos_app/features/sync/domain/repositories/sync_repository.dart';
 // Repository implementations
 import 'package:pos_app/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:pos_app/features/products/data/repositories/product_repository_impl.dart';
+import 'package:pos_app/features/products/data/repositories/unit_repository_impl.dart';
 import 'package:pos_app/features/customer/data/repositories/customer_repository_impl.dart';
 import 'package:pos_app/features/cart/data/repositories/cart_repository_impl.dart';
 import 'package:pos_app/features/orders/data/repositories/order_repository_impl.dart';
@@ -85,6 +87,12 @@ void main() async {
             create: (context) => ProductRepositoryImpl(
               dbHelper: context.read<DatabaseHelper>(),
               networkInfo: context.read<NetworkInfo>(),
+              dio: context.read<Dio>(),
+            ),
+          ),
+          Provider<UnitRepository>(
+            create: (context) => UnitRepositoryImpl(
+              dbHelper: context.read<DatabaseHelper>(),
               dio: context.read<Dio>(),
             ),
           ),

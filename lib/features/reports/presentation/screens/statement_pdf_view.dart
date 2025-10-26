@@ -18,15 +18,17 @@ class StatementPdfView extends StatefulWidget {
 
 class _StatementPdfViewState extends State<StatementPdfView> {
   String? _pdfPath;
-  bool _isLoading = true;
+  bool _isLoading = false; // İlk yüklemede false, kullanıcı butona bassın
   String? _errorMessage;
   int _totalPages = 0;
   int _currentPage = 0;
+  DateTime _selectedDate = DateTime(2025, 1, 1); // Default tarih
+  bool _showDetail = true; // Detay göster (1) veya gösterme (0)
 
   @override
   void initState() {
     super.initState();
-    _downloadAndDisplayPdf();
+    // İlk açılışta PDF yükleme, kullanıcı parametreleri seçip butona bassın
   }
 
   Future<void> _downloadAndDisplayPdf() async {
@@ -43,8 +45,12 @@ class _StatementPdfViewState extends State<StatementPdfView> {
         throw Exception('Customer code not found');
       }
 
-      // API endpoint
-      final url = 'https://test.rowhub.net/index.php?r=apimobil/getekstre&carikod=$customerCode';
+      // Format tarih as YYYY-MM-DD
+      final formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      final detayParam = _showDetail ? '1' : '0';
+
+      // API endpoint with tarih and detay parameters
+      final url = 'https://test.rowhub.net/index.php?r=apimobil/getekstre&carikod=$customerCode&tarih=$formattedDate&detay=$detayParam';
 
       print('📄 Downloading PDF from: $url');
 
@@ -99,6 +105,20 @@ class _StatementPdfViewState extends State<StatementPdfView> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _selectedDate = picked;
+      });
     }
   }
 
@@ -220,31 +240,98 @@ class _StatementPdfViewState extends State<StatementPdfView> {
                           ),
           ),
 
-          // Page indicator
-          if (_pdfPath != null && _totalPages > 0)
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: SafeArea(
-                child: Text(
+        ],
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Page indicator (if PDF loaded)
+              if (_pdfPath != null && _totalPages > 0) ...[
+                Text(
                   'Page ${_currentPage + 1} of $_totalPages',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 16),
+              ],
+
+              // Tarih seçici ve Detay checkbox
+              Row(
+                children: [
+                  // Tarih seçici
+                  Expanded(
+                    child: InkWell(
+                      onTap: _selectDate,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              DateFormat('dd.MM.yyyy').format(_selectedDate),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            const Icon(Icons.calendar_today, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Detay checkbox
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _showDetail,
+                        onChanged: (value) {
+                          setState(() {
+                            _showDetail = value ?? true;
+                          });
+                        },
+                      ),
+                      const Text('Detail'),
+                    ],
+                  ),
+                ],
               ),
-            ),
-        ],
+              const SizedBox(height: 12),
+
+              // Load Report butonu
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _downloadAndDisplayPdf,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.lightPrimaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Load Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
