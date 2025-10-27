@@ -39,13 +39,25 @@ class AudioService {
     _audioPlayerDit.setVolume(0.8);
     _audioPlayerWrong.setVolume(0.8);
 
-    // 🚀 4 ses dosyasını PARALEL yükle
-    await Future.wait([
-      _audioPlayerBeepK.setSource(AssetSource('beepk.mp3')).then((_) => print('✅ beepk.mp3 loaded')),
-      _audioPlayerBoopK.setSource(AssetSource('boopk.mp3')).then((_) => print('✅ boopk.mp3 loaded')),
-      _audioPlayerDit.setSource(AssetSource('ditdit.mp3')).then((_) => print('✅ ditdit.mp3 loaded')),
-      _audioPlayerWrong.setSource(AssetSource('wrongk.mp3')).then((_) => print('✅ wrongk.mp3 loaded')),
-    ]);
+    // 🚀 Ses dosyalarını SIRALI yükle (paralel yükleme sorun çıkarıyordu)
+    try {
+      await _audioPlayerBeepK.setSource(AssetSource('beepk.mp3'));
+      print('✅ beepk.mp3 loaded');
+
+      await _audioPlayerBoopK.setSource(AssetSource('boopk.mp3'));
+      print('✅ boopk.mp3 loaded');
+
+      await _audioPlayerDit.setSource(AssetSource('ditdit.mp3'));
+      print('✅ ditdit.mp3 loaded');
+
+      await _audioPlayerWrong.setSource(AssetSource('wrongk.mp3'));
+      print('✅ wrongk.mp3 loaded');
+    } catch (e) {
+      print('⚠️ Ses dosyaları yüklenirken hata: $e');
+      // Ses yükleme başarısız olsa bile devam et
+      _isLoaded = false; // Tekrar denenebilsin
+      rethrow; // Hatayı yukarı ilet ki cart_view.dart catch bloğu yakalasın
+    }
 
     // ReleaseMode.stop: Ses bitince durur, tekrar çalmaya hazır olur
     _audioPlayerBeepK.setReleaseMode(ReleaseMode.stop);

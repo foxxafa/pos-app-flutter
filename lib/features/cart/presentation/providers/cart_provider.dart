@@ -19,8 +19,7 @@ class CartItem {
   String adetFiyati; // yeni alan
   String kutuFiyati; // yeni alan
   String aciklama = "";
-  int birimKey1; // yeni alan
-  int birimKey2; // yeni alan
+  String? selectedBirimKey; // ✅ Seçili birimin key'i (KG, ADET, LITRE vs.)
 
   CartItem({
     required this.stokKodu,
@@ -36,8 +35,7 @@ class CartItem {
     this.adetFiyati = '',
     this.kutuFiyati = '',
     this.aciklama = '',
-    this.birimKey1 = 0,
-    this.birimKey2 = 0,
+    this.selectedBirimKey,
   });
 
   double get fiyat => birimFiyat * miktar;
@@ -76,8 +74,7 @@ extension CartItemExtension on CartItem {
       "AdetFiyati": adetFiyati,
       "KutuFiyati": kutuFiyati,
       "Aciklama": aciklama,
-      "BirimKey1": birimKey1,
-      "BirimKey2": birimKey2,
+      "SelectedBirimKey": selectedBirimKey, // ✅ Seçili birim key'i
     };
   }
 }
@@ -187,8 +184,7 @@ class CartProvider extends ChangeNotifier {
     int vat = 18,
     String adetFiyati = '',
     String kutuFiyati = '',
-    int birimKey1 = 0,
-    int birimKey2 = 0,
+    String? selectedBirimKey, // ✅ Seçili birimin key'i (BirimModel.key)
   }) {
     // ⚠️ KRITIK: fisNo set edilmemişse UYARI (OrderInfoProvider tarafından set edilmelidir)
     if (_fisNo.isEmpty || _fisNo == '') {
@@ -222,8 +218,7 @@ class CartProvider extends ChangeNotifier {
         current.durum = durum;
         current.adetFiyati = adetFiyati;
         current.kutuFiyati = kutuFiyati;
-        current.birimKey1 = birimKey1;
-        current.birimKey2 = birimKey2;
+        current.selectedBirimKey = selectedBirimKey;
       }
     } else {
       _items[cartKey] = CartItem(
@@ -239,8 +234,7 @@ class CartProvider extends ChangeNotifier {
         vat: vat,
         adetFiyati: adetFiyati,
         kutuFiyati: kutuFiyati,
-        birimKey1: birimKey1,
-        birimKey2: birimKey2,
+        selectedBirimKey: selectedBirimKey,
       );
     }
 

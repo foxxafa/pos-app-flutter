@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/network/api_config.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:pos_app/features/customer/domain/repositories/customer_repository.dart';
 import 'package:pos_app/features/orders/domain/repositories/order_repository.dart';
 import 'package:pos_app/features/products/domain/repositories/product_repository.dart';

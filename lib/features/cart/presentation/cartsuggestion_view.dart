@@ -327,7 +327,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
         // Find the correct cart item by checking both unit types
         CartItem? cartItem = cartProvider.items[stokKodu];
-        final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
+        final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit');
 
         final controllerKey = '${stokKodu}_$birimTipi';
 
@@ -472,8 +472,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   }
 
   Widget _buildUnitSelector(ProductModel product, CartItem? cartItem, CartProvider cartProvider, SalesCustomerProvider customerProvider) {
-    final hasUnit = product.birimKey1 != 0;
-    final hasBox = product.birimKey2 != 0;
+    final hasUnit = (double.tryParse(product.adetFiyati.toString()) ?? 0) > 0;
+    final hasBox = (double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0;
     final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
     final birimTipi = cartItem?.birimTipi ?? (hasBox ? 'Box' : 'Unit');
 
@@ -523,7 +523,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               cartProvider.addOrUpdateItem(
                 urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, urunBarcode: product.barcode1,
                 adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, miktar: 0, iskonto: cartItem.iskonto,
-                birimTipi: newValue, vat: product.vat, imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2,
+                birimTipi: newValue, vat: product.vat, imsrc: product.imsrc,  
               );
             }
           },
@@ -533,7 +533,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   }
 
   Widget _buildPriceField(ProductModel product, CartItem? cartItem, TextEditingController priceController, TextEditingController discountController, FocusNode discountFocusNode, CartProvider cartProvider, SalesCustomerProvider customerProvider) {
-    final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
+    final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit');
 
     // cart_view2.dart mantığı: Controller zaten üstte dolduruldu, burada tekrar güncelleme
     // Build method'da oluyor, burada sadece TextField widget'ını döndürüyoruz
@@ -590,8 +590,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           imsrc: product.imsrc,
           adetFiyati: product.adetFiyati,
           kutuFiyati: product.kutuFiyati,
-          birimKey1: product.birimKey1,
-          birimKey2: product.birimKey2,
+          
+          
         );
       },
       onEditingComplete: () {
@@ -638,7 +638,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
             ),
             onChanged: (value) {
-              final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
+              final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit');
 
               // cart_view2.dart mantığı: orjinal fiyat her zaman ürünün birim fiyatı
               final originalPrice = birimTipi == 'Unit'
@@ -661,8 +661,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                   adetFiyati: product.adetFiyati,
                   kutuFiyati: product.kutuFiyati,
                   urunBarcode: product.barcode1,
-                  birimKey1: product.birimKey1,
-                  birimKey2: product.birimKey2
+                  
                 );
                 return;
               }
@@ -689,8 +688,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 adetFiyati: product.adetFiyati,
                 kutuFiyati: product.kutuFiyati,
                 urunBarcode: product.barcode1,
-                birimKey1: product.birimKey1,
-                birimKey2: product.birimKey2,
+                
+                
               );
 
               // İmleç pozisyonunu koru
@@ -709,7 +708,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
   Widget _buildQuantityControls(ProductModel product, CartItem? cartItem, CartProvider cartProvider, SalesCustomerProvider customerProvider, TextEditingController quantityController, FocusNode quantityFocusNode) {
     // Her zaman provider'dan güncel miktarı al
-    final birimTipi = cartItem?.birimTipi ?? (product.birimKey2 != 0 ? 'Box' : 'Unit');
+    final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit');
 
     // Provider'dan güncel miktarı al (context.watch kullanarak dinamik güncelleme)
     final currentMiktar = context.watch<CartProvider>().getmiktar(product.stokKodu, birimTipi);
@@ -733,7 +732,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: 0, miktar: -1,
                 iskonto: cartItem?.iskonto ?? 0, birimTipi: birimTipi, urunBarcode: product.barcode1,
                 adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, vat: product.vat,
-                imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2
             );
           } : null,
         ),
@@ -780,8 +778,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                     kutuFiyati: product.kutuFiyati,
                     vat: product.vat,
                     imsrc: product.imsrc,
-                    birimKey1: product.birimKey1,
-                    birimKey2: product.birimKey2,
+                    
+                    
                   );
                 }
               }
@@ -804,7 +802,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: fiyat, miktar: 1,
                 iskonto: cartItem?.iskonto ?? 0, birimTipi: birimTipi, urunBarcode: product.barcode1,
                 adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, vat: product.vat,
-                imsrc: product.imsrc, birimKey1: product.birimKey1, birimKey2: product.birimKey2
             );
           },
         ),
