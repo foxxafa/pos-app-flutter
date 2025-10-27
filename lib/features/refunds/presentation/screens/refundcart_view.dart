@@ -7,13 +7,13 @@ import 'package:pos_app/features/refunds/presentation/providers/cart_provider_re
 import 'package:pos_app/features/refunds/presentation/screens/refundcart_view2.dart';
 import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:pos_app/core/services/scanner_service.dart';
+import 'package:pos_app/core/services/audio_service.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
 import 'dart:io';
 import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class RefundCartView extends StatefulWidget {
@@ -41,14 +41,13 @@ class _RefundCartViewState extends State<RefundCartView> {
   final FocusNode _barcodeFocusNode2 = FocusNode();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _searchController2 = TextEditingController();
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  final AudioPlayer _audioPlayerBeepK = AudioPlayer(); // beepk.mp3 için ayrı player
-  final AudioPlayer _audioPlayerBoopK = AudioPlayer(); // boopk.mp3 için ayrı player
 
   List<ProductModel> _allProducts = [];
   List<ProductModel> _filteredProducts = [];
   Map<String, Future<String?>> _imageFutures = {};
   bool _isLoading = true;
+  bool _audioLoaded = false;
+  bool _productsLoaded = false;
 
   final Map<String, int> _quantityMap = {};
   final Map<String, String> _birimTipiMap = {}; // Her ürün için seçili birim tipi
@@ -76,31 +75,38 @@ class _RefundCartViewState extends State<RefundCartView> {
   @override
   void initState() {
     super.initState();
+
+    // ⚡ SES DOSYALARINI İLK ÖNCE yükle (direkt initState'te!)
+    _initializeAudioAndScanner();
+
     _loadProducts();
-    _setupAudioPlayer();
-    // 🔑 Hardware keyboard listener ekle
-    _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
-    HardwareKeyboard.instance.addHandler(_scannerHandler);
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _barcodeFocusNode.requestFocus();
       await _syncWithProvider();
     });
   }
 
-  void _setupAudioPlayer() async {
-    _audioPlayer.setVolume(0.8);
+  Future<void> _initializeAudioAndScanner() async {
+    // ✅ AudioService - Sadece ilk kez yükler, sonra cache'ten kullanır!
+    await AudioService.instance.ensureLoaded();
 
-    // ⚡ Ses dosyalarını önceden yükle (preload) - performans için kritik!
-    _audioPlayerBeepK.setVolume(0.8);
-    _audioPlayerBoopK.setVolume(0.8);
+    _audioLoaded = true;
+    _checkLoadingComplete();
 
-    // Ses dosyalarını hafızaya yükle
-    await _audioPlayerBeepK.setSource(AssetSource('beepk.mp3'));
-    await _audioPlayerBoopK.setSource(AssetSource('boopk.mp3'));
+    // ✅ Ses dosyaları hazır - ŞIMDI scanner'ı ekle
+    _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
+    HardwareKeyboard.instance.addHandler(_scannerHandler);
+  }
 
-    // ReleaseMode.stop: Ses bitince durur, tekrar çalmaya hazır olur
-    _audioPlayerBeepK.setReleaseMode(ReleaseMode.stop);
-    _audioPlayerBoopK.setReleaseMode(ReleaseMode.stop);
+  void _checkLoadingComplete() {
+    // İkisi de bitince loading'i kapat
+    if (_audioLoaded && _productsLoaded && mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+      print('✅ Loading tamamlandı: Ses ve ürünler hazır! (RefundCart)');
+    }
   }
 
   @override
@@ -113,9 +119,7 @@ class _RefundCartViewState extends State<RefundCartView> {
     _quantityControllers.values.forEach((c) => c.dispose());
     _priceControllers.values.forEach((c) => c.dispose());
     _priceFocusNodes.values.forEach((f) => f.dispose());
-    _audioPlayer.dispose();
-    _audioPlayerBeepK.dispose();
-    _audioPlayerBoopK.dispose();
+    // AudioService singleton - dispose edilmez, uygulama boyunca yaşar
     // 🔑 Hardware keyboard listener kaldır
     HardwareKeyboard.instance.removeHandler(_scannerHandler);
     super.dispose();
@@ -123,13 +127,6 @@ class _RefundCartViewState extends State<RefundCartView> {
 
   // --- Product & Data Loading ---
   Future<void> _loadProducts() async {
-    // İlk frame'de loading göster
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
-
     // ⚡ İlk yüklemede sadece 50 ürünü yükle (lazy loading)
     final dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
@@ -153,7 +150,6 @@ class _RefundCartViewState extends State<RefundCartView> {
     setState(() {
       _allProducts = products; // İlk başta sadece 50 ürün
       _filteredProducts = products;
-      _isLoading = false;
 
       // ⚡ Map'leri sadece gösterilen 50 ürün için doldur
       for (var product in _filteredProducts) {
@@ -164,6 +160,9 @@ class _RefundCartViewState extends State<RefundCartView> {
       }
       _generateImageFutures(_filteredProducts);
     });
+
+    _productsLoaded = true;
+    _checkLoadingComplete();
   }
 
   Future<void> _syncWithProvider() async {
@@ -249,35 +248,29 @@ class _RefundCartViewState extends State<RefundCartView> {
 
   // --- Sound & Barcode ---
   Future<void> playWrong() async {
-    await _audioPlayer.play(AssetSource('wrong.mp3'));
-  }
-
-  Future<void> playBeep() async {
-    await _audioPlayer.play(AssetSource('beep.mp3'));
+    await AudioService.instance.playWrong();
   }
 
   final Map<String, int> _productScanCount = {}; // Her ürünün kaç kez okutulduğunu takip eder
 
   /// Her ürün için sıralı ses çalar
   /// İlk okutma: beepk.mp3, sonraki tüm okutmalar: boopk.mp3
-  Future<void> playBeepForProduct(String stokKodu) async {
+  Future<void> playBeepForProduct(ProductModel product) async {
     // Bu ürünün kaç kez okutulduğunu kontrol et
-    final currentCount = _productScanCount[stokKodu] ?? 0;
+    final currentCount = _productScanCount[product.stokKodu] ?? 0;
 
     // İlk okutma (currentCount == 0): beepk.mp3
     // Sonraki tüm okutmalar: boopk.mp3
     if (currentCount == 0) {
       // İlk okutma - beepk.mp3
-      await _audioPlayerBeepK.stop();
-      await _audioPlayerBeepK.resume();
+      await AudioService.instance.playBeepK();
     } else {
       // Sonraki okutmalar - boopk.mp3
-      await _audioPlayerBoopK.stop();
-      await _audioPlayerBoopK.resume();
+      await AudioService.instance.playBoopK();
     }
 
     // Sayacı artır (setState olmadan!)
-    _productScanCount[stokKodu] = currentCount + 1;
+    _productScanCount[product.stokKodu] = currentCount + 1;
   }
 
   void _onBarcodeScanned(String barcode) async {
@@ -320,7 +313,7 @@ class _RefundCartViewState extends State<RefundCartView> {
     if (searchResults.isNotEmpty) {
       // Bulunan ürünün stokKodu'nu al
       final product = ProductModel.fromMap(searchResults.first);
-      playBeepForProduct(product.stokKodu);
+      playBeepForProduct(product); // ✅ Product gönder
     } else {
       playWrong();
     }
@@ -412,7 +405,7 @@ class _RefundCartViewState extends State<RefundCartView> {
             iskonto: iskonto,
             birimTipi: birimTipi,
           );
-          playBeepForProduct(key);
+          playBeepForProduct(product); // ✅ Product gönder
         }
         _clearAndFocusBarcode();
       } else if (_filteredProducts.isEmpty && query.length > 10 && RegExp(r'^\d+$').hasMatch(query)) {

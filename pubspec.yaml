@@ -78,14 +78,12 @@ flutter_launcher_icons:
 # The following section is specific to Flutter packages.
 flutter:
   assets:
-    - assets/beep.mp3
     - assets/beepk.mp3
     - assets/boopk.mp3
     - assets/ditdit.mp3
     - assets/wrongk.mp3
     - assets/logo.png
     - assets/hand.png
-    - assets/wrong.mp3
     - assets/translations/
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

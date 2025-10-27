@@ -2,6 +2,10 @@ import 'package:flutter/services.dart';
 
 /// El terminali (handheld scanner) tuş tespiti için merkezi servis
 class ScannerService {
+  // 🛡️ Duplicate scan prevention
+  static DateTime? _lastScanTime;
+  static const int _debounceMilliseconds = 300; // 300ms debounce
+
   // Scanner tuşları için USB HID kodları
   static const Set<int> _scannerPhysicalKeys = {
     392983,       // KEYCODE_SCANNER_RIGHT (Game Button Right 1)
@@ -42,6 +46,19 @@ class ScannerService {
   static bool Function(KeyEvent) createHandler(VoidCallback onScannerKeyPressed) {
     return (KeyEvent event) {
       if (isScannerKey(event)) {
+        // 🛡️ Duplicate scan prevention: Çok hızlı ardışık tuşları ignore et
+        final now = DateTime.now();
+        if (_lastScanTime != null) {
+          final timeDiff = now.difference(_lastScanTime!).inMilliseconds;
+          if (timeDiff < _debounceMilliseconds) {
+            print('⚠️ ScannerService: Duplicate scan ignored (${timeDiff}ms ago)');
+            return true; // Event'i handle ettik ama callback çağırmadık
+          }
+        }
+
+        // ✅ Yeni scan - kaydet ve callback çağır
+        _lastScanTime = now;
+        print('✅ ScannerService: Scanner key detected');
         onScannerKeyPressed();
         return true; // Event'i handle ettik
       }

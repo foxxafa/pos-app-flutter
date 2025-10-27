@@ -159,12 +159,12 @@ class CartRepositoryImpl implements CartRepository {
 
   @override
   Future<void> clearCart() async {
-    try {
-      final db = await dbHelper.database;
-      await db.delete('cart_items');
-    } catch (e) {
-      throw Exception('Failed to clear cart: $e');
-    }
+    // ❌ DEPRECATED: This method is DANGEROUS - it deletes ALL cart_items for ALL customers!
+    // Use clearCartByCustomer() with fisNo and customerKod instead.
+    throw UnimplementedError(
+      'clearCart() is deprecated and UNSAFE! '
+      'Use clearCartByCustomer(customerName, fisNo: fisNo, customerKod: customerKod) instead.'
+    );
   }
 
   @override
