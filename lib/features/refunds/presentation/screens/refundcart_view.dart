@@ -52,6 +52,12 @@ class _RefundCartViewState extends State<RefundCartView> {
   final Map<String, int> _quantityMap = {};
   final Map<String, String> _birimTipiMap = {}; // Her ürün için seçili birim tipi
 
+  // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
+  bool _isUpdatingFromScanner = false;
+
+  // El terminali için debounce timer (çift eklemeyi önler)
+  Timer? _scanDebounceTimer;
+
   Timer? _imageDownloadTimer;
 
   final List<String> _returnReasons = [
@@ -112,6 +118,7 @@ class _RefundCartViewState extends State<RefundCartView> {
   @override
   void dispose() {
     _imageDownloadTimer?.cancel();
+    _scanDebounceTimer?.cancel();
     _barcodeFocusNode.dispose();
     _barcodeFocusNode2.dispose();
     _searchController.dispose();
@@ -276,55 +283,29 @@ class _RefundCartViewState extends State<RefundCartView> {
   void _onBarcodeScanned(String barcode) async {
     if (!mounted) return;
 
+    // Flag set et ki TextField'ların onChanged'i tetiklenmesin
+    _isUpdatingFromScanner = true;
     _searchController.text = barcode;
     _searchController2.text = barcode;
-    _filterProducts(queryOverride: barcode);
+    _isUpdatingFromScanner = false;
 
-    // ⚡ SQL ile kontrol et (hafızaya yüklemeye gerek yok)
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    if (!mounted) return;
-
-    final dbHelper = DatabaseHelper();
-    final db = await dbHelper.database;
-
-    final query = barcode.trimRight().toLowerCase();
-    final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-
-    String whereClause = queryWords.map((_) =>
-      '(urunAdi LIKE ? OR stokKodu LIKE ? OR barcode1 LIKE ? OR barcode2 LIKE ? OR barcode3 LIKE ? OR barcode4 LIKE ?)'
-    ).join(' AND ');
-
-    List<String> whereArgs = [];
-    for (var word in queryWords) {
-      final likePattern = '%$word%';
-      whereArgs.addAll([likePattern, likePattern, likePattern, likePattern, likePattern, likePattern]);
-    }
-
-    final searchResults = await db.query(
-      'Product',
-      where: 'aktif = ? AND ($whereClause)',
-      whereArgs: [1, ...whereArgs],
-      limit: 1,
-    );
-
-    if (!mounted) return;
-
-    if (searchResults.isNotEmpty) {
-      // Bulunan ürünün stokKodu'nu al
-      final product = ProductModel.fromMap(searchResults.first);
-      playBeepForProduct(product); // ✅ Product gönder
-    } else {
-      playWrong();
-    }
+    // Parametresiz çağır ki fromUI = false olsun
+    // _filterProducts içinde zaten ses çalıyor, burada tekrar çalmasına gerek yok
+    _filterProducts();
   }
 
   Future<void> _openBarcodeScanner() async {
-    await Navigator.of(context).push(
+    // Scanner page'den dönen barkodu al
+    final scannedBarcode = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (context) => BarcodeScannerPage(onScanned: _onBarcodeScanned),
+        builder: (context) => const BarcodeScannerPage(),
       ),
     );
+
+    // Page kapandıktan SONRA barkodu işle (state'i korunmuş olacak)
+    if (scannedBarcode != null && scannedBarcode.isNotEmpty && mounted) {
+      _onBarcodeScanned(scannedBarcode);
+    }
   }
 
   // --- Filtering & Searching ---
@@ -558,7 +539,11 @@ class _RefundCartViewState extends State<RefundCartView> {
                 ],
               ),
             ),
-            onChanged: (value) => _filterProducts(queryOverride: value),
+            onChanged: (value) {
+              // Scanner'dan güncelleme yapılıyorsa ignore et (çift çağrıyı önle)
+              if (_isUpdatingFromScanner) return;
+              _filterProducts(queryOverride: value);
+            },
           ),
         ),
         actions: [
@@ -576,10 +561,22 @@ class _RefundCartViewState extends State<RefundCartView> {
                   focusNode: _barcodeFocusNode,
                   controller: _searchController,
                   onChanged: (value) {
+                    // El terminali için: Controller'ları sync yaparken flag set et
+                    _isUpdatingFromScanner = true;
                     _searchController2.text = value;
-                    _filterProducts();
+                    _isUpdatingFromScanner = false;
+
+                    // Debounce: Timer'ı iptal et ve yeniden başlat
+                    _scanDebounceTimer?.cancel();
+                    _scanDebounceTimer = Timer(const Duration(milliseconds: 150), () {
+                      if (mounted) {
+                        _filterProducts();
+                      }
+                    });
                   },
                   onSubmitted: (value) {
+                    // Enter tuşuna basıldığında timer'ı iptal et ve hemen işle
+                    _scanDebounceTimer?.cancel();
                     if (value.isNotEmpty) {
                       _filterProducts();
                     }

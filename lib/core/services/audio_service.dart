@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
 
 /// Singleton audio service - Ses dosyaları SADECE BİR KEZ yüklenir!
@@ -26,38 +28,31 @@ class AudioService {
       return;
     }
 
-    print('⏳ Ses dosyaları yükleniyor (LOW_LATENCY mode - ilk kez)...');
+    print('⏳ Ses dosyaları yükleniyor...');
 
-    // ⚡ LOW_LATENCY mode: Ses dosyaları hafızada tutulur, anında çalınır!
-    _audioPlayerBeepK.setPlayerMode(PlayerMode.lowLatency);
-    _audioPlayerBoopK.setPlayerMode(PlayerMode.lowLatency);
-    _audioPlayerDit.setPlayerMode(PlayerMode.lowLatency);
-    _audioPlayerWrong.setPlayerMode(PlayerMode.lowLatency);
-
+    // Volume ayarları
     _audioPlayerBeepK.setVolume(0.8);
     _audioPlayerBoopK.setVolume(0.8);
     _audioPlayerDit.setVolume(0.8);
     _audioPlayerWrong.setVolume(0.8);
 
-    // 🚀 Ses dosyalarını SIRALI yükle (paralel yükleme sorun çıkarıyordu)
+    // 🚀 Ses dosyalarını SIRALI yükle (timeout ve retry mekanizması ile)
     try {
-      await _audioPlayerBeepK.setSource(AssetSource('beepk.mp3'));
-      print('✅ beepk.mp3 loaded');
-
-      await _audioPlayerBoopK.setSource(AssetSource('boopk.mp3'));
-      print('✅ boopk.mp3 loaded');
-
-      await _audioPlayerDit.setSource(AssetSource('ditdit.mp3'));
-      print('✅ ditdit.mp3 loaded');
-
-      await _audioPlayerWrong.setSource(AssetSource('wrongk.mp3'));
-      print('✅ wrongk.mp3 loaded');
+      await _loadAudioWithRetry(_audioPlayerBeepK, 'beepk.mp3');
+      await _loadAudioWithRetry(_audioPlayerBoopK, 'boopk.mp3');
+      await _loadAudioWithRetry(_audioPlayerDit, 'ditdit.mp3');
+      await _loadAudioWithRetry(_audioPlayerWrong, 'wrongk.mp3');
     } catch (e) {
-      print('⚠️ Ses dosyaları yüklenirken hata: $e');
-      // Ses yükleme başarısız olsa bile devam et
+      print('❌ Ses dosyaları yüklenemedi (tüm denemeler başarısız): $e');
       _isLoaded = false; // Tekrar denenebilsin
       rethrow; // Hatayı yukarı ilet ki cart_view.dart catch bloğu yakalasın
     }
+
+    // Source set edildikten SONRA player mode ve release mode ayarla
+    _audioPlayerBeepK.setPlayerMode(PlayerMode.lowLatency);
+    _audioPlayerBoopK.setPlayerMode(PlayerMode.lowLatency);
+    _audioPlayerDit.setPlayerMode(PlayerMode.lowLatency);
+    _audioPlayerWrong.setPlayerMode(PlayerMode.lowLatency);
 
     // ReleaseMode.stop: Ses bitince durur, tekrar çalmaya hazır olur
     _audioPlayerBeepK.setReleaseMode(ReleaseMode.stop);
@@ -66,7 +61,50 @@ class AudioService {
     _audioPlayerWrong.setReleaseMode(ReleaseMode.stop);
 
     _isLoaded = true;
-    print('🎵 Tüm ses dosyaları yüklendi ve cache\'lendi!');
+    print('🎵 Tüm ses dosyaları yüklendi ve LOW_LATENCY mode aktif!');
+  }
+
+  /// Ses dosyasını timeout ve retry mekanizması ile yükle
+  Future<void> _loadAudioWithRetry(
+    AudioPlayer player,
+    String assetName, {
+    int maxRetries = 3,
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        print('🔄 $assetName yükleniyor (deneme $attempt/$maxRetries)...');
+
+        // Her denemede player'ı temizle (timeout sonrası state problemi olabilir)
+        if (attempt > 1) {
+          await player.stop();
+          await player.release();
+          print('🔧 Player reset edildi');
+        }
+
+        await player.setSource(AssetSource(assetName)).timeout(
+          timeout,
+          onTimeout: () {
+            throw TimeoutException(
+              '$assetName yüklenirken timeout ($timeout)',
+              timeout,
+            );
+          },
+        );
+
+        print('✅ $assetName loaded');
+        return; // Başarılı, fonksiyondan çık
+      } catch (e) {
+        print('⚠️ $assetName hata (deneme $attempt/$maxRetries): $e');
+
+        if (attempt == maxRetries) {
+          throw Exception('$assetName $maxRetries denemeden sonra yüklenemedi: $e');
+        }
+
+        // Kısa bir bekleme süresi ekle (exponential backoff)
+        await Future.delayed(Duration(milliseconds: 300 * attempt));
+      }
+    }
   }
 
   /// İlk okutma sesi (beepk.mp3)

@@ -24,6 +24,9 @@ class _ProductControlViewState extends State<ProductControlView> {
   final Map<String, int> _quantityMap = {};
   final Map<String, int> _iskontoMap = {};
 
+  // Scanner'dan controller güncellenirken listener tetiklenmemesi için
+  bool _isUpdatingFromScanner = false;
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +53,9 @@ class _ProductControlViewState extends State<ProductControlView> {
   }
 
   void _filterProducts() {
+    // Scanner'dan güncelleme yapılıyorsa ignore et (listener çift çağrıyı önle)
+    if (_isUpdatingFromScanner) return;
+
     final query = _searchController.text.toLowerCase();
     final filtered =
         _allProducts.where((product) {
@@ -76,17 +82,27 @@ class _ProductControlViewState extends State<ProductControlView> {
   }
 
   void _onBarcodeScanned(String barcode) {
+    // Flag set et ki listener tetiklenmesin
+    _isUpdatingFromScanner = true;
     _searchController.text = barcode;
+    _isUpdatingFromScanner = false;
+
+    // Listener zaten _filterProducts çağıracak ama flag yüzünden çalışmayacak, manuel çağır
     _filterProducts();
-    Navigator.of(context).pop(); // Kamera sayfasını kapat
   }
 
   Future<void> _openBarcodeScanner() async {
-    await Navigator.of(context).push(
+    // Scanner page'den dönen barkodu al
+    final scannedBarcode = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (context) => BarcodeScannerPage(onScanned: _onBarcodeScanned),
+        builder: (context) => const BarcodeScannerPage(),
       ),
     );
+
+    // Page kapandıktan SONRA barkodu işle (state'i korunmuş olacak)
+    if (scannedBarcode != null && scannedBarcode.isNotEmpty && mounted) {
+      _onBarcodeScanned(scannedBarcode);
+    }
   }
 
   @override
@@ -138,7 +154,11 @@ class _ProductControlViewState extends State<ProductControlView> {
                           onPressed: _clearSearch,
                         ),
               ),
-              onChanged: (_) => _filterProducts(),
+              onChanged: (_) {
+                // Scanner'dan güncelleme yapılıyorsa ignore et
+                if (_isUpdatingFromScanner) return;
+                _filterProducts();
+              },
             ),
             SizedBox(height: 2.h),
             _filteredProducts.isEmpty

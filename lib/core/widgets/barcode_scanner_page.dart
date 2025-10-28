@@ -3,8 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class BarcodeScannerPage extends StatefulWidget {
-  final void Function(String barcode) onScanned;
-  const BarcodeScannerPage({super.key, required this.onScanned});
+  const BarcodeScannerPage({super.key});
 
   @override
   State<BarcodeScannerPage> createState() => _BarcodeScannerPageState();
@@ -25,11 +24,9 @@ class _BarcodeScannerPageState extends State<BarcodeScannerPage> {
           if (barcode != null && barcode.isNotEmpty) {
             _isProcessing = true; // İşlem başladı
 
-            widget.onScanned(barcode);
-
-            // Güvenli navigation
+            // Barkodu result olarak geri döndür ve page'i kapat
             if (mounted && Navigator.canPop(context)) {
-              Navigator.of(context).pop();
+              Navigator.of(context).pop(barcode);
             }
           }
         },

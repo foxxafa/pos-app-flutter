@@ -37,6 +37,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   Map<String, Future<String?>> _imageFutures = {};
   bool _isLoading = true;
 
+  // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
+  bool _isUpdatingFromScanner = false;
+
   // cart_view2.dart'tan eklenen image download timer
   Timer? _imageDownloadTimer;
 
@@ -165,19 +168,31 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   // --- Barcode Scanning ---
   void _onBarcodeScanned(String barcode) {
     if (!mounted) return;
+
+    // Flag set et ki TextField'ın onChanged'i tetiklenmesin
+    _isUpdatingFromScanner = true;
     _searchController.text = barcode;
+    _isUpdatingFromScanner = false;
+
     _filterProducts();
+
     if (Navigator.canPop(context)) {
       Navigator.of(context).pop();
     }
   }
 
   Future<void> _openBarcodeScanner() async {
-    await Navigator.of(context).push(
+    // Scanner page'den dönen barkodu al
+    final scannedBarcode = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (context) => BarcodeScannerPage(onScanned: _onBarcodeScanned),
+        builder: (context) => const BarcodeScannerPage(),
       ),
     );
+
+    // Page kapandıktan SONRA barkodu işle (state'i korunmuş olacak)
+    if (scannedBarcode != null && scannedBarcode.isNotEmpty && mounted) {
+      _onBarcodeScanned(scannedBarcode);
+    }
   }
 
   // --- Build Method ---
@@ -222,7 +237,11 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 ],
               ),
             ),
-            onChanged: (value) => _filterProducts(queryOverride: value),
+            onChanged: (value) {
+              // Scanner'dan güncelleme yapılıyorsa ignore et (çift çağrıyı önle)
+              if (_isUpdatingFromScanner) return;
+              _filterProducts(queryOverride: value);
+            },
           ),
         ),
         actions: [

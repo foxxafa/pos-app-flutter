@@ -62,6 +62,12 @@ class _CartViewState extends State<CartView> {
   final Map<String, List<BirimModel>> _productBirimlerMap = {}; // Her ürün için birimler
   final Map<String, BirimModel?> _selectedBirimMap = {}; // Her ürün için seçili birim
 
+  // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
+  bool _isUpdatingFromScanner = false;
+
+  // El terminali için debounce timer (çift eklemeyi önler)
+  Timer? _scanDebounceTimer;
+
   Timer? _imageDownloadTimer;
 
   // --- Lifecycle Methods ---
@@ -134,6 +140,7 @@ class _CartViewState extends State<CartView> {
   @override
   void dispose() {
     _imageDownloadTimer?.cancel();
+    _scanDebounceTimer?.cancel();
     _barcodeFocusNode.dispose();
     _barcodeFocusNode2.dispose();
     _searchController2.dispose();
@@ -411,57 +418,29 @@ class _CartViewState extends State<CartView> {
   void _onBarcodeScanned(String barcode) {
     if (!mounted) return; // Widget dispose edilmişse çık
 
-    // 🛡️ Duplicate scan prevention: Aynı barkod 500ms içinde tekrar okunursa ignore et
-    final now = DateTime.now();
-    if (_lastScannedBarcode == barcode && _lastScanTime != null) {
-      final timeDiff = now.difference(_lastScanTime!).inMilliseconds;
-      if (timeDiff < 500) {
-        print('⚠️ Duplicate barcode scan ignored: $barcode (${timeDiff}ms ago)');
-        return; // Çok kısa sürede aynı barkod tekrar okundu - ignore et!
-      }
-    }
-
-    // ✅ Yeni barkod okuması - kaydet
-    _lastScannedBarcode = barcode;
-    _lastScanTime = now;
     print('✅ Barcode scanned: $barcode');
 
-    _searchController2.text = barcode; // Tek controller kullan
-    _filterProducts(queryOverride: barcode);
+    // Flag set et ki AppBar TextField'ın onChanged'i tetiklenmesin
+    _isUpdatingFromScanner = true;
+    _searchController2.text = barcode;
+    _isUpdatingFromScanner = false;
 
-    // Barkod sonucuna göre ses çal
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (!mounted) return; // Widget hala mevcut mu kontrol et
-
-      final query = barcode.trimRight().toLowerCase();
-  final queryWords = query.split(' ').where((w) => w.isNotEmpty).toList();
-      final filtered = _allProducts.where((product) {
-        final name = product.urunAdi.toLowerCase();
-        final stokKodu = product.stokKodu.toLowerCase(); // Stok kodu araması ekle
-        final barcodes = [product.barcode1, product.barcode2, product.barcode3, product.barcode4]
-            .map((b) => b.toLowerCase())
-            .toList();
-        return queryWords.every((word) =>
-          name.contains(word) ||
-          stokKodu.contains(word) || // Stok kodunda ara
-          barcodes.any((b) => b.contains(word))
-        );
-      }).toList();
-
-      if (filtered.isNotEmpty) {
-        playBeepForProduct(filtered.first); // ✅ Product'ı direkt gönder
-      } else {
-        playWrong(); // Ürün bulunamadı - wrong sesi
-      }
-    });
+    // _filterProducts içinde zaten ses çalıyor, burada tekrar çalmasına gerek yok
+    _filterProducts();
   }
 
   Future<void> _openBarcodeScanner() async {
-    await Navigator.of(context).push(
+    // Scanner page'den dönen barkodu al
+    final scannedBarcode = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (context) => BarcodeScannerPage(onScanned: _onBarcodeScanned),
+        builder: (context) => const BarcodeScannerPage(),
       ),
     );
+
+    // Page kapandıktan SONRA barkodu işle (state'i korunmuş olacak)
+    if (scannedBarcode != null && scannedBarcode.isNotEmpty && mounted) {
+      _onBarcodeScanned(scannedBarcode);
+    }
   }
 
   // --- Filtering & Searching ---
@@ -469,22 +448,6 @@ class _CartViewState extends State<CartView> {
     final provider = Provider.of<CartProvider>(context, listen: false);
     final query = (queryOverride ?? _searchController2.text).trimRight().toLowerCase();
     final fromUI = queryOverride != null;
-
-    // 🛡️ Duplicate barcode prevention: Tam sayı barkod için tekrar kontrolü
-    // (Scanner otomatik okumalarda - onChanged'den gelir)
-    if (query.isNotEmpty && RegExp(r'^\d+$').hasMatch(query)) {
-      final now = DateTime.now();
-      if (_lastScannedBarcode == query && _lastScanTime != null) {
-        final timeDiff = now.difference(_lastScanTime!).inMilliseconds;
-        if (timeDiff < 500) {
-          print('⚠️ Duplicate barcode scan ignored in _filterProducts: $query (${timeDiff}ms ago)');
-          return; // Çok kısa sürede aynı barkod tekrar okundu - ignore et!
-        }
-      }
-      _lastScannedBarcode = query;
-      _lastScanTime = now;
-      print('✅ Barcode processed in _filterProducts: $query');
-    }
 
     if (query.isEmpty) {
       setState(() {
@@ -765,7 +728,11 @@ class _CartViewState extends State<CartView> {
                 ],
               ),
             ),
-            onChanged: (value) => _filterProducts(queryOverride: value),
+            onChanged: (value) {
+              // Scanner'dan güncelleme yapılıyorsa ignore et (çift çağrıyı önle)
+              if (_isUpdatingFromScanner) return;
+              _filterProducts(queryOverride: value);
+            },
           ),
         ),
         actions: [
@@ -783,11 +750,17 @@ class _CartViewState extends State<CartView> {
                   focusNode: _barcodeFocusNode,
                   controller: _searchController2, // Tek controller kullan - controller sync kaldırıldı
                   onChanged: (value) {
-                    // El terminali için her değişiklikte filtrele
-                    _filterProducts();
+                    // El terminali için debounce: Timer'ı iptal et ve yeniden başlat
+                    _scanDebounceTimer?.cancel();
+                    _scanDebounceTimer = Timer(const Duration(milliseconds: 150), () {
+                      if (mounted) {
+                        _filterProducts();
+                      }
+                    });
                   },
                   onSubmitted: (value) {
-                    // Enter tuşuna basıldığında da işle
+                    // Enter tuşuna basıldığında timer'ı iptal et ve hemen işle
+                    _scanDebounceTimer?.cancel();
                     if (value.isNotEmpty) {
                       _filterProducts();
                     }
