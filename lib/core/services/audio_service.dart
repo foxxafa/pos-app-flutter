@@ -18,115 +18,98 @@ class AudioService {
   final AudioPlayer _audioPlayerDit = AudioPlayer(playerId: 'global_ditdit');
   final AudioPlayer _audioPlayerWrong = AudioPlayer(playerId: 'global_wrongk');
 
-  bool _isLoaded = false;
-  bool get isLoaded => _isLoaded;
+  // Track loading state per audio file
+  bool _beepKLoaded = false;
+  bool _boopKLoaded = false;
+  bool _ditLoaded = false;
+  bool _wrongLoaded = false;
 
-  /// Ses dosyalarını yükle (sadece ilk çağrıda yüklenir!)
-  Future<void> ensureLoaded() async {
-    if (_isLoaded) {
-      print('🎵 Ses dosyaları zaten yüklü (cache\'ten kullanılıyor)');
-      return;
-    }
+  bool get isLoaded => _beepKLoaded && _boopKLoaded && _ditLoaded && _wrongLoaded;
 
-    print('⏳ Ses dosyaları yükleniyor...');
-
-    // Volume ayarları
-    _audioPlayerBeepK.setVolume(0.8);
-    _audioPlayerBoopK.setVolume(0.8);
-    _audioPlayerDit.setVolume(0.8);
-    _audioPlayerWrong.setVolume(0.8);
-
-    // 🚀 Ses dosyalarını SIRALI yükle (timeout ve retry mekanizması ile)
-    try {
-      await _loadAudioWithRetry(_audioPlayerBeepK, 'beepk.mp3');
-      await _loadAudioWithRetry(_audioPlayerBoopK, 'boopk.mp3');
-      await _loadAudioWithRetry(_audioPlayerDit, 'ditdit.mp3');
-      await _loadAudioWithRetry(_audioPlayerWrong, 'wrongk.mp3');
-    } catch (e) {
-      print('❌ Ses dosyaları yüklenemedi (tüm denemeler başarısız): $e');
-      _isLoaded = false; // Tekrar denenebilsin
-      rethrow; // Hatayı yukarı ilet ki cart_view.dart catch bloğu yakalasın
-    }
-
-    // Source set edildikten SONRA player mode ve release mode ayarla
-    _audioPlayerBeepK.setPlayerMode(PlayerMode.lowLatency);
-    _audioPlayerBoopK.setPlayerMode(PlayerMode.lowLatency);
-    _audioPlayerDit.setPlayerMode(PlayerMode.lowLatency);
-    _audioPlayerWrong.setPlayerMode(PlayerMode.lowLatency);
-
-    // ReleaseMode.stop: Ses bitince durur, tekrar çalmaya hazır olur
-    _audioPlayerBeepK.setReleaseMode(ReleaseMode.stop);
-    _audioPlayerBoopK.setReleaseMode(ReleaseMode.stop);
-    _audioPlayerDit.setReleaseMode(ReleaseMode.stop);
-    _audioPlayerWrong.setReleaseMode(ReleaseMode.stop);
-
-    _isLoaded = true;
-    print('🎵 Tüm ses dosyaları yüklendi ve LOW_LATENCY mode aktif!');
-  }
-
-  /// Ses dosyasını timeout ve retry mekanizması ile yükle
-  Future<void> _loadAudioWithRetry(
+  /// Lazy load: Her ses dosyası ilk çalındığında yükle
+  Future<void> _ensureAudioLoaded(
     AudioPlayer player,
-    String assetName, {
-    int maxRetries = 3,
-    Duration timeout = const Duration(seconds: 10),
-  }) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        print('🔄 $assetName yükleniyor (deneme $attempt/$maxRetries)...');
+    String assetName,
+    bool Function() isLoadedGetter,
+    void Function(bool) isLoadedSetter,
+  ) async {
+    if (isLoadedGetter()) return; // Zaten yüklü
 
-        // Her denemede player'ı temizle (timeout sonrası state problemi olabilir)
-        if (attempt > 1) {
-          await player.stop();
-          await player.release();
-          print('🔧 Player reset edildi');
-        }
+    try {
+      print('🔄 $assetName lazy loading...');
 
-        await player.setSource(AssetSource(assetName)).timeout(
-          timeout,
-          onTimeout: () {
-            throw TimeoutException(
-              '$assetName yüklenirken timeout ($timeout)',
-              timeout,
-            );
-          },
-        );
+      // Volume ve mode ayarları
+      player.setVolume(0.8);
 
-        print('✅ $assetName loaded');
-        return; // Başarılı, fonksiyondan çık
-      } catch (e) {
-        print('⚠️ $assetName hata (deneme $attempt/$maxRetries): $e');
+      // Ses dosyasını yükle (timeout: 3 saniye - daha agresif)
+      await player.setSource(AssetSource(assetName)).timeout(
+        Duration(seconds: 3),
+        onTimeout: () {
+          throw TimeoutException('$assetName timeout', Duration(seconds: 3));
+        },
+      );
 
-        if (attempt == maxRetries) {
-          throw Exception('$assetName $maxRetries denemeden sonra yüklenemedi: $e');
-        }
+      // Source set edildikten SONRA player mode ve release mode ayarla
+      player.setPlayerMode(PlayerMode.lowLatency);
+      player.setReleaseMode(ReleaseMode.stop);
 
-        // Kısa bir bekleme süresi ekle (exponential backoff)
-        await Future.delayed(Duration(milliseconds: 300 * attempt));
-      }
+      isLoadedSetter(true);
+      print('✅ $assetName loaded');
+    } catch (e) {
+      print('⚠️ $assetName yüklenemedi: $e');
+      isLoadedSetter(false);
+      // Hata fırlatma - sessiz devam et
     }
   }
 
   /// İlk okutma sesi (beepk.mp3)
   Future<void> playBeepK() async {
+    await _ensureAudioLoaded(
+      _audioPlayerBeepK,
+      'beepk.mp3',
+      () => _beepKLoaded,
+      (val) => _beepKLoaded = val,
+    );
+    if (!_beepKLoaded) return; // Yüklenemedi, sessiz devam et
     await _audioPlayerBeepK.stop();
     await _audioPlayerBeepK.resume();
   }
 
   /// Tekrar okutma sesi (boopk.mp3)
   Future<void> playBoopK() async {
+    await _ensureAudioLoaded(
+      _audioPlayerBoopK,
+      'boopk.mp3',
+      () => _boopKLoaded,
+      (val) => _boopKLoaded = val,
+    );
+    if (!_boopKLoaded) return; // Yüklenemedi, sessiz devam et
     await _audioPlayerBoopK.stop();
     await _audioPlayerBoopK.resume();
   }
 
   /// Suspended ürün sesi (ditdit.mp3)
   Future<void> playDit() async {
+    await _ensureAudioLoaded(
+      _audioPlayerDit,
+      'ditdit.mp3',
+      () => _ditLoaded,
+      (val) => _ditLoaded = val,
+    );
+    if (!_ditLoaded) return; // Yüklenemedi, sessiz devam et
     await _audioPlayerDit.stop();
     await _audioPlayerDit.resume();
   }
 
   /// Hata sesi (wrongk.mp3)
   Future<void> playWrong() async {
+    await _ensureAudioLoaded(
+      _audioPlayerWrong,
+      'wrongk.mp3',
+      () => _wrongLoaded,
+      (val) => _wrongLoaded = val,
+    );
+    if (!_wrongLoaded) return; // Yüklenemedi, sessiz devam et
     await _audioPlayerWrong.stop();
     await _audioPlayerWrong.resume();
   }

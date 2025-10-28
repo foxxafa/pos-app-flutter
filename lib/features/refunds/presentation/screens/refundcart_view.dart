@@ -94,25 +94,13 @@ class _RefundCartViewState extends State<RefundCartView> {
   }
 
   Future<void> _initializeAudioAndScanner() async {
-    // ✅ AudioService - main.dart'ta başlatılmış olmalı, burası kontrol eder
-    if (!AudioService.instance.isLoaded) {
-      print('⏳ Ses dosyaları henüz yüklenmedi, bekleniyor...');
-      try {
-        // Eğer main.dart'ta yüklenmediyse burada yükle (refund cart açılması gecikebilir)
-        await AudioService.instance.ensureLoaded();
-        print('✅ Ses dosyaları başarıyla yüklendi');
-      } catch (e) {
-        print('⚠️ Ses dosyaları yüklenemedi (devam ediliyor): $e');
-        // Ses yüklenemese bile uygulama devam etsin
-      }
-    } else {
-      print('✅ Ses dosyaları zaten yüklü (main.dart\'ta yüklendi)');
-    }
+    // ✅ AudioService - Lazy loading kullanıyor, pre-load gerekli değil
+    print('✅ AudioService hazır (lazy loading ile ilk çalışta yüklenecek)');
 
     _audioLoaded = true;
     _checkLoadingComplete();
 
-    // ✅ Ses dosyaları hazır - ŞIMDI scanner'ı ekle
+    // ✅ Scanner'ı ekle
     _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
     HardwareKeyboard.instance.addHandler(_scannerHandler);
   }
@@ -520,6 +508,7 @@ class _RefundCartViewState extends State<RefundCartView> {
         foregroundColor: Colors.white,
         elevation: 2,
         centerTitle: true,
+        titleSpacing: 0,
         title: SizedBox(
           height: 40,
           child: TextField(

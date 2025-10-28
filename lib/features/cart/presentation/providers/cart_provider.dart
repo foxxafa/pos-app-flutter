@@ -263,10 +263,15 @@ class CartProvider extends ChangeNotifier {
 
   Future<void> clearCart() async {
     print("DEBUG: CartProvider.clearCart() called - items before clear: ${_items.length}");
+
+    // ✅ ÖNCE debounce timer'ı iptal et (race condition önleme)
+    _debounceTimer?.cancel();
+    _hasPendingSave = false;
+
     _items.clear();
     print("DEBUG: CartProvider items cleared - current count: ${_items.length}");
 
-    // ✅ Database kaydetme başarısız olsa bile devam et
+    // ✅ Database'i HEMEN temizle (debounce yok)
     try {
       await _saveCartToDatabase();
       print("DEBUG: CartProvider _saveCartToDatabase() completed successfully");
@@ -275,7 +280,9 @@ class CartProvider extends ChangeNotifier {
       // Hata olsa bile devam et - memory'den zaten temizlendi
     }
 
-    notifyListeners();
+    // ✅ Direkt notifyListeners (debounce bypass)
+    // super.notifyListeners() çağırarak debounce mekanizmasını atla
+    super.notifyListeners();
     print("DEBUG: CartProvider notifyListeners() completed");
   }
 

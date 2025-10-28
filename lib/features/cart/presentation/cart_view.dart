@@ -89,25 +89,13 @@ class _CartViewState extends State<CartView> {
   }
 
   Future<void> _initializeAudioAndScanner() async {
-    // ✅ AudioService - main.dart'ta başlatılmış olmalı, burası kontrol eder
-    if (!AudioService.instance.isLoaded) {
-      print('⏳ Ses dosyaları henüz yüklenmedi, bekleniyor...');
-      try {
-        // Eğer main.dart'ta yüklenmediyse burada yükle (cart açılması gecikebilir)
-        await AudioService.instance.ensureLoaded();
-        print('✅ Ses dosyaları başarıyla yüklendi');
-      } catch (e) {
-        print('⚠️ Ses dosyaları yüklenemedi (devam ediliyor): $e');
-        // Ses yüklenemese bile uygulama devam etsin
-      }
-    } else {
-      print('✅ Ses dosyaları zaten yüklü (main.dart\'ta yüklendi)');
-    }
+    // ✅ AudioService - Lazy loading kullanıyor, pre-load gerekli değil
+    print('✅ AudioService hazır (lazy loading ile ilk çalışta yüklenecek)');
 
     _audioLoaded = true;
     _checkLoadingComplete();
 
-    // ✅ Ses dosyaları hazır - ŞIMDI scanner'ı ekle
+    // ✅ Scanner'ı ekle
     _scannerHandler = ScannerService.createHandler(_clearAndFocusBarcode);
     HardwareKeyboard.instance.addHandler(_scannerHandler);
   }
@@ -696,6 +684,7 @@ class _CartViewState extends State<CartView> {
         foregroundColor: Colors.white,
         elevation: 2,
         centerTitle: true,
+        titleSpacing: 0,
         leading: IconButton(
           icon: Icon(Icons.menu, size: 25.sp),
           onPressed: () => Navigator.push(
@@ -794,6 +783,15 @@ class _CartViewState extends State<CartView> {
 
         // CartView2'den döndükten sonra scan sayacını temizle
         _cleanupScanCounters();
+
+        // ✅ Sepet tamamen boşsa tüm scan counter'ları temizle
+        final provider = Provider.of<CartProvider>(context, listen: false);
+        if (provider.items.isEmpty) {
+          setState(() {
+            _productScanCount.clear();
+            print('🧹 Sepet boş - tüm scan counter\'lar temizlendi');
+          });
+        }
       },
       behavior: HitTestBehavior.translucent,
       child: Container(
@@ -860,8 +858,9 @@ class _CartViewState extends State<CartView> {
         if (!_priceControllers.containsKey(key)) {
           final cartItem = provider.items[key];
           final selectedType = getBirimTipiFromProduct(product);
+          // ✅ Price controller indirimli fiyatı göstermeli (KDV'siz)
           final initialPrice = cartItem != null
-              ? cartItem.birimFiyat.toStringAsFixed(2)
+              ? (cartItem.birimFiyat * (1 - cartItem.iskonto / 100)).toStringAsFixed(2)
               : selectedType == 'Unit'
               ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
               : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
@@ -1460,6 +1459,55 @@ class _ProductDetailsState extends State<ProductDetails> {
           widget.discountController.text = _oldDiscountValue;
         }
       }
+
+      // ✅ Focus kaybında provider'a kaydet
+      // ANCAK sadece ürün sepette varsa (quantity > 0)
+      if (widget.quantity <= 0) {
+        // Ürün sepette yok, kaydetme!
+        return;
+      }
+
+      final selectedType = widget.getBirimTipi() ?? 'Unit';
+      final val = widget.discountController.text;
+      if (val.isEmpty) {
+        final originalPrice = selectedType == 'Unit' ? widget.product.adetFiyati : widget.product.kutuFiyati;
+        widget.provider.addOrUpdateItem(
+          stokKodu: widget.product.stokKodu,
+          miktar: 0,
+          iskonto: 0,
+          birimTipi: selectedType,
+          urunAdi: widget.product.urunAdi,
+          birimFiyat: double.tryParse(originalPrice.toString()) ?? 0,
+          vat: widget.product.vat,
+          imsrc: widget.product.imsrc,
+          adetFiyati: widget.product.adetFiyati,
+          kutuFiyati: widget.product.kutuFiyati,
+          urunBarcode: widget.product.barcode1,
+          selectedBirimKey: widget.selectedBirim?.key,
+        );
+      } else {
+        int discountPercent = int.tryParse(val) ?? 0;
+        if (discountPercent > 100) discountPercent = 100;
+
+        final originalPrice = selectedType == 'Unit'
+            ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+            : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+
+        widget.provider.addOrUpdateItem(
+            stokKodu: widget.product.stokKodu,
+            miktar: 0,
+            iskonto: discountPercent,
+            birimTipi: selectedType,
+            urunAdi: widget.product.urunAdi,
+            birimFiyat: originalPrice,
+            vat: widget.product.vat,
+            imsrc: widget.product.imsrc,
+            adetFiyati: widget.product.adetFiyati,
+            kutuFiyati: widget.product.kutuFiyati,
+            urunBarcode: widget.product.barcode1,
+            selectedBirimKey: widget.selectedBirim?.key,
+        );
+      }
     }
   }
 
@@ -1475,6 +1523,45 @@ class _ProductDetailsState extends State<ProductDetails> {
           widget.priceController.text = _oldPriceValue;
         }
       }
+
+      // ✅ Focus kaybında provider'a kaydet
+      // ANCAK sadece ürün sepette varsa (quantity > 0)
+      if (widget.quantity <= 0) {
+        // Ürün sepette yok, kaydetme!
+        return;
+      }
+
+      final selectedType = widget.getBirimTipi() ?? 'Unit';
+      final yeniFiyat = double.tryParse(widget.priceController.text.replaceAll(',', '.')) ?? 0;
+      var orjinalFiyat = selectedType == 'Unit'
+          ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+          : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+      if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+
+      final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+          ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+          : 0;
+
+      widget.provider.addOrUpdateItem(
+        stokKodu: widget.product.stokKodu,
+        urunAdi: widget.product.urunAdi,
+        birimFiyat: orjinalFiyat,
+        urunBarcode: widget.product.barcode1,
+        miktar: 0,
+        iskonto: indirimOrani,
+        birimTipi: selectedType,
+        vat: widget.product.vat,
+        imsrc: widget.product.imsrc,
+        adetFiyati: widget.product.adetFiyati,
+        kutuFiyati: widget.product.kutuFiyati,
+        selectedBirimKey: widget.selectedBirim?.key,
+      );
+
+      // Fiyatı formatla
+      final formattedValue = yeniFiyat.toStringAsFixed(2);
+      if (widget.priceController.text != formattedValue) {
+        widget.priceController.text = formattedValue;
+      }
     }
   }
 
@@ -1483,30 +1570,13 @@ class _ProductDetailsState extends State<ProductDetails> {
     final customer = Provider.of<SalesCustomerProvider>(context, listen: false).selectedCustomer;
     final selectedType = widget.getBirimTipi() ?? 'Unit';
 
-    // Senkronizasyon - sadece focus yokken VE price focus da yokken güncelle
-    final anlikIskonto = context.watch<CartProvider>().getIskonto(widget.product.stokKodu);
-    if (!widget.discountFocusNode.hasFocus && !widget.priceFocusNode.hasFocus) {
-      final expectedText = anlikIskonto > 0 ? anlikIskonto.toString() : '';
-      if (widget.discountController.text != expectedText) {
-        // Post frame callback ile güncelle, böylece listener ile çakışma olmaz
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !widget.discountFocusNode.hasFocus && !widget.priceFocusNode.hasFocus) {
-            widget.discountController.text = expectedText;
-          }
-        });
-      }
-    }
+    // ✅ MİMARİ DEĞİŞİKLİK: Price ve Discount alanları SADECE kullanıcı tarafından yönetilir
+    // Provider'dan otomatik güncelleme YAPILMAZ (race condition'ı önler)
+    // Sadece quantity değiştiğinde veya başka bir ürün seçildiğinde güncelleme yapılır
 
-    final anlikFiyat = context.watch<CartProvider>().getBirimFiyat(widget.product.stokKodu, selectedType);
-    if (!widget.priceFocusNode.hasFocus) {
-      if(anlikFiyat > 0 && widget.priceController.text != anlikFiyat.toStringAsFixed(2)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && !widget.priceFocusNode.hasFocus) {
-            widget.priceController.text = anlikFiyat.toStringAsFixed(2);
-          }
-        });
-      }
-    }
+    // NOT: Discount controller'ı da artık otomatik güncelleme yapmıyor
+    // Kullanıcı fiyat/indirim girdikten sonra provider'a kaydediliyor
+    // Provider tekrar notify ettiğinde bu değerler zaten doğru olduğu için değişmiyor
 
 
     return Column(
@@ -1678,6 +1748,8 @@ class _ProductDetailsState extends State<ProductDetails> {
           contentPadding: EdgeInsets.zero,
         ),
         onChanged: (value) {
+          // ✅ MİMARİ DEĞİŞİKLİK: Sadece discount controller'ı güncelle
+          // Provider'a KAYDETME (onEditingComplete'te kaydedilecek)
           final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
           var orjinalFiyat = selectedType == 'Unit'
               ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
@@ -1688,13 +1760,28 @@ class _ProductDetailsState extends State<ProductDetails> {
               ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
               : 0;
 
-          // İndirim controller'ı her zaman güncelle (focus kontrolü kaldırıldı)
-          widget.discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+          // Sadece discount controller'ı güncelle (local state)
+          if (!widget.discountFocusNode.hasFocus) {
+            widget.discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+          }
+        },
+        onEditingComplete: () {
+          widget.formatPriceField();
+          // ✅ Provider'a KAYDETMartık burada kaydet (focus kaybında)
+          final yeniFiyat = double.tryParse(widget.priceController.text.replaceAll(',', '.')) ?? 0;
+          var orjinalFiyat = selectedType == 'Unit'
+              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+          if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+
+          final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+              ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+              : 0;
 
           widget.provider.addOrUpdateItem(
             stokKodu: widget.product.stokKodu,
             urunAdi: widget.product.urunAdi,
-            birimFiyat: orjinalFiyat, // ✅ DÜZELTME: Her zaman orijinal fiyat kullanılmalı
+            birimFiyat: orjinalFiyat,
             urunBarcode: widget.product.barcode1,
             miktar: 0,
             iskonto: indirimOrani,
@@ -1703,15 +1790,37 @@ class _ProductDetailsState extends State<ProductDetails> {
             imsrc: widget.product.imsrc,
             adetFiyati: widget.product.adetFiyati,
             kutuFiyati: widget.product.kutuFiyati,
-            selectedBirimKey: widget.selectedBirim?.key, // ✅ Seçili birimi kaydet
+            selectedBirimKey: widget.selectedBirim?.key,
           );
-        },
-        onEditingComplete: () {
-          widget.formatPriceField();
           widget.priceFocusNode.unfocus();
         },
         onSubmitted: (value) {
           widget.formatPriceField();
+          // ✅ Provider'a KAYDET (submit'te)
+          final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
+          var orjinalFiyat = selectedType == 'Unit'
+              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+          if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+
+          final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+              ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
+              : 0;
+
+          widget.provider.addOrUpdateItem(
+            stokKodu: widget.product.stokKodu,
+            urunAdi: widget.product.urunAdi,
+            birimFiyat: orjinalFiyat,
+            urunBarcode: widget.product.barcode1,
+            miktar: 0,
+            iskonto: indirimOrani,
+            birimTipi: selectedType,
+            vat: widget.product.vat,
+            imsrc: widget.product.imsrc,
+            adetFiyati: widget.product.adetFiyati,
+            kutuFiyati: widget.product.kutuFiyati,
+            selectedBirimKey: widget.selectedBirim?.key,
+          );
           widget.priceFocusNode.unfocus();
         },
       ),
@@ -1739,9 +1848,40 @@ class _ProductDetailsState extends State<ProductDetails> {
             ),
             style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
             onChanged: (val) {
+              // ✅ MİMARİ DEĞİŞİKLİK: Sadece price controller'ı güncelle
+              // Provider'a KAYDETME (focus kaybında kaydedilecek)
               if (val.isEmpty) {
                 final originalPrice = selectedType == 'Unit' ? widget.product.adetFiyati : widget.product.kutuFiyati;
                 widget.priceController.text = (double.tryParse(originalPrice.toString()) ?? 0).toStringAsFixed(2);
+                return;
+              }
+
+              int discountPercent = int.tryParse(val) ?? 0;
+              if (discountPercent > 100) discountPercent = 100;
+
+              final originalPrice = selectedType == 'Unit'
+                  ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+                  : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+
+              final discountedPrice = originalPrice * (1 - (discountPercent / 100));
+
+              // Sadece price controller'ı güncelle (local state)
+              if (!widget.priceFocusNode.hasFocus) {
+                widget.priceController.text = discountedPrice.toStringAsFixed(2);
+              }
+
+              // Yüzde formatını düzelt
+              if (val != discountPercent.toString()) {
+                widget.discountController.text = discountPercent.toString();
+                widget.discountController.selection = TextSelection.fromPosition(TextPosition(offset: widget.discountController.text.length));
+              }
+            },
+            // ✅ Focus kaybında provider'a kaydet
+            onEditingComplete: () {
+              // Discount field submit edildiğinde provider'a kaydet
+              final val = widget.discountController.text;
+              if (val.isEmpty) {
+                final originalPrice = selectedType == 'Unit' ? widget.product.adetFiyati : widget.product.kutuFiyati;
                 widget.provider.addOrUpdateItem(
                   stokKodu: widget.product.stokKodu,
                   miktar: 0,
@@ -1754,40 +1894,32 @@ class _ProductDetailsState extends State<ProductDetails> {
                   adetFiyati: widget.product.adetFiyati,
                   kutuFiyati: widget.product.kutuFiyati,
                   urunBarcode: widget.product.barcode1,
-                  selectedBirimKey: widget.selectedBirim?.key, // ✅ Seçili birimi kaydet
+                  selectedBirimKey: widget.selectedBirim?.key,
                 );
-                return;
+              } else {
+                int discountPercent = int.tryParse(val) ?? 0;
+                if (discountPercent > 100) discountPercent = 100;
+
+                final originalPrice = selectedType == 'Unit'
+                    ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+                    : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+
+                widget.provider.addOrUpdateItem(
+                    stokKodu: widget.product.stokKodu,
+                    miktar: 0,
+                    iskonto: discountPercent,
+                    birimTipi: selectedType,
+                    urunAdi: widget.product.urunAdi,
+                    birimFiyat: originalPrice,
+                    vat: widget.product.vat,
+                    imsrc: widget.product.imsrc,
+                    adetFiyati: widget.product.adetFiyati,
+                    kutuFiyati: widget.product.kutuFiyati,
+                    urunBarcode: widget.product.barcode1,
+                    selectedBirimKey: widget.selectedBirim?.key,
+                );
               }
-
-              int discountPercent = int.tryParse(val) ?? 0;
-              if (discountPercent > 100) discountPercent = 100;
-
-              final originalPrice = selectedType == 'Unit'
-                  ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-                  : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
-
-              final discountedPrice = originalPrice * (1 - (discountPercent / 100));
-              widget.priceController.text = discountedPrice.toStringAsFixed(2);
-
-              widget.provider.addOrUpdateItem(
-                  stokKodu: widget.product.stokKodu,
-                  miktar: 0,
-                  iskonto: discountPercent,
-                  birimTipi: selectedType,
-                  urunAdi: widget.product.urunAdi,
-                  birimFiyat: originalPrice, // ✅ DÜZELTME: Her zaman orijinal fiyat kullanılmalı
-                  vat: widget.product.vat,
-                  imsrc: widget.product.imsrc,
-                  adetFiyati: widget.product.adetFiyati,
-                  kutuFiyati: widget.product.kutuFiyati,
-                  urunBarcode: widget.product.barcode1,
-                  selectedBirimKey: widget.selectedBirim?.key, // ✅ Seçili birimi kaydet
-              );
-
-              if (val != discountPercent.toString()) {
-                widget.discountController.text = discountPercent.toString();
-                widget.discountController.selection = TextSelection.fromPosition(TextPosition(offset: widget.discountController.text.length));
-              }
+              widget.discountFocusNode.unfocus();
             },
           ),
         ),

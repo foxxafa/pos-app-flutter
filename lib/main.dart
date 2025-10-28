@@ -9,7 +9,6 @@ import 'package:pos_app/core/network/network_info.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:pos_app/core/theme/theme_provider.dart';
 import 'package:pos_app/core/widgets/startup_view.dart';
-import 'package:pos_app/core/services/audio_service.dart';
 
 // Repository interfaces
 import 'package:pos_app/features/auth/domain/repositories/auth_repository.dart';
@@ -57,11 +56,8 @@ void main() async {
   final connectivity = Connectivity();
   final networkInfo = NetworkInfoImpl(connectivity);
 
-  // 🎵 Ses dosyalarını arka planda yükle (unawaited - UI'yı bloklamaz)
-  // Cart açıldığında sesler hazır olur
-  AudioService.instance.ensureLoaded().catchError((e) {
-    print('⚠️ [main.dart] Ses dosyaları yüklenemedi: $e');
-  });
+  // 🎵 Ses servisi singleton olarak hazır (lazy loading kullanacak)
+  // İlk ses çalındığında yüklenecek
 
   // Sadece dikey yönlendirmeye izin ver
   await SystemChrome.setPreferredOrientations([

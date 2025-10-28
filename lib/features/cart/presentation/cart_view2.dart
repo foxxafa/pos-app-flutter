@@ -277,8 +277,10 @@ class _CartView2State extends State<CartView2> {
 
   @override
   Widget build(BuildContext context) {
-    // _cartProvider zaten didChangeDependencies'de set edildi.
-    final cartItems = _cartProvider.items.values.toList().reversed.toList();
+    // ✅ MİMARİ DÜZELTME: Provider'ı aktif olarak dinle
+    // clearCart() çağrıldığında widget yeniden build edilsin
+    final cartProvider = context.watch<CartProvider>();
+    final cartItems = cartProvider.items.values.toList().reversed.toList();
 
     final unitCount = cartItems
         .where((item) => item.birimTipi == _unitType)
@@ -298,8 +300,8 @@ class _CartView2State extends State<CartView2> {
           IconButton(
             icon: const Icon(Icons.delete_forever),
             onPressed: () {
-              if (_cartProvider.items.isNotEmpty) {
-                _showClearCartDialog(context, _cartProvider);
+              if (cartProvider.items.isNotEmpty) {
+                _showClearCartDialog(context, cartProvider);
               }
             },
             tooltip: 'Clear All Items',
@@ -334,9 +336,9 @@ class _CartView2State extends State<CartView2> {
             ),
             const Divider(),
             _buildTotalsSection(
-                context, unitCount, boxCount, totalCount, _cartProvider),
+                context, unitCount, boxCount, totalCount, cartProvider),
             _buildPlaceOrderButton(context),
-            SizedBox(height: 2.h),
+            SizedBox(height: 0.5.h),
             const Divider(),
           ],
         ),
@@ -360,21 +362,44 @@ class _CartView2State extends State<CartView2> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // Provider'ı temizle (DB ve memory)
-              await cartProvider.clearCart();
+              try {
+                // Loading göstergesi ekle
+                Navigator.pop(ctx); // Dialog'u hemen kapat
 
-              // UI state'ini (image cache) de temizle
-              _imageFutures.clear();
+                // Provider'ı temizle (DB ve memory)
+                await cartProvider.clearCart();
 
-              // UI'yi yenile
-              if (mounted) {
-                setState(() {});
+                // UI state'ini (image cache) de temizle
+                if (mounted) {
+                  setState(() {
+                    _imageFutures.clear();
+                  });
+                }
+
+                // ✅ Kısa bir gecikme - Provider'ın notifyListeners'ın tamamlanmasını bekle
+                await Future.delayed(const Duration(milliseconds: 100));
+
+                // context mounted kontrolü
+                if (!mounted || !context.mounted) return;
+
+                // SnackBar göster
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cart cleared successfully.'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+
+                // ✅ CartView'e geri dön
+                Navigator.pop(context);
+              } catch (e) {
+                // Hata durumunda kullanıcıya bilgi ver
+                if (mounted && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error clearing cart: $e')),
+                  );
+                }
               }
-
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cart cleared.')),
-              );
             },
             child: const Text("Clear All"),
           ),
@@ -550,36 +575,48 @@ class _CartItemCardState extends State<_CartItemCard> {
     super.didUpdateWidget(oldWidget);
     // Provider'dan gelen veri değiştiyse (örn: miktar +/- butonları)
     // ve kullanıcı o anda o alanı düzenlemiyorsa, controller'ları güncelle.
-    if (widget.item != oldWidget.item) {
+    // Miktar, fiyat veya indirim değişikliklerini kontrol et
+    if (widget.item.miktar != oldWidget.item.miktar ||
+        widget.item.birimFiyat != oldWidget.item.birimFiyat ||
+        widget.item.iskonto != oldWidget.item.iskonto) {
       _updateTextControllers(widget.item);
     }
   }
 
   /// Controller'ların metinlerini güncelleyen yardımcı metod.
   void _updateTextControllers(CartItem item) {
-    // Fiyat controller'ı *indirimli* fiyatı gösterir.
-    // Orijinal kodda da fiyat controller'ı indirimli fiyatı gösteriyordu.
-    // (item.birimFiyat * (100 - item.iskonto) / 100)
-    // item.indirimliTutar zaten (BirimFiyat * Miktar * (1-Iskonto/100))
-    // Bize tekil indirimli fiyat lazım:
-    final singleItemDiscountedPrice =
-    item.miktar > 0 ? (item.indirimliTutar / item.miktar) : 0.0;
+    // ✅ Fiyat controller'ı indirimli fiyatı gösterir (KDV'siz).
+    // item.indirimliTutar KDV DAHİL tutar olduğu için direkt kullanamayız!
+    // Doğru hesaplama: item.birimFiyat * (1 - item.iskonto / 100)
+    final singleItemDiscountedPrice = item.birimFiyat * (1 - item.iskonto / 100);
 
+    // ✅ MİMARİ İYİLEŞTİRME: Focus kontrolü ile güncelleme
+    // Kullanıcı o alanı düzenlerken güncelleme yapma
     if (!_priceFocusNode.hasFocus) {
-      _priceController.text = singleItemDiscountedPrice.toStringAsFixed(2);
-      _oldPriceValue = _priceController.text;
+      final newPriceText = singleItemDiscountedPrice.toStringAsFixed(2);
+      if (_priceController.text != newPriceText) {
+        _priceController.text = newPriceText;
+        _oldPriceValue = newPriceText;
+      }
     }
 
     // İndirim controller'ı
     if (!_discountFocusNode.hasFocus) {
-      _discountController.text = item.iskonto > 0 ? item.iskonto.toString() : '';
-      _oldDiscountValue = _discountController.text;
+      final newDiscountText = item.iskonto > 0 ? item.iskonto.toString() : '';
+      if (_discountController.text != newDiscountText) {
+        _discountController.text = newDiscountText;
+        _oldDiscountValue = newDiscountText;
+      }
     }
 
-    // Miktar controller'ı
+    // ✅ Miktar controller'ı - Her zaman güncelle (optimistic update'te zaten güncelledik)
+    // Ama provider'dan gelen değer farklıysa, provider'ı önceliklendir
     if (!_quantityFocusNode.hasFocus) {
-      _quantityController.text = item.miktar.toString();
-      _oldQuantityValue = _quantityController.text;
+      final newQuantityText = item.miktar.toString();
+      if (_quantityController.text != newQuantityText) {
+        _quantityController.text = newQuantityText;
+        _oldQuantityValue = newQuantityText;
+      }
     }
   }
 
@@ -716,16 +753,33 @@ class _CartItemCardState extends State<_CartItemCard> {
 
   /// Miktarı 1 artırır.
   void _incrementQuantity() {
+    // ✅ MİMARİ: Focus kontrolünü kaldır, butona basınca TextField focus kaybetsin
+    _quantityFocusNode.unfocus();
+
+    // ✅ Optimistic UI Update: Controller'ı hemen güncelle (kullanıcı deneyimi)
+    final newMiktar = widget.item.miktar + 1;
+    _quantityController.text = newMiktar.toString();
+
+    // Provider'ı güncelle
     _updateProviderItem(miktar: 1);
   }
 
   /// Miktarı 1 azaltır veya 0 ise siler.
   void _decrementQuantity() {
+    // ✅ MİMARİ: Focus kontrolünü kaldır, butona basınca TextField focus kaybetsin
+    _quantityFocusNode.unfocus();
+
     int newMiktar = widget.item.miktar - 1;
     if (newMiktar <= 0) {
+      // ✅ Optimistic UI Update: Controller'ı hemen güncelle
+      _quantityController.text = '0';
+
       Provider.of<CartProvider>(context, listen: false)
           .removeItem(widget.item.stokKodu, widget.item.birimTipi);
     } else {
+      // ✅ Optimistic UI Update: Controller'ı hemen güncelle
+      _quantityController.text = newMiktar.toString();
+
       _updateProviderItem(miktar: -1);
     }
   }
@@ -824,10 +878,10 @@ class _CartItemCardState extends State<_CartItemCard> {
                       children: [
                         // Ürün Adı ve Sil Butonu
                         _buildItemHeader(context, cartProvider),
-                        SizedBox(height: 0.5.h),
+                        SizedBox(height: 0.3.h),
                         // İlk satır: Dropdown | Fiyat | İndirim
                         _buildPriceRow(context),
-                        SizedBox(height: 1.h),
+                        SizedBox(height: 0.5.h),
                         // İkinci satır: Miktar kontrolleri
                         _buildQuantityRow(context),
                       ],
@@ -920,19 +974,34 @@ class _CartItemCardState extends State<_CartItemCard> {
     return Row(
       children: [
         // Birim kontrolü (Dropdown veya Text)
-        _buildUnitSelector(context),
+        Expanded(
+          flex: 2,
+          child: _buildUnitSelector(context),
+        ),
         SizedBox(width: 2.w),
         // Fiyat alanı
         Expanded(
           flex: 2,
-          child: _buildTextField(
+          child: TextField(
             controller: _priceController,
             focusNode: _priceFocusNode,
-            keyboardType:
-            const TextInputType.numberWithOptions(decimal: true),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onChanged: _onPriceChanged,
             onSubmitted: (_) => _formatPriceField(),
             textAlign: TextAlign.center,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.7),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            ),
             style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
           ),
         ),
@@ -950,17 +1019,31 @@ class _CartItemCardState extends State<_CartItemCard> {
               ),
               SizedBox(width: 1.w),
               Expanded(
-                child: _buildTextField(
+                child: TextField(
                   controller: _discountController,
                   focusNode: _discountFocusNode,
                   keyboardType: TextInputType.number,
                   onChanged: _onDiscountChanged,
-                  prefixText: '%',
-                  prefixStyle: TextStyle(
-                    fontSize: 14.sp,
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.error,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.7),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    prefixText: '%',
+                    prefixStyle: TextStyle(
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
+                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -983,28 +1066,29 @@ class _CartItemCardState extends State<_CartItemCard> {
           onPressed: _decrementQuantity,
         ),
         SizedBox(width: 1.w),
-        // Miktar TextField
+        // Miktar TextField - Fiyat alanıyla TAM AYNI stil
         Container(
           width: 12.w,
-          height: 8.w,
-          decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest
-                .withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(4),
-          ),
           child: TextField(
             controller: _quantityController,
             focusNode: _quantityFocusNode,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
-            decoration: const InputDecoration(
-              contentPadding: EdgeInsets.zero,
-              border: InputBorder.none,
-            ),
             keyboardType: TextInputType.number,
             onSubmitted: _onQuantitySubmitted,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.7),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            ),
+            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
           ),
         ),
         SizedBox(width: 1.w),
@@ -1025,69 +1109,15 @@ class _CartItemCardState extends State<_CartItemCard> {
         required Color color,
         required VoidCallback onPressed}) {
     return Container(
-      width: 12.w,
-      height: 8.w,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Center(
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: onPressed,
-          icon: Icon(icon, size: 6.w, color: color),
-        ),
+      child: InkWell(
+        onTap: onPressed,
+        child: Icon(icon, size: 20, color: color),
       ),
-    );
-  }
-
-  /// Fiyat ve indirim için standart bir TextField oluşturur.
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    TextInputType? keyboardType,
-    ValueChanged<String>? onChanged,
-    ValueChanged<String>? onSubmitted,
-    TextAlign textAlign = TextAlign.start,
-    TextStyle? style,
-    String? prefixText,
-    TextStyle? prefixStyle,
-  }) {
-    return TextField(
-      controller: controller,
-      focusNode: focusNode,
-      keyboardType: keyboardType,
-      textAlign: textAlign,
-      decoration: InputDecoration(
-        filled: true,
-        fillColor: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-            .withValues(alpha: 0.7),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
-        ),
-        isDense: true,
-        contentPadding:
-        const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-        prefixText: prefixText,
-        prefixStyle: prefixStyle,
-      ),
-      style: style,
-      onChanged: onChanged,
-      onSubmitted: onSubmitted,
-      onEditingComplete:
-      (focusNode == _priceFocusNode) ? _formatPriceField : null,
     );
   }
 
@@ -1111,6 +1141,7 @@ class _CartItemCardState extends State<_CartItemCard> {
 
     final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
 
+    // Fiyat TextField ile AYNI renk ve border radius
     final containerDecoration = BoxDecoration(
       color: Theme.of(context)
           .colorScheme
@@ -1118,46 +1149,48 @@ class _CartItemCardState extends State<_CartItemCard> {
           .withValues(alpha: 0.7),
       borderRadius: BorderRadius.circular(8),
     );
-    final textStyle = TextStyle(
-      fontSize: 14.sp,
-      color: Theme.of(context).colorScheme.primary,
-      fontWeight: FontWeight.w600,
-    );
+    // Her zaman dropdown göster
+    final currentValue = (item.birimTipi == _unitType && hasUnit) ||
+        (item.birimTipi == _boxType && hasBox)
+        ? item.birimTipi
+        : (hasUnit ? _unitType : _boxType);
 
-    if (availableUnits <= 1) {
-      // Tek birim varsa sadece text göster
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9.5), // Dropdown ile hizalamak için
-        decoration: containerDecoration,
-        child: Text(item.birimTipi, style: textStyle),
-      );
-    } else {
-      // Birden fazla birim varsa dropdown göster
-      // Hatalı birim seçiliyse (örn: Box seçili ama Box fiyatı 0),
-      // geçerli olan ilk birimi seç.
-      final currentValue = (item.birimTipi == _unitType && hasUnit) ||
-          (item.birimTipi == _boxType && hasBox)
-          ? item.birimTipi
-          : (hasUnit ? _unitType : _boxType);
-
-      return Container(
-        padding: EdgeInsets.symmetric(horizontal: 2.w),
-        decoration: containerDecoration,
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: currentValue,
-            isDense: true,
-            style: textStyle,
-            items: [
-              if (hasUnit)
-                const DropdownMenuItem(value: _unitType, child: Text(_unitType)),
-              if (hasBox)
-                const DropdownMenuItem(value: _boxType, child: Text(_boxType)),
-            ],
-            onChanged: _onUnitTypeChanged,
-          ),
+    // DropdownButtonFormField kullanarak TextField ile TAM AYNI decoration
+    return DropdownButtonFormField<String>(
+      value: currentValue,
+      isDense: true,
+      icon: const Icon(Icons.arrow_drop_down, size: 16),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withValues(alpha: 0.7),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
         ),
-      );
-    }
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+      style: TextStyle(
+        fontSize: 16.sp,
+        color: Theme.of(context).colorScheme.primary,
+        fontWeight: FontWeight.w500,
+      ),
+      items: [
+        if (hasUnit)
+          DropdownMenuItem(
+            value: _unitType,
+            child: Text(_unitType),
+          ),
+        if (hasBox)
+          DropdownMenuItem(
+            value: _boxType,
+            child: Text(_boxType),
+          ),
+      ],
+      onChanged: availableUnits > 1 ? _onUnitTypeChanged : null,
+    );
   }
 }
