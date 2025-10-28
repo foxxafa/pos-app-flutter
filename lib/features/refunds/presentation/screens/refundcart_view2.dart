@@ -32,16 +32,16 @@ class _RefundCartView2State extends State<RefundCartView2> {
   bool _isSubmitting = false;
 
   final List<String> _returnReasons = [
+    'Expired (Useless)',
+    'Refused (Useful)',
+    'Damaged (Useless)',
+    'Faulty Pack (Useless)',
     'Short Item',
     'Misdelivery (Useful)',
-    'Refused (Useful)',
     'Other (Useful)',
     'Trial Returned (Useful)',
     'Short Dated (Useless)',
     'Price Difference',
-    'Expired (Useless)',
-    'Damaged (Useless)',
-    'Faulty Pack (Useless)',
     'Others (Useless)',
     'Trial Returned (Useless)',
   ];

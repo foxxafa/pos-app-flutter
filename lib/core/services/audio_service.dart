@@ -69,7 +69,7 @@ class AudioService {
     AudioPlayer player,
     String assetName, {
     int maxRetries = 3,
-    Duration timeout = const Duration(seconds: 5),
+    Duration timeout = const Duration(seconds: 10),
   }) async {
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {

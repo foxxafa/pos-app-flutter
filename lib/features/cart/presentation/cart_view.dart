@@ -89,13 +89,19 @@ class _CartViewState extends State<CartView> {
   }
 
   Future<void> _initializeAudioAndScanner() async {
-    // ✅ AudioService - Sadece ilk kez yükler, sonra cache'ten kullanır!
-    try {
-      await AudioService.instance.ensureLoaded();
-      print('✅ Ses dosyaları başarıyla yüklendi');
-    } catch (e) {
-      print('⚠️ Ses dosyaları yüklenemedi (devam ediliyor): $e');
-      // Ses yüklenemese bile uygulama devam etsin
+    // ✅ AudioService - main.dart'ta başlatılmış olmalı, burası kontrol eder
+    if (!AudioService.instance.isLoaded) {
+      print('⏳ Ses dosyaları henüz yüklenmedi, bekleniyor...');
+      try {
+        // Eğer main.dart'ta yüklenmediyse burada yükle (cart açılması gecikebilir)
+        await AudioService.instance.ensureLoaded();
+        print('✅ Ses dosyaları başarıyla yüklendi');
+      } catch (e) {
+        print('⚠️ Ses dosyaları yüklenemedi (devam ediliyor): $e');
+        // Ses yüklenemese bile uygulama devam etsin
+      }
+    } else {
+      print('✅ Ses dosyaları zaten yüklü (main.dart\'ta yüklendi)');
     }
 
     _audioLoaded = true;
@@ -1688,7 +1694,7 @@ class _ProductDetailsState extends State<ProductDetails> {
           widget.provider.addOrUpdateItem(
             stokKodu: widget.product.stokKodu,
             urunAdi: widget.product.urunAdi,
-            birimFiyat: yeniFiyat,
+            birimFiyat: orjinalFiyat, // ✅ DÜZELTME: Her zaman orijinal fiyat kullanılmalı
             urunBarcode: widget.product.barcode1,
             miktar: 0,
             iskonto: indirimOrani,
@@ -1769,7 +1775,7 @@ class _ProductDetailsState extends State<ProductDetails> {
                   iskonto: discountPercent,
                   birimTipi: selectedType,
                   urunAdi: widget.product.urunAdi,
-                  birimFiyat: discountedPrice,
+                  birimFiyat: originalPrice, // ✅ DÜZELTME: Her zaman orijinal fiyat kullanılmalı
                   vat: widget.product.vat,
                   imsrc: widget.product.imsrc,
                   adetFiyati: widget.product.adetFiyati,

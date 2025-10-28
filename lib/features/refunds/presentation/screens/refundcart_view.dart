@@ -61,16 +61,16 @@ class _RefundCartViewState extends State<RefundCartView> {
   Timer? _imageDownloadTimer;
 
   final List<String> _returnReasons = [
+    'Expired (Useless)',
+    'Refused (Useful)',
+    'Damaged (Useless)',
+    'Faulty Pack (Useless)',
     'Short Item',
     'Misdelivery (Useful)',
-    'Refused (Useful)',
     'Other (Useful)',
     'Trial Returned (Useful)',
     'Short Dated (Useless)',
     'Price Difference',
-    'Expired (Useless)',
-    'Damaged (Useless)',
-    'Faulty Pack (Useless)',
     'Others (Useless)',
     'Trial Returned (Useless)',
   ];
@@ -94,8 +94,20 @@ class _RefundCartViewState extends State<RefundCartView> {
   }
 
   Future<void> _initializeAudioAndScanner() async {
-    // ✅ AudioService - Sadece ilk kez yükler, sonra cache'ten kullanır!
-    await AudioService.instance.ensureLoaded();
+    // ✅ AudioService - main.dart'ta başlatılmış olmalı, burası kontrol eder
+    if (!AudioService.instance.isLoaded) {
+      print('⏳ Ses dosyaları henüz yüklenmedi, bekleniyor...');
+      try {
+        // Eğer main.dart'ta yüklenmediyse burada yükle (refund cart açılması gecikebilir)
+        await AudioService.instance.ensureLoaded();
+        print('✅ Ses dosyaları başarıyla yüklendi');
+      } catch (e) {
+        print('⚠️ Ses dosyaları yüklenemedi (devam ediliyor): $e');
+        // Ses yüklenemese bile uygulama devam etsin
+      }
+    } else {
+      print('✅ Ses dosyaları zaten yüklü (main.dart\'ta yüklendi)');
+    }
 
     _audioLoaded = true;
     _checkLoadingComplete();
