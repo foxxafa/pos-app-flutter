@@ -89,6 +89,11 @@ class SyncService {
       }
     }
 
+    // Depostok senkronizasyonu
+    print('📦 Depo stok bilgileri senkronizasyonu başlatılıyor...');
+    await SyncDepostok();
+    print('✅ Depo stok senkronizasyonu tamamlandı');
+
     print('⏰ Son güncelleme zamanı kaydediliyor...');
     //update sonu son update saati güncelleme
     await saveLastUpdateTime(DateTime.now());
@@ -124,6 +129,11 @@ class SyncService {
           print('⚠️ Birimler ve Barkodlar güncellemesi başarısız');
         }
       }
+
+      // Depostok güncellemesi (her update sync'de yenile)
+      print('📦 Depo stok bilgileri güncelleniyor...');
+      await SyncDepostok();
+      print('✅ Depo stok güncellemesi tamamlandı');
 
       //son update zamanı güncelleme
       await saveLastUpdateTime(DateTime.now());
@@ -320,17 +330,73 @@ class SyncService {
       // Local değişken oluştur (null-safety için)
       final productList = products;
       print('📦 ${productList.length} ürün veritabanına yazılıyor...');
-      await db.transaction((txn) async {
-        final batch = txn.batch();
 
-        for (int i = 0; i < productList.length; i++) {
-          final productMap = productList[i].toMap();
-          productMap['sortOrder'] = i; // Sıra numarası ekle
-          batch.insert('Product', productMap);
-        }
+      // 🔧 GEÇİCİ: Depostok'tan UNIT miktarlarını çek (BOX'lar henüz sunucuda yok)
+      // Önce Depostok tablosunda kayıt var mı kontrol et
+      final depostokCount = await db.rawQuery('SELECT COUNT(*) as count FROM Depostok');
+      final hasDepostok = (depostokCount.first['count'] as int) > 0;
 
-        await batch.commit(noResult: true);
-      });
+      if (hasDepostok) {
+        print('🔄 Depo stok miktarları Product tablosuna aktarılıyor (UNIT bazlı)...');
+        int depoUpdatedCount = 0;
+        int depoNotFoundCount = 0;
+
+        await db.transaction((txn) async {
+          final batch = txn.batch();
+
+          for (int i = 0; i < productList.length; i++) {
+            final productMap = productList[i].toMap();
+            productMap['sortOrder'] = i; // Sıra numarası ekle
+
+            // 🔧 GEÇİCİ: Depostok'tan UNIT miktarını al
+            // (Şuanlık qty kullanıyormuş gibi davran, ama depostok'tan çek)
+            final depoResult = await txn.rawQuery(
+              'SELECT miktar FROM Depostok WHERE StokKodu = ? AND birim = ?',
+              [productList[i].stokKodu, 'UNIT']
+            );
+
+            if (depoResult.isNotEmpty) {
+              final depoMiktar = depoResult.first['miktar'];
+              productMap['miktar'] = depoMiktar;
+              depoUpdatedCount++;
+
+              // İlk 5 ürün için log
+              if (i < 5) {
+                print('  📦 ${productList[i].stokKodu}: qty=${productList[i].miktar} -> depo UNIT=$depoMiktar');
+              }
+            } else {
+              depoNotFoundCount++;
+              // Eğer depostok'ta UNIT yoksa, qty'yi kullan (fallback)
+              if (i < 5 && depoNotFoundCount <= 3) {
+                print('  ⚠️ ${productList[i].stokKodu}: Depo UNIT bulunamadı, qty kullanılıyor (${productList[i].miktar})');
+              }
+            }
+
+            batch.insert('Product', productMap);
+          }
+
+          await batch.commit(noResult: true);
+        });
+
+        print('✅ Depo stok entegrasyonu: $depoUpdatedCount ürün güncellendi, $depoNotFoundCount ürün qty kullandı');
+      } else {
+        // ✅ Depostok tablosu boş - Kullanıcıya depo atanmamış
+        print('⚠️ Depostok tablosu boş - Kullanıcıya depo atanmamış, qty kullanılmaya devam edilecek');
+
+        await db.transaction((txn) async {
+          final batch = txn.batch();
+
+          for (int i = 0; i < productList.length; i++) {
+            final productMap = productList[i].toMap();
+            productMap['sortOrder'] = i;
+            // miktar zaten qty ile geldi, olduğu gibi kullan
+            batch.insert('Product', productMap);
+          }
+
+          await batch.commit(noResult: true);
+        });
+      }
+
       print('✅ Ürün veritabanı yazma tamamlandı');
     }
   }
@@ -826,6 +892,95 @@ static Future<void> downloadCartItemImages(List<dynamic> cartItems, {Function? o
     print('⚠️ Sepet resmi indirme hatası: $e');
   }
 }
+
+// ============= DEPO STOK SYNC =============
+
+  Future<void> SyncDepostok() async {
+    try {
+      // Get API key from database
+      final DatabaseHelper dbHelper = DatabaseHelper();
+      final Database db = await dbHelper.database;
+
+      List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
+      if (result.isEmpty) {
+        print('⚠️ API Key bulunamadı, depo sync iptal edildi');
+        return;
+      }
+
+      String apiKey = result.first['apikey'];
+
+      // Mevcut depostok verilerini sil
+      await db.delete('Depostok');
+      print('🗑️ Eski depo stok verileri silindi');
+
+      int page = 1;
+      const int limit = 5000;
+      int totalSynced = 0;
+
+      while (true) {
+        print('📥 Depo stok sayfa $page indiriliyor...');
+
+        try {
+          final url = Uri.parse('${ApiConfig.baseUrl}?r=apimobil/getdepostok&page=$page&limit=$limit');
+
+          final response = await http.get(
+            url,
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+            },
+          );
+
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+
+            if (data['status'] == 1 && data['depostok'] != null) {
+              final depostokList = data['depostok'] as List;
+
+              if (depostokList.isEmpty) {
+                print('✅ Tüm depo stok sayfaları indirildi (Toplam: $totalSynced)');
+                break;
+              }
+
+              // Batch insert için
+              final batch = db.batch();
+              for (var item in depostokList) {
+                batch.insert('Depostok', {
+                  'StokKodu': item['StokKodu'],
+                  'birim': item['birim'] ?? '',
+                  'miktar': item['miktar'] ?? 0.0,
+                });
+              }
+              await batch.commit(noResult: true);
+
+              totalSynced += depostokList.length;
+              print('📥 Sayfa $page: ${depostokList.length} stok kaydı (Toplam: $totalSynced)');
+
+              page++;
+            } else {
+              // Kullanıcıya depo atanmamış olabilir
+              if (data['message'] != null) {
+                print('⚠️ Depo sync: ${data['message']}');
+              }
+              break;
+            }
+          } else {
+            print('⚠️ Depo stok sync başarısız: HTTP ${response.statusCode}');
+            print('Response: ${response.body}');
+            break;
+          }
+        } catch (e) {
+          print('❌ Depo stok sync hatası (Sayfa $page): $e');
+          break;
+        }
+      }
+
+      print('✅ Toplam $totalSynced depo stok kaydı senkronize edildi');
+    } catch (e) {
+      print('❌ Depo stok senkronizasyonu genel hatası: $e');
+    }
+  }
 
 // Arka plan resim indirme durumunu kontrol et
 static bool isBackgroundDownloadActive() => _backgroundDownloadActive;

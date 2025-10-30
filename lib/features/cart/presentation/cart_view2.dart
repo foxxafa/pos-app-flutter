@@ -12,6 +12,8 @@ import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart'
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/orders/presentation/providers/orderinfo_provider.dart';
 import 'package:pos_app/features/customer/presentation/customer_view.dart';
+import 'package:pos_app/features/products/domain/entities/birim_model.dart';
+import 'package:pos_app/features/products/domain/repositories/unit_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -527,6 +529,11 @@ class _CartItemCardState extends State<_CartItemCard> {
   String _oldDiscountValue = '';
   String _oldQuantityValue = '';
 
+  // ✅ Dinamik birim yönetimi
+  List<BirimModel> _birimler = [];
+  BirimModel? _selectedBirim;
+  bool _birimlersLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -548,6 +555,62 @@ class _CartItemCardState extends State<_CartItemCard> {
     _priceFocusNode.addListener(_onPriceFocusChange);
     _discountFocusNode.addListener(_onDiscountFocusChange);
     _quantityFocusNode.addListener(_onQuantityFocusChange);
+
+    // ✅ Ürün birimlerini yükle
+    _loadBirimlerForItem();
+  }
+
+  /// Ürün için birimleri veritabanından yükler (fiyat7 kullanarak)
+  Future<void> _loadBirimlerForItem() async {
+    try {
+      setState(() => _birimlersLoading = true);
+
+      final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+      final birimler = await unitRepository.getBirimlerByStokKodu(widget.item.stokKodu);
+
+      if (!mounted) return;
+
+      setState(() {
+        _birimler = birimler;
+        _birimlersLoading = false;
+
+        // ✅ Mevcut seçili birimi bul (CartItem'daki selectedBirimKey kullanarak)
+        if (widget.item.selectedBirimKey != null) {
+          _selectedBirim = _birimler.firstWhere(
+            (b) => b.key == widget.item.selectedBirimKey,
+            orElse: () => _birimler.isNotEmpty ? _birimler.first : BirimModel(key: '', birimadi: '', fiyat7: 0),
+          );
+        } else if (_birimler.isNotEmpty) {
+          // Eğer selectedBirimKey yoksa, mevcut birimTipi'ne göre seç
+          _selectedBirim = _birimler.firstWhere(
+            (b) {
+              final birimAdi = b.birimadi?.toLowerCase() ?? '';
+              if (widget.item.birimTipi == 'Box') {
+                return birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
+              } else {
+                return birimAdi.contains('unit') || birimAdi.contains('adet') || birimAdi.contains('pcs');
+              }
+            },
+            orElse: () => _birimler.first,
+          );
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _birimlersLoading = false;
+        _birimler = [];
+      });
+
+      // Hata durumunda kullanıcıya bilgi ver
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⚠️ Birimler yüklenemedi: $e'),
+          backgroundColor: Colors.orange.shade700,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override
@@ -784,23 +847,21 @@ class _CartItemCardState extends State<_CartItemCard> {
     }
   }
 
-  /// Birim tipi değiştirildiğinde tetiklenir.
-  void _onUnitTypeChanged(String? newValue) {
-    if (newValue == null) return;
+  /// Birim değiştirildiğinde tetiklenir (Dinamik birimler sistemi)
+  void _onBirimChanged(BirimModel? newBirim) {
+    if (newBirim == null) return;
 
     final item = widget.item;
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
 
-    // Yeni birim tipinin fiyatını kontrol et
-    final fiyatStr =
-    (newValue == _unitType) ? item.adetFiyati : item.kutuFiyati;
-    final fiyat = double.tryParse(fiyatStr.replaceAll(',', '.')) ?? 0.0;
+    // ✅ Yeni birimin fiyatını fiyat7'den al
+    final fiyat = newBirim.fiyat7 ?? 0.0;
 
     // Fiyat kontrolü - eğer 0 veya null ise hata göster
     if (fiyat <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('⚠️ $newValue fiyatı bulunamadı ($fiyat).'),
+          content: Text('⚠️ ${newBirim.birimadi} fiyatı bulunamadı ($fiyat).'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.orange.shade700,
           duration: const Duration(seconds: 3),
@@ -809,13 +870,43 @@ class _CartItemCardState extends State<_CartItemCard> {
       return;
     }
 
-    // Provider'ı yeni birim tipiyle güncelle
-    _updateProviderItem(
-      birimFiyat: fiyat,
-      birimTipi: newValue,
-      miktar: 0, // 0 göndererek mevcut miktarı korumasını sağlıyoruz
-      iskonto: item.iskonto,
-    );
+    // ✅ Seçili birimi güncelle
+    setState(() {
+      _selectedBirim = newBirim;
+    });
+
+    // ✅ Birim tipini belirle (Box/Unit - UI gösterimi için)
+    final birimAdi = newBirim.birimadi?.toLowerCase() ?? '';
+    final isBox = birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
+    final newBirimTipi = isBox ? 'Box' : 'Unit';
+
+    // ✅ KRITIK: Eski birimi silip yeni birimle ekle (birim değişiminde)
+    if (newBirimTipi != item.birimTipi) {
+      // Eski item'ın miktarını al
+      final oldMiktar = item.miktar;
+
+      // Eski item'ı sil (eski birim tipiyle)
+      final oldCartKey = '${item.stokKodu}_${item.birimTipi}';
+      cartProvider.removeItem(oldCartKey);
+
+      // Yeni item'ı ekle (yeni birim tipiyle, eski miktarla)
+      _updateProviderItem(
+        birimFiyat: fiyat,
+        birimTipi: newBirimTipi,
+        selectedBirimKey: newBirim.key,
+        miktar: oldMiktar, // ✅ Eski miktarı koru
+        iskonto: item.iskonto,
+      );
+    } else {
+      // Aynı birim seçildiyse sadece fiyatı güncelle
+      _updateProviderItem(
+        birimFiyat: fiyat,
+        birimTipi: newBirimTipi,
+        selectedBirimKey: newBirim.key,
+        miktar: 0, // 0 = miktarı değiştirme
+        iskonto: item.iskonto,
+      );
+    }
   }
 
   /// Provider'daki item'ı güncellemek için merkezi metod.
@@ -826,6 +917,7 @@ class _CartItemCardState extends State<_CartItemCard> {
     int? iskonto,
     double? birimFiyat,
     String? birimTipi,
+    String? selectedBirimKey,
   }) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final customerProvider =
@@ -850,6 +942,7 @@ class _CartItemCardState extends State<_CartItemCard> {
       imsrc: widget.item.imsrc,
       adetFiyati: widget.item.adetFiyati,
       kutuFiyati: widget.item.kutuFiyati,
+      selectedBirimKey: selectedBirimKey ?? widget.item.selectedBirimKey, // ✅ Dinamik birim key'i
     );
   }
 
@@ -1055,51 +1148,54 @@ class _CartItemCardState extends State<_CartItemCard> {
 
   /// Miktar kontrol butonlarını ve alanını oluşturan widget.
   Widget _buildQuantityRow(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Miktar azaltma butonu (-)
-        _buildQuantityButton(
-          context,
-          icon: Icons.remove,
-          color: Theme.of(context).colorScheme.error,
-          onPressed: _decrementQuantity,
-        ),
-        SizedBox(width: 1.w),
-        // Miktar TextField - Fiyat alanıyla TAM AYNI stil
-        Container(
-          width: 12.w,
-          child: TextField(
-            controller: _quantityController,
-            focusNode: _quantityFocusNode,
-            textAlign: TextAlign.center,
-            keyboardType: TextInputType.number,
-            onSubmitted: _onQuantitySubmitted,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.7),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide.none,
-              ),
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            ),
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+    return IntrinsicHeight(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Miktar azaltma butonu (-)
+          _buildQuantityButton(
+            context,
+            icon: Icons.remove,
+            color: Theme.of(context).colorScheme.error,
+            onPressed: _decrementQuantity,
           ),
-        ),
-        SizedBox(width: 1.w),
-        // Miktar artırma butonu (+)
-        _buildQuantityButton(
-          context,
-          icon: Icons.add,
-          color: Theme.of(context).colorScheme.primary,
-          onPressed: _incrementQuantity,
-        ),
-      ],
+          SizedBox(width: 1.w),
+          // Miktar TextField - Fiyat alanıyla TAM AYNI stil
+          Container(
+            width: 12.w,
+            child: TextField(
+              controller: _quantityController,
+              focusNode: _quantityFocusNode,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              onSubmitted: _onQuantitySubmitted,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Theme.of(context)
+                    .colorScheme
+                    .surfaceContainerHighest
+                    .withValues(alpha: 0.7),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+              ),
+              style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+            ),
+          ),
+          SizedBox(width: 1.w),
+          // Miktar artırma butonu (+)
+          _buildQuantityButton(
+            context,
+            icon: Icons.add,
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: _incrementQuantity,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1108,56 +1204,71 @@ class _CartItemCardState extends State<_CartItemCard> {
       {required IconData icon,
         required Color color,
         required VoidCallback onPressed}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: InkWell(
-        onTap: onPressed,
-        child: Icon(icon, size: 20, color: color),
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }
 
-  /// Birim seçimi için Dropdown veya Text widget'ı oluşturur.
+  /// ✅ Dinamik birim seçimi için Dropdown widget'ı (fiyat7 ile)
   Widget _buildUnitSelector(BuildContext context) {
-    final item = widget.item;
+    // ✅ Birimler yüklenirken loading göster
+    if (_birimlersLoading) {
+      return Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest
+              .withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
 
-    // Mevcut birimleri fiyatlarına göre kontrol et
-    final hasUnit = (item.birimTipi == _unitType) ||
-        (item.adetFiyati != "0" &&
-            item.adetFiyati.isNotEmpty &&
-            (double.tryParse(item.adetFiyati.toString().replaceAll(',', '.')) ??
-                0) >
-                0);
-    final hasBox = (item.birimTipi == _boxType) ||
-        (item.kutuFiyati != "0" &&
-            item.kutuFiyati.isNotEmpty &&
-            (double.tryParse(item.kutuFiyati.toString().replaceAll(',', '.')) ??
-                0) >
-                0);
+    // ✅ Birim bulunamadıysa eski sisteme fallback (adetFiyati/kutuFiyati)
+    if (_birimler.isEmpty) {
+      return Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest
+              .withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            widget.item.birimTipi,
+            style: TextStyle(
+              fontSize: 16.sp,
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      );
+    }
 
-    final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
-
-    // Fiyat TextField ile AYNI renk ve border radius
-    final containerDecoration = BoxDecoration(
-      color: Theme.of(context)
-          .colorScheme
-          .surfaceContainerHighest
-          .withValues(alpha: 0.7),
-      borderRadius: BorderRadius.circular(8),
-    );
-    // Her zaman dropdown göster
-    final currentValue = (item.birimTipi == _unitType && hasUnit) ||
-        (item.birimTipi == _boxType && hasBox)
-        ? item.birimTipi
-        : (hasUnit ? _unitType : _boxType);
-
-    // DropdownButtonFormField kullanarak TextField ile TAM AYNI decoration
-    return DropdownButtonFormField<String>(
-      value: currentValue,
+    // ✅ Dropdown ile dinamik birimleri göster
+    return DropdownButtonFormField<BirimModel>(
+      value: _selectedBirim,
       isDense: true,
       icon: const Icon(Icons.arrow_drop_down, size: 16),
       decoration: InputDecoration(
@@ -1178,19 +1289,16 @@ class _CartItemCardState extends State<_CartItemCard> {
         color: Theme.of(context).colorScheme.primary,
         fontWeight: FontWeight.w500,
       ),
-      items: [
-        if (hasUnit)
-          DropdownMenuItem(
-            value: _unitType,
-            child: Text(_unitType),
+      items: _birimler.map((birim) {
+        return DropdownMenuItem<BirimModel>(
+          value: birim,
+          child: Text(
+            birim.birimadi ?? '',
+            style: TextStyle(fontSize: 14.sp),
           ),
-        if (hasBox)
-          DropdownMenuItem(
-            value: _boxType,
-            child: Text(_boxType),
-          ),
-      ],
-      onChanged: availableUnits > 1 ? _onUnitTypeChanged : null,
+        );
+      }).toList(),
+      onChanged: _birimler.length > 1 ? _onBirimChanged : null,
     );
   }
 }

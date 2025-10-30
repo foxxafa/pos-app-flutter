@@ -79,7 +79,8 @@ class ApimobilController extends Controller
                 $action->id == 'getupdatedproducts' ||
                 $action->id == 'getnewcustomer' ||
                 $action->id == 'getupdatedcustomer' ||
-                $action->id == 'getnewbirimler' ) {
+                $action->id == 'getnewbirimler' ||
+                $action->id == 'getdepostok' ) {
             $this->enableCsrfValidation = false;
         }
         return parent::beforeAction($action);
@@ -284,13 +285,15 @@ class ApimobilController extends Controller
                 'message' => 'time parametresi eksik'
             ];
         }
-
-        if($this->getApikey( $apiKey )){
+        $user=$this->getApikey( $apiKey );
+        if($user){
             // Pagination parametreleri
             $page = (int)Yii::$app->request->get('page', 1);
             $limit = (int)Yii::$app->request->get('limit', 5000);
             $offset = ($page - 1) * $limit;
 
+            // ✅ Basit sorgu: Sadece urunler tablosunu çek
+            // Depo stok bilgileri ayrı endpoint'ten (/getdepostok) alınacak
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
                UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc, qty as miktar
@@ -301,6 +304,7 @@ class ApimobilController extends Controller
                 ':limit' => $limit,
                 ':offset' => $offset
             ])->queryAll();
+
             foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
                 $stok['KutuFiyati'] = (string) $stok['KutuFiyati'];
@@ -333,11 +337,26 @@ class ApimobilController extends Controller
             ];
         }
 
-        if($this->getApikey( $apiKey )){
+        $user=$this->getApikey( $apiKey );
+        if($user){
+            // Pagination parametreleri
+            $page = (int)Yii::$app->request->get('page', 1);
+            $limit = (int)Yii::$app->request->get('limit', 5000);
+            $offset = ($page - 1) * $limit;
+
+            // ✅ Basit sorgu: Sadece urunler tablosunu çek
+            // Depo stok bilgileri ayrı endpoint'ten (/getdepostok) alınacak
             $stoklar=Yii::$app->db->createCommand('SELECT StokKodu,fiyat4 as AdetFiyati,fiyat5 as KutuFiyati, Pm1, Pm2, Pm3,
             Barcode1, Barcode2, Barcode3, Vat, Barcode4,
                UrunAdi,Birim1,BirimKey1,Birim2,BirimKey2,Aktif,imsrc, qty as miktar
-            FROM urunler WHERE aktif=1 and updated_at > :time and created_at<:time', ['time' => $this->convertToStandardDateTime($time)])->queryAll();
+            FROM urunler WHERE aktif=1 and updated_at > :time and created_at < :time
+            ORDER BY StokKodu ASC
+            LIMIT :limit OFFSET :offset', [
+                'time' => $this->convertToStandardDateTime($time),
+                ':limit' => $limit,
+                ':offset' => $offset
+            ])->queryAll();
+
               foreach ($stoklar as &$stok) {
                 $stok['AdetFiyati'] = (string) $stok['AdetFiyati'];
                 $stok['KutuFiyati'] = (string) $stok['KutuFiyati'];
@@ -1084,6 +1103,85 @@ class ApimobilController extends Controller
                 'IsSuccessStatusCode' => false,
                 'status' => 'error',
                 'message' => 'Veri alınamadı: ' . $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Kullanıcının deposundaki stok bilgilerini çeker
+     * GET /apimobil/getdepostok
+     */
+    public function actionGetdepostok(){
+        $this->layout = false;
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        $apiKey = Yii::$app->request->headers->get('Authorization');
+
+        $user = $this->getApikey($apiKey);
+        if(!$user){
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Geçersiz API key'
+            ];
+        }
+
+        // Kullanıcının deposunu bul
+        $depo = Satiscilar::find()->where(["kodu" => $user])->one();
+
+        // ✅ Depo yoksa veya 0 ise boş liste dön (qty kullanılmaya devam edilsin)
+        if(!$depo || !$depo->_key_sis_depo || $depo->_key_sis_depo == 0){
+            return [
+                'status' => 1,
+                'page' => 1,
+                'limit' => 5000,
+                'depot_key' => null,
+                'depostok' => [],
+                'message' => 'Kullanıcıya depo atanmamış, qty kullanılıyor'
+            ];
+        }
+
+        $depokodu = $depo->_key_sis_depo;
+
+        // Pagination parametreleri
+        $page = (int)Yii::$app->request->get('page', 1);
+        $limit = (int)Yii::$app->request->get('limit', 5000);
+        $offset = ($page - 1) * $limit;
+
+        try {
+            // Sadece bu depodaki stokları çek (birim ile birlikte)
+            $stoklar = Yii::$app->db->createCommand('
+                SELECT
+                    StokKodu,
+                    birim,
+                    miktar
+                FROM depostok
+                WHERE warehouse_key = :depokodu
+                ORDER BY StokKodu ASC, birim ASC
+                LIMIT :limit OFFSET :offset
+            ', [
+                ':depokodu' => $depokodu,
+                ':limit' => $limit,
+                ':offset' => $offset
+            ])->queryAll();
+
+            // miktar'ı double'a çevir
+            foreach ($stoklar as &$stok) {
+                $stok['miktar'] = (double)$stok['miktar'];
+            }
+
+            return [
+                'status' => 1,
+                'page' => $page,
+                'limit' => $limit,
+                'depot_key' => $depokodu,
+                'depostok' => $stoklar
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Depo stok bilgileri alınamadı: ' . $e->getMessage()
             ];
         }
     }

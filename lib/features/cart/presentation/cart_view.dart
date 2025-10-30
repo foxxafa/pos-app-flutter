@@ -554,10 +554,10 @@ class _CartViewState extends State<CartView> {
           // Fiyatı seçili birimden veya default'tan al
           double birimFiyat;
           if (selectedBirim != null) {
-            // Seçili birimin fiyatını al (fiyat1, fiyat2, vs.)
-            birimFiyat = selectedBirim.fiyat1 ?? 0;
+            // ✅ Birim fiyatını fiyat7 sütunundan al (dinamik fiyatlandırma)
+            birimFiyat = selectedBirim.fiyat7 ?? 0;
           } else {
-            // Eski sistem: Box/Unit fiyatı
+            // Eski sistem: Box/Unit fiyatı (fallback - birim bulunamazsa)
             birimFiyat = isBox
                 ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                 : double.tryParse(product.adetFiyati.toString()) ?? 0;
@@ -929,7 +929,7 @@ class _CartViewState extends State<CartView> {
                 final birimAdi = newBirim.birimadi?.toLowerCase() ?? '';
                 final isBox = birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
                 final birimTipi = isBox ? 'Box' : 'Unit';
-                final birimFiyat = newBirim.fiyat1 ?? 0;
+                final birimFiyat = newBirim.fiyat7 ?? 0; // ✅ fiyat7 kullan
 
                 provider.addOrUpdateItem(
                   stokKodu: product.stokKodu,

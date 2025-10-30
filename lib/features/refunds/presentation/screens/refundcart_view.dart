@@ -9,6 +9,8 @@ import 'package:pos_app/core/widgets/barcode_scanner_page.dart';
 import 'package:pos_app/core/services/scanner_service.dart';
 import 'package:pos_app/core/services/audio_service.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/features/products/domain/entities/birim_model.dart';
+import 'package:pos_app/features/products/domain/repositories/unit_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/features/products/domain/entities/product_model.dart';
@@ -51,6 +53,11 @@ class _RefundCartViewState extends State<RefundCartView> {
 
   final Map<String, int> _quantityMap = {};
   final Map<String, String> _birimTipiMap = {}; // Her ürün için seçili birim tipi
+
+  // ✅ Dinamik birim yönetimi
+  final Map<String, List<BirimModel>> _productBirimlerMap = {}; // Her ürün için birimler
+  final Map<String, BirimModel?> _selectedBirimMap = {}; // Her ürün için seçili birim
+  final Map<String, bool> _birimlerLoadingMap = {}; // Her ürün için loading durumu
 
   // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
   bool _isUpdatingFromScanner = false;
@@ -112,6 +119,74 @@ class _RefundCartViewState extends State<RefundCartView> {
         _isLoading = false;
       });
       print('✅ Loading tamamlandı: Ses ve ürünler hazır! (RefundCart)');
+    }
+  }
+
+  /// ✅ Dinamik birim yükleme metodu (lazy loading)
+  Future<void> _loadBirimlerForProduct(String stokKodu) async {
+    // Zaten yüklendiyse tekrar yükleme
+    if (_productBirimlerMap.containsKey(stokKodu)) return;
+
+    try {
+      setState(() {
+        _birimlerLoadingMap[stokKodu] = true;
+      });
+
+      final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+      final birimler = await unitRepository.getBirimlerByStokKodu(stokKodu);
+
+      if (!mounted) return;
+
+      setState(() {
+        _productBirimlerMap[stokKodu] = birimler;
+        _birimlerLoadingMap[stokKodu] = false;
+
+        // ✅ Varsayılan olarak ilk birimi seç (veya mevcut birimTipi'ne göre seç)
+        if (birimler.isNotEmpty) {
+          final currentBirimTipi = _birimTipiMap[stokKodu] ?? 'Unit';
+          _selectedBirimMap[stokKodu] = birimler.firstWhere(
+            (b) {
+              final birimAdi = b.birimadi?.toLowerCase() ?? '';
+              if (currentBirimTipi == 'Box') {
+                return birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
+              } else {
+                return birimAdi.contains('unit') || birimAdi.contains('adet') || birimAdi.contains('pcs');
+              }
+            },
+            orElse: () => birimler.first,
+          );
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _birimlerLoadingMap[stokKodu] = false;
+        _productBirimlerMap[stokKodu] = [];
+      });
+      print('⚠️ Birimler yüklenemedi ($stokKodu): $e');
+    }
+  }
+
+  /// ✅ Ürün fiyatını dinamik birimlerden al (fiyat7), fallback: adetFiyati/kutuFiyati
+  Future<double> _getBirimFiyat(ProductModel product, String birimTipi) async {
+    final stokKodu = product.stokKodu;
+
+    // ✅ Önce birimler yüklü mü kontrol et
+    if (!_productBirimlerMap.containsKey(stokKodu)) {
+      await _loadBirimlerForProduct(stokKodu);
+    }
+
+    // ✅ Seçili birimi al
+    final selectedBirim = _selectedBirimMap[stokKodu];
+    if (selectedBirim != null && selectedBirim.fiyat7 != null && selectedBirim.fiyat7! > 0) {
+      return selectedBirim.fiyat7!;
+    }
+
+    // ✅ Fallback: Eski sistem (adetFiyati/kutuFiyati)
+    if (birimTipi == 'Box') {
+      return double.tryParse(product.kutuFiyati.toString()) ?? 0;
+    } else {
+      return double.tryParse(product.adetFiyati.toString()) ?? 0;
     }
   }
 

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 6;  // Version artırıldı (Birimler ve Barkodlar tabloları için)
+  static const _databaseVersion = 7;  // Version artırıldı (Depostok tablosu için)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -123,6 +123,28 @@ class DatabaseHelper {
       ''');
 
       debugPrint('Birimler and Barkodlar tables created successfully');
+    }
+
+    if (oldVersion < 7) {
+      // Version 7: Depostok (Depot Stock) tablosu ekleme
+      debugPrint('Creating Depostok table...');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS Depostok (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          StokKodu TEXT NOT NULL,
+          birim TEXT NOT NULL,
+          miktar REAL DEFAULT 0.0
+        )
+      ''');
+
+      // Index ekle - performans için (StokKodu + birim composite index)
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_depostok_stokkodu_birim
+        ON Depostok(StokKodu, birim)
+      ''');
+
+      debugPrint('Depostok table created successfully');
     }
   }
 
@@ -317,6 +339,22 @@ class DatabaseHelper {
         created_at TEXT,
         updated_at TEXT
       )
+    ''');
+
+    // Depostok (Depot Stock) table - Depo bazlı stok miktarları
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS Depostok (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        StokKodu TEXT NOT NULL,
+        birim TEXT NOT NULL,
+        miktar REAL DEFAULT 0.0
+      )
+    ''');
+
+    // Index ekle - performans için (StokKodu + birim composite index)
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_depostok_stokkodu_birim
+      ON Depostok(StokKodu, birim)
     ''');
 
     // NOTE: AppState and refund_queue tables are created dynamically
