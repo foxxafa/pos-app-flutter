@@ -1111,7 +1111,7 @@ class _ProductListItemState extends State<ProductListItem> {
   }
 }
 
-class ProductImage extends StatelessWidget {
+class ProductImage extends StatefulWidget {
   final Future<String?>? imageFuture;
   final ProductModel product;
   final BirimModel? selectedBirim;
@@ -1123,14 +1123,91 @@ class ProductImage extends StatelessWidget {
     this.selectedBirim,
   });
 
+  @override
+  State<ProductImage> createState() => _ProductImageState();
+}
+
+class _ProductImageState extends State<ProductImage> {
+  double? _availableStock;
+  bool _stockLoading = true;
+
+  // ✅ STATIC CACHE: Depostok tablosu boş mu kontrolü ve tüm stok verileri
+  static bool? _hasAnyDepostok;
+  static Map<String, double>? _allDepostokStocks; // StokKodu -> miktar
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAvailableStock();
+  }
+
+  /// Depostok fallback mantığı ile stok miktarını yükler
+  Future<void> _loadAvailableStock() async {
+    try {
+      // 1. İlk widget için 1 kere kontrol et: Depostok'ta hiç veri var mı?
+      if (_hasAnyDepostok == null) {
+        final db = await DatabaseHelper().database;
+        final anyResult = await db.rawQuery('SELECT 1 FROM Depostok LIMIT 1');
+        _hasAnyDepostok = anyResult.isNotEmpty;
+
+        // ✅ Eğer Depostok'ta veri varsa, TÜM stokları TEK SORGUDA çek
+        if (_hasAnyDepostok == true) {
+          final allStocks = await db.query(
+            'Depostok',
+            columns: ['StokKodu', 'miktar'],
+            where: 'UPPER(birim) = ?',
+            whereArgs: ['UNIT'],
+          );
+
+          _allDepostokStocks = {};
+          for (var row in allStocks) {
+            final stokKodu = row['StokKodu'].toString();
+            final miktar = (row['miktar'] as num?)?.toDouble() ?? 0.0;
+            _allDepostokStocks![stokKodu] = miktar;
+          }
+        }
+      }
+
+      double stock;
+
+      if (_hasAnyDepostok == false) {
+        // Depostok tamamen boş → Product.miktar kullan
+        stock = widget.product.miktar ?? 0.0;
+      } else {
+        // Depostok'ta veri var → Cache'ten bak
+        if (_allDepostokStocks!.containsKey(widget.product.stokKodu.toString())) {
+          // Bulundu → Depostok'tan al
+          stock = _allDepostokStocks![widget.product.stokKodu.toString()]!;
+        } else {
+          // Bulunamadı → 0 (Depostok'ta veri var ama bu ürün yok)
+          stock = 0.0;
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableStock = stock;
+        _stockLoading = false;
+      });
+    } catch (e) {
+      debugPrint('⚠️ Stok bilgisi yüklenemedi: $e');
+      if (!mounted) return;
+      setState(() {
+        _availableStock = widget.product.miktar ?? 0.0;
+        _stockLoading = false;
+      });
+    }
+  }
+
   void _showProductInfoDialog(BuildContext context) {
-    final qty = (product.miktar ?? 0).toInt();
+    final qty = (_availableStock ?? 0).toInt();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          product.urunAdi,
+          widget.product.urunAdi,
           style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold),
         ),
         content: ConstrainedBox(
@@ -1140,9 +1217,9 @@ class ProductImage extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (product.imsrc != null)
+                if (widget.product.imsrc != null)
                   FutureBuilder<String?>(
-                    future: _getLocalImagePath(product.imsrc!),
+                    future: _getLocalImagePath(widget.product.imsrc!),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState != ConnectionState.done) {
                         return SizedBox(
@@ -1169,13 +1246,13 @@ class ProductImage extends StatelessWidget {
                     child: Icon(Icons.shopping_bag, size: 50.w, color: Colors.grey),
                   ),
                 SizedBox(height: 2.h),
-                Text("${'cart.code'.tr()}: ${product.stokKodu}", style: TextStyle(fontSize: 16.sp)),
+                Text("${'cart.code'.tr()}: ${widget.product.stokKodu}", style: TextStyle(fontSize: 16.sp)),
                 SizedBox(height: 1.h),
-                Text("${'cart.unit_price'.tr()}: ${product.adetFiyati}", style: TextStyle(fontSize: 16.sp)),
+                Text("${'cart.unit_price'.tr()}: ${widget.product.adetFiyati}", style: TextStyle(fontSize: 16.sp)),
                 SizedBox(height: 1.h),
-                Text("${'cart.box_price'.tr()}: ${product.kutuFiyati}", style: TextStyle(fontSize: 16.sp)),
+                Text("${'cart.box_price'.tr()}: ${widget.product.kutuFiyati}", style: TextStyle(fontSize: 16.sp)),
                 SizedBox(height: 1.h),
-                Text("${'cart.vat'.tr()}: ${product.vat}", style: TextStyle(fontSize: 16.sp)),
+                Text("${'cart.vat'.tr()}: ${widget.product.vat}", style: TextStyle(fontSize: 16.sp)),
                 SizedBox(height: 1.h),
                 Text("Qty: $qty", style: TextStyle(fontSize: 16.sp)),
               ],
@@ -1209,8 +1286,8 @@ class ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Banner'ı miktar 0 veya negatif olan ürünlerde göster
-    final showBanner = (product.miktar ?? 0) <= 0;
+    // ✅ Banner'ı Depostok stok bilgisine göre göster
+    final showBanner = (_availableStock ?? widget.product.miktar ?? 0) <= 0;
 
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
@@ -1225,10 +1302,10 @@ class ProductImage extends StatelessWidget {
                 SizedBox(
                   width: 30.w,
                   height: 30.w,
-                  child: product.imsrc == null
+                  child: widget.product.imsrc == null
                       ? Icon(Icons.shopping_bag_sharp, size: 25.w, color: Colors.grey)
                       : FutureBuilder<String?>(
-                    future: imageFuture,
+                    future: widget.imageFuture,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState != ConnectionState.done) {
                         return const Center(child: Icon(Icons.image_outlined, size: 20, color: Colors.grey));
@@ -1256,7 +1333,7 @@ class ProductImage extends StatelessWidget {
             ),
           ),
           Text(
-            _getQuantityText(product.miktar),
+            _getQuantityText(),
             style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
           ),
         ],
@@ -1264,19 +1341,25 @@ class ProductImage extends StatelessWidget {
     );
   }
 
-  String _getQuantityText(double? miktar) {
-    if (miktar == null) return "Qty: 0";
-
-    // If we have a selected birim, calculate stock for that unit
-    if (selectedBirim != null) {
-      final calculatedQty = selectedBirim!.calculateStockForUnit(miktar);
-      if (calculatedQty > 99) return "Qty: 99+";
-      if (calculatedQty < -99) return "Qty: 99-";
-      return "Qty: $calculatedQty ${selectedBirim!.displayName}";
+  String _getQuantityText() {
+    // ✅ Loading durumunda boş döndür (yanlış veri gösterme)
+    if (_stockLoading) {
+      return "Qty: ...";
     }
 
-    // Fall back to default behavior (display base UNIT quantity)
-    final qty = miktar.toInt();
+    // ✅ Depostok fallback mantığından gelen stok bilgisini kullan (UNIT cinsinden)
+    final unitStock = _availableStock ?? widget.product.miktar ?? 0.0;
+
+    // ✅ Seçili birime göre stoğu hesapla (carpan ile böl)
+    double displayStock = unitStock;
+    if (widget.selectedBirim != null && widget.selectedBirim!.carpan > 0) {
+      // Seçili birim varsa ve carpan > 0 ise, UNIT stoğunu carpan'a böl
+      // Örnek: 24 UNIT / 8 (carpan) = 3 BOX
+      displayStock = unitStock / widget.selectedBirim!.carpan;
+    }
+
+    final qty = displayStock.toInt();
+
     if (qty > 99) return "Qty: 99+";
     if (qty < -99) return "Qty: 99-";
     return "Qty: $qty";

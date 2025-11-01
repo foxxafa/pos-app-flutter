@@ -943,14 +943,17 @@ static Future<void> downloadCartItemImages(List<dynamic> cartItems, {Function? o
                 break;
               }
 
-              // Batch insert için
+              // Batch insert için - SADECE ihtiyacımız olan kolonları insert et
               final batch = db.batch();
               for (var item in depostokList) {
-                batch.insert('Depostok', {
-                  'StokKodu': item['StokKodu'],
-                  'birim': item['birim'] ?? '',
-                  'miktar': item['miktar'] ?? 0.0,
-                });
+                batch.rawInsert(
+                  'INSERT INTO Depostok (StokKodu, birim, miktar) VALUES (?, ?, ?)',
+                  [
+                    item['StokKodu'],
+                    item['birim'] ?? '',
+                    (item['miktar'] ?? 0.0) is double ? item['miktar'] : double.tryParse(item['miktar'].toString()) ?? 0.0,
+                  ],
+                );
               }
               await batch.commit(noResult: true);
 

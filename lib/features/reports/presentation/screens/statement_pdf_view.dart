@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -9,6 +10,89 @@ import 'package:pos_app/core/network/api_config.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+
+// Custom TextInputFormatter for date input
+class DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Remove all non-digits
+    String digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
+
+    if (digitsOnly.isEmpty) {
+      return const TextEditingValue();
+    }
+
+    // Limit to 8 digits max
+    if (digitsOnly.length > 8) {
+      digitsOnly = digitsOnly.substring(0, 8);
+    }
+
+    // Auto-correct first digit if > 3 (for day)
+    if (digitsOnly.length >= 1) {
+      int? firstDigit = int.tryParse(digitsOnly[0]);
+      if (firstDigit != null && firstDigit > 3) {
+        digitsOnly = '0$digitsOnly';
+      }
+    }
+
+    // Build formatted string
+    String formatted = '';
+
+    // Add day (first 2 digits)
+    if (digitsOnly.length >= 1) {
+      formatted = digitsOnly.substring(0, digitsOnly.length >= 2 ? 2 : 1);
+
+      // Validate day
+      if (formatted.length == 2) {
+        int? day = int.tryParse(formatted);
+        if (day == null || day < 1 || day > 31) {
+          formatted = digitsOnly[0];
+          digitsOnly = digitsOnly[0]; // Keep only first digit
+        }
+      }
+    }
+
+    // Add dot and month (next 2 digits)
+    if (digitsOnly.length >= 3) {
+      formatted += '.';
+      String monthPart = digitsOnly.substring(2, digitsOnly.length >= 4 ? 4 : 3);
+
+      // Validate month first digit
+      int? firstMonthDigit = int.tryParse(monthPart[0]);
+      if (firstMonthDigit != null && firstMonthDigit > 1) {
+        // Invalid first digit for month, stop here
+        return TextEditingValue(
+          text: formatted,
+          selection: TextSelection.collapsed(offset: formatted.length),
+        );
+      }
+
+      // Validate full month if 2 digits
+      if (monthPart.length == 2) {
+        int? month = int.tryParse(monthPart);
+        if (month == null || month < 1 || month > 12) {
+          monthPart = monthPart[0]; // Keep only first digit
+        }
+      }
+
+      formatted += monthPart;
+    }
+
+    // Add dot and year (next 4 digits)
+    if (digitsOnly.length >= 5) {
+      formatted += '.';
+      formatted += digitsOnly.substring(4, digitsOnly.length >= 8 ? 8 : digitsOnly.length);
+    }
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+}
 
 class StatementPdfView extends StatefulWidget {
   const StatementPdfView({super.key});
@@ -20,7 +104,6 @@ class StatementPdfView extends StatefulWidget {
 class _StatementPdfViewState extends State<StatementPdfView> {
   String? _pdfPath;
   bool _isLoading = false;
-  String? _errorMessage;
   PdfDocument? _pdfDocument;
   int _totalPages = 0;
   int _currentPage = 0;
@@ -59,8 +142,29 @@ class _StatementPdfViewState extends State<StatementPdfView> {
 
   DateTime? _parseDate(String input) {
     try {
-      // Parse dd.MM.yyyy format
-      return DateFormat('dd.MM.yyyy').parseStrict(input);
+      // Check format first
+      final parts = input.split('.');
+      if (parts.length != 3) return null;
+
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+
+      if (day == null || month == null || year == null) return null;
+      if (day < 1 || day > 31) return null;
+      if (month < 1 || month > 12) return null;
+      if (year < 1900 || year > 2100) return null;
+
+      // Try to create a DateTime object - this will validate if the date actually exists
+      final date = DateTime(year, month, day);
+
+      // Verify the created date matches our input
+      // This catches cases like 31.02.2025 which DateTime auto-corrects to 03.03.2025
+      if (date.day != day || date.month != month || date.year != year) {
+        return null;
+      }
+
+      return date;
     } catch (e) {
       return null;
     }
@@ -69,7 +173,6 @@ class _StatementPdfViewState extends State<StatementPdfView> {
   Future<void> _downloadAndDisplayPdf() async {
     setState(() {
       _isLoading = true;
-      _errorMessage = null;
     });
 
     try {
@@ -85,10 +188,51 @@ class _StatementPdfViewState extends State<StatementPdfView> {
       final parsedEndDate = _parseDate(_endDateController.text);
 
       if (parsedStartDate == null) {
-        throw Exception('Invalid start date format. Use dd.MM.yyyy');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Invalid start date. Please enter a valid date (e.g., 01.01.2025)'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
       if (parsedEndDate == null) {
-        throw Exception('Invalid end date format. Use dd.MM.yyyy');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Invalid end date. Please enter a valid date (e.g., 31.12.2025)'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        setState(() {
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // Check if start date is after end date
+      if (parsedStartDate.isAfter(parsedEndDate)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Start date cannot be after end date'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
 
       // Update internal dates
@@ -137,8 +281,18 @@ class _StatementPdfViewState extends State<StatementPdfView> {
       }
     } catch (e) {
       print('❌ Error downloading PDF: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load statement: ${e.toString().replaceAll('Exception: ', '')}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+
       setState(() {
-        _errorMessage = 'Failed to load statement: $e';
         _isLoading = false;
       });
     }
@@ -190,8 +344,8 @@ class _StatementPdfViewState extends State<StatementPdfView> {
       ),
       body: Column(
         children: [
-          // PDF Viewer or Loading/Error - Expanded (kalan tüm alanı kapla)
-          if (_pdfDocument != null || _isLoading || _errorMessage != null)
+          // PDF Viewer or Loading - Expanded (kalan tüm alanı kapla)
+          if (_pdfDocument != null || _isLoading)
             Expanded(
                 child: _isLoading
                   ? Center(
@@ -212,62 +366,20 @@ class _StatementPdfViewState extends State<StatementPdfView> {
                         ],
                       ),
                     )
-                  : _errorMessage != null
-                      ? Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(24.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.error_outline,
-                                  size: 64,
-                                  color: Colors.red[300],
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Error',
-                                  style: theme.textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _errorMessage!,
-                                  textAlign: TextAlign.center,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                ElevatedButton.icon(
-                                  onPressed: _downloadAndDisplayPdf,
-                                  icon: const Icon(Icons.refresh),
-                                  label: const Text('Try Again'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppTheme.lightPrimaryColor,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      : PageView.builder(
-                          controller: _pageController,
-                          itemCount: _totalPages,
-                          itemBuilder: (context, index) {
-                            return _PdfPageWithZoom(
-                              document: _pdfDocument!,
-                              pageNumber: index + 1,
-                            );
-                          },
-                        ),
-                      ),
+                  : PageView.builder(
+                      controller: _pageController,
+                      itemCount: _totalPages,
+                      itemBuilder: (context, index) {
+                        return _PdfPageWithZoom(
+                          document: _pdfDocument!,
+                          pageNumber: index + 1,
+                        );
+                      },
+                    ),
+                  ),
 
           // Spacer - PDF yoksa kontroller ortada
-          if (_pdfDocument == null && !_isLoading && _errorMessage == null)
+          if (_pdfDocument == null && !_isLoading)
             const Spacer(),
 
           // Controls section - Alt kısım (sabit yükseklik)
@@ -305,6 +417,9 @@ class _StatementPdfViewState extends State<StatementPdfView> {
                       Expanded(
                         child: TextField(
                           controller: _startDateController,
+                          inputFormatters: [
+                            DateInputFormatter(),
+                          ],
                           decoration: InputDecoration(
                             labelText: 'Start Date',
                             labelStyle: const TextStyle(fontSize: 12),
@@ -326,7 +441,7 @@ class _StatementPdfViewState extends State<StatementPdfView> {
                             suffixIcon: const Icon(Icons.calendar_today, size: 16),
                           ),
                           style: const TextStyle(fontSize: 13),
-                          keyboardType: TextInputType.datetime,
+                          keyboardType: TextInputType.number,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -335,6 +450,9 @@ class _StatementPdfViewState extends State<StatementPdfView> {
                       Expanded(
                         child: TextField(
                           controller: _endDateController,
+                          inputFormatters: [
+                            DateInputFormatter(),
+                          ],
                           decoration: InputDecoration(
                             labelText: 'End Date',
                             labelStyle: const TextStyle(fontSize: 12),
@@ -356,7 +474,7 @@ class _StatementPdfViewState extends State<StatementPdfView> {
                             suffixIcon: const Icon(Icons.calendar_today, size: 16),
                           ),
                           style: const TextStyle(fontSize: 13),
-                          keyboardType: TextInputType.datetime,
+                          keyboardType: TextInputType.number,
                         ),
                       ),
                     ],
