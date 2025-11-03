@@ -23,7 +23,8 @@ abstract class RefundRepository {
   Future<bool> sendRefund(RefundSendModel refund);
 
   /// Save refund to offline queue
-  Future<void> saveRefundOffline(RefundSendModel refund);
+  /// Returns true if saved successfully, false if duplicate
+  Future<bool> saveRefundOffline(RefundSendModel refund);
 
   /// Get all offline refunds from queue
   Future<List<Map<String, dynamic>>> getOfflineRefunds();

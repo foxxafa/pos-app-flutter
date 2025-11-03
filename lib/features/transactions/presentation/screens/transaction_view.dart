@@ -15,6 +15,7 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
+import 'package:pos_app/core/utils/fisno_generator.dart';
 
 class TransactionPage extends StatefulWidget {
   const TransactionPage({super.key});
@@ -36,8 +37,27 @@ class _TransactionPageState extends State<TransactionPage> {
   @override
   void initState() {
     super.initState();
-_documentNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().padLeft(10, '0').substring(0, 10)}';
-print("fisnooooooooo $_documentNo");
+    _generateDocumentNo();
+  }
+
+  /// Generate unique document number for transaction using FisNoGenerator
+  Future<void> _generateDocumentNo() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final result = await db.query('Login', limit: 1);
+      final int userId = result.isNotEmpty ? (result.first['id'] as int) : 1;
+
+      // Generate documentNo (16 characters, same format as orders)
+      _documentNo = FisNoGenerator.generate(userId: userId);
+      print('✅ Transaction DocumentNo generated: $_documentNo (UserID: $userId)');
+      setState(() {}); // Update UI
+    } catch (e) {
+      print('⚠️ Error generating transaction documentNo: $e');
+      // Fallback
+      _documentNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(3, 17)}';
+      setState(() {});
+    }
   }
 
   Future<void> _sendTahsilat(String method, BuildContext context) async {

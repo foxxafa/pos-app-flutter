@@ -149,12 +149,13 @@ class RefundRepositoryImpl implements RefundRepository {
 
   // ============= Refund Send Methods =============
 
-  @override
-  Future<bool> sendRefund(RefundSendModel refund) async {
+  /// Send refund to backend
+  /// Returns: 'success', 'duplicate', or 'failed'
+  Future<String> _sendRefundInternal(RefundSendModel refund) async {
     if (!await networkInfo.isConnected) {
       await saveRefundOffline(refund);
       print("📥 İnternet yok, refund offline kaydedildi.");
-      return false;
+      return 'failed';
     }
 
     print(jsonEncode(refund.toJson()));
@@ -166,22 +167,43 @@ class RefundRepositoryImpl implements RefundRepository {
       );
 
       if (response.statusCode == 200) {
-        print("✅ Refund gönderildi: ${response.data}");
-        return true;
+        // ✅ Check backend's IsSuccessStatusCode field
+        final data = response.data;
+        if (data is Map && data['IsSuccessStatusCode'] == true) {
+          print("✅ Refund başarıyla gönderildi: ${data['message']} (FisNo: ${refund.fis.fisNo})");
+          return 'success';
+        } else {
+          // ✅ Check if error is due to duplicate FisNo
+          final errorMessage = data['message']?.toString() ?? response.data.toString();
+          if (errorMessage.contains('already been taken') || errorMessage.contains('Receipt Number')) {
+            print("⚠️ Refund duplicate tespit edildi (backend'de zaten var): ${refund.fis.fisNo}");
+            return 'duplicate';
+          }
+
+          print("❌ Refund backend tarafından reddedildi: $errorMessage");
+          await saveRefundOffline(refund);
+          return 'failed';
+        }
       } else {
-        print("❌ Refund başarısız: ${response.data}");
+        print("❌ Refund HTTP hatası (${response.statusCode}): ${response.data}");
         await saveRefundOffline(refund);
-        return false;
+        return 'failed';
       }
     } catch (e) {
-      print("💥 Refund Hatası: $e");
+      print("💥 Refund gönderimi sırasında hata: $e");
       await saveRefundOffline(refund);
-      return false;
+      return 'failed';
     }
   }
 
   @override
-  Future<void> saveRefundOffline(RefundSendModel refund) async {
+  Future<bool> sendRefund(RefundSendModel refund) async {
+    final result = await _sendRefundInternal(refund);
+    return result == 'success';
+  }
+
+  @override
+  Future<bool> saveRefundOffline(RefundSendModel refund) async {
     final db = await _database;
 
     // Create table if not exists
@@ -192,14 +214,50 @@ class RefundRepositoryImpl implements RefundRepository {
       )
     ''');
 
+    // ✅ Check if fisNo column exists
+    final tableInfo = await db.rawQuery('PRAGMA table_info(refund_queue)');
+    final hasFisNoColumn = tableInfo.any((column) => column['name'] == 'fisNo');
+
+    // ✅ Add fisNo column if it doesn't exist (migration for existing tables)
+    if (!hasFisNoColumn) {
+      try {
+        await db.execute('ALTER TABLE refund_queue ADD COLUMN fisNo TEXT');
+        print("✅ fisNo column added to refund_queue");
+      } catch (e) {
+        print("⚠️ Error adding fisNo column: $e");
+      }
+    }
+
+    // ✅ Check if this fisNo already exists in queue to prevent duplicates
+    try {
+      final existingRefund = await db.query(
+        'refund_queue',
+        where: 'fisNo = ?',
+        whereArgs: [refund.fis.fisNo],
+        limit: 1,
+      );
+
+      if (existingRefund.isNotEmpty) {
+        print("⚠️ Refund with fisNo ${refund.fis.fisNo} already exists in queue, skipping duplicate");
+        return false; // Duplicate, not saved
+      }
+    } catch (e) {
+      // If fisNo column doesn't exist yet, continue (will be caught on next run)
+      print("⚠️ Error checking for duplicate fisNo: $e");
+    }
+
     await db.insert(
       'refund_queue',
-      {'data': jsonEncode(refund.toJson())},
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      {
+        'fisNo': refund.fis.fisNo,
+        'data': jsonEncode(refund.toJson())
+      },
+      conflictAlgorithm: ConflictAlgorithm.ignore, // Ignore duplicates silently
     );
 
-    print("📥 Refund offline queue'ya kaydedildi");
+    print("📥 Refund offline queue'ya kaydedildi (FisNo: ${refund.fis.fisNo})");
     print(jsonEncode(refund.toJson()));
+    return true; // Successfully saved
   }
 
   @override
@@ -230,6 +288,20 @@ class RefundRepositoryImpl implements RefundRepository {
         data TEXT
       )
     ''');
+
+    // ✅ Check if fisNo column exists
+    final tableInfo = await db.rawQuery('PRAGMA table_info(refund_queue)');
+    final hasFisNoColumn = tableInfo.any((column) => column['name'] == 'fisNo');
+
+    // ✅ Add fisNo column if it doesn't exist (migration for existing tables)
+    if (!hasFisNoColumn) {
+      try {
+        await db.execute('ALTER TABLE refund_queue ADD COLUMN fisNo TEXT');
+        print("✅ fisNo column added to refund_queue");
+      } catch (e) {
+        print("⚠️ Error adding fisNo column: $e");
+      }
+    }
 
     final rawList = await db.query('refund_queue');
 
@@ -266,13 +338,18 @@ class RefundRepositoryImpl implements RefundRepository {
         }).toList();
 
         final refund = RefundSendModel(fis: fis, satirlar: satirlar);
-        final success = await sendRefund(refund);
+        final result = await _sendRefundInternal(refund);
 
-        if (success) {
+        if (result == 'success') {
           await deleteRefundById(id);
-          print("✅ Offline refund gönderildi ve silindi (id: $id)");
+          print("✅ Offline refund gönderildi ve silindi (id: $id, FisNo: ${fis.fisNo})");
+        } else if (result == 'duplicate') {
+          // ✅ Duplicate detected - delete from queue since it was already processed
+          await deleteRefundById(id);
+          print("🗑️ Duplicate refund queue'dan temizlendi (id: $id, FisNo: ${fis.fisNo})");
         } else {
-          print("❌ Refund gönderimi başarısız (id: $id)");
+          // Failed - keep in queue for retry
+          print("❌ Refund gönderimi başarısız, queue'da bırakıldı (id: $id, FisNo: ${fis.fisNo})");
         }
       } catch (e) {
         print("💥 Parsing hatası (id: $id): $e");

@@ -3,7 +3,7 @@
 /// FisNo (Sipariş Numarası) üretimi için utility class
 ///
 /// Format: MO + YY + MM + DD + ÇalışanID(2) + Dakika(2) + Mikrosaniye(4)
-/// Örnek: MO250724053539746
+/// Örnek: MO250724053539746 (15 characters)
 ///
 /// Breakdown:
 /// - MO: Prefix (Mobil Order)
@@ -12,9 +12,9 @@
 /// - 24: Gün (24)
 /// - 05: Çalışan ID (1-99 arası)
 /// - 35: Dakika (00-59)
-/// - 39746: Mikrosaniye (Saniye * 1000 + Milisaniye) mod 10000 = (39 * 1000 + 746) % 10000 = 39746
+/// - 9746: Mikrosaniye (Saniye * 1000 + Milisaniye) mod 10000 = (39 * 1000 + 746) % 10000 = 9746
 ///
-/// Mikrosaniye formatı dakika başına 60.000 farklı kombinasyon sunar (0-59999 arası)
+/// Mikrosaniye formatı dakika başına 60.000 farklı kombinasyon sunar (0-9999 arası)
 class FisNoGenerator {
   /// Benzersiz FisNo üretir
   ///
@@ -25,7 +25,7 @@ class FisNoGenerator {
   /// Örnek kullanım:
   /// ```dart
   /// final fisNo = FisNoGenerator.generate(userId: 5);
-  /// print(fisNo); // MO250724053539746
+  /// print(fisNo); // MO2507240535974
   /// ```
   static String generate({required int userId}) {
     final now = DateTime.now();
@@ -47,8 +47,8 @@ class FisNoGenerator {
     final dakika = now.minute.toString().padLeft(2, '0');
 
     // Mikrosaniye: (Saniye * 1000 + Milisaniye) % 10000
-    // Bu bize 0-59999 arası bir değer verir (4 basamak)
-    // Örnek: 10:50:39.746 → (39 * 1000 + 746) % 10000 = 39746
+    // Bu bize 0-9999 arası bir değer verir (4 basamak - backend uyumlu 15 karakter için)
+    // Örnek: 10:50:39.746 → (39 * 1000 + 746) % 10000 = 9746
     final mikrosaniye = ((now.second * 1000) + now.millisecond) % 10000;
     final mikroStr = mikrosaniye.toString().padLeft(4, '0');
 
@@ -84,20 +84,20 @@ class FisNoGenerator {
     }
 
     try {
-      final microsecond = int.parse(fisNo.substring(11, 15));
+      final microsecond = int.parse(fisNo.substring(12, 16));
       final second = microsecond ~/ 1000;  // Saniye kısmını çıkar
       final millisecond = microsecond % 1000;  // Milisaniye kısmını çıkar
 
       return {
         'prefix': fisNo.substring(0, 2),           // MO
         'year': '20${fisNo.substring(2, 4)}',      // 2025
-        'month': fisNo.substring(4, 6),            // 07
-        'day': fisNo.substring(6, 8),              // 24
-        'userId': int.parse(fisNo.substring(8, 10)), // 05
-        'minute': fisNo.substring(10, 12),         // 35
-        'microsecond': fisNo.substring(11, 15),    // 39746
-        'second': second,                          // 39 (hesaplanmış)
-        'millisecond': millisecond,                // 746 (hesaplanmış)
+        'month': fisNo.substring(4, 6),            // 11
+        'day': fisNo.substring(6, 8),              // 03
+        'userId': int.parse(fisNo.substring(8, 10)), // 01
+        'minute': fisNo.substring(10, 12),         // 07
+        'microsecond': fisNo.substring(12, 16),    // 1928
+        'second': second,                          // 1 (hesaplanmış)
+        'millisecond': millisecond,                // 928 (hesaplanmış)
         'fullDate': '20${fisNo.substring(2, 4)}-${fisNo.substring(4, 6)}-${fisNo.substring(6, 8)}',
         'isValid': true,
       };

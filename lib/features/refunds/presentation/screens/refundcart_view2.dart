@@ -175,8 +175,23 @@ class _RefundCartView2State extends State<RefundCartView2> {
         satirlar: refundItems,
       );
 
-      // İnternet olsa bile önce offline kaydet, sync butonuna basınca gönder
-      await refundRepository.saveRefundOffline(refundSendModel);
+      // ✅ İnternet olsa bile önce offline kaydet, sync butonuna basınca gönder
+      final saved = await refundRepository.saveRefundOffline(refundSendModel);
+
+      if (!saved) {
+        // Duplicate fisNo - this refund was already submitted
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('This return was already submitted (FisNo: ${fisModelCopy.fisNo})'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return; // Don't proceed with navigation
+      }
+
       print("📥 İade offline kaydedildi, sync ile gönderilecek.");
 
       // Log activity
@@ -357,13 +372,13 @@ class _RefundCartView2State extends State<RefundCartView2> {
   Widget _buildSubmitButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 6.h,
       child: ElevatedButton(
         onPressed: _isSubmitting ? null : () => _submitRefund(context),
         style: ElevatedButton.styleFrom(
           backgroundColor: Theme.of(context).colorScheme.error,
           foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: EdgeInsets.symmetric(vertical: 3.h),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
         child: _isSubmitting
             ? SizedBox(

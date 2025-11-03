@@ -439,13 +439,18 @@ class _RefundCartViewState extends State<RefundCartView> {
         final key = product.stokKodu;
         final birimTipi = provider.getBirimTipi(key);
 
-        if ((birimTipi == 'Unit' && product.birimKey1 != 0) || (birimTipi == 'Box' && product.birimKey2 != 0)) {
+        // ✅ Birimler yüklenmişse devam et
+        await _loadBirimlerForProduct(key);
+        final selectedBirim = _selectedBirimMap[key];
+
+        if (selectedBirim != null) {
           final matchingRefunds = widget.refunds.where((r) => r.urunAdi == product.urunAdi).toList()
             ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
           final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
 
-          final birimFiyat = latestRefund?.birimFiyat ??
-            (birimTipi == 'Box' ? double.tryParse(product.kutuFiyati.toString()) ?? 0 : double.tryParse(product.adetFiyati.toString()) ?? 0);
+          // ✅ %70 indirimli fiyat hesapla
+          final originalPrice = selectedBirim.fiyat7 ?? 0;
+          final birimFiyat = latestRefund?.birimFiyat ?? (originalPrice * 0.7);
           final iskonto = latestRefund?.iskonto ?? 0;
 
           provider.addOrUpdateItem(
@@ -459,7 +464,7 @@ class _RefundCartViewState extends State<RefundCartView> {
             urunBarcode: product.barcode1,
             miktar: 1,
             iskonto: iskonto,
-            birimTipi: birimTipi,
+            birimTipi: selectedBirim.birimadi ?? 'Unit',
           );
           playBeepForProduct(product); // ✅ Product gönder
         }
@@ -485,10 +490,9 @@ class _RefundCartViewState extends State<RefundCartView> {
     _filterProducts(queryOverride: "");
   }
 
-  void _updateQuantityFromTextField(String key, String value, ProductModel product) {
+  void _updateQuantityFromTextField(String key, String value, ProductModel product) async {
     final provider = Provider.of<RCartProvider>(context, listen: false);
     final newQuantity = int.tryParse(value) ?? 0;
-    final birimTipi = provider.getBirimTipi(key);
 
     final currentQuantity = provider.getmiktar(key);
     final difference = newQuantity - currentQuantity;
@@ -498,12 +502,17 @@ class _RefundCartViewState extends State<RefundCartView> {
     if (newQuantity <= 0) {
       provider.removeItem(key);
     } else {
+      // ✅ Birimler yükle
+      await _loadBirimlerForProduct(key);
+      final selectedBirim = _selectedBirimMap[key];
+
       final matchingRefunds = widget.refunds.where((r) => r.urunAdi == product.urunAdi).toList()
         ..sort((a, b) => b.fisTarihi.compareTo(a.fisTarihi));
       final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
 
-      final birimFiyat = latestRefund?.birimFiyat ??
-        (birimTipi == 'Box' ? double.tryParse(product.kutuFiyati.toString()) ?? 0 : double.tryParse(product.adetFiyati.toString()) ?? 0);
+      // ✅ %70 indirimli fiyat hesapla - önce fiyat7'den, sonra fallback
+      final originalPrice = selectedBirim?.fiyat7 ?? 0;
+      final birimFiyat = latestRefund?.birimFiyat ?? (originalPrice * 0.7);
       final iskonto = latestRefund?.iskonto ?? 0;
 
       provider.addOrUpdateItem(

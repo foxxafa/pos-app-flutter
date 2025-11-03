@@ -10,6 +10,7 @@ import 'package:pos_app/features/refunds/presentation/screens/refundcart_view.da
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/utils/fisno_generator.dart';
 
 class RefundList2View extends StatefulWidget {
   @override
@@ -24,7 +25,7 @@ class _RefundList2ViewState extends State<RefundList2View> {
   String _aciklama = '';
   double toplam = 0;
   String _searchQuery = '';
-List<String> urunAdlariUnique=[];
+  List<String> urunAdlariUnique=[];
   // List<String> _iadeNedenleri = [
   //   'Short Item',
   //   'Misdelivery (Useful)',
@@ -43,18 +44,48 @@ List<String> urunAdlariUnique=[];
   String _selectedIadeNedeni = "";
 
   DateTime _selectedDate = DateTime.now();
-  final fisNo =
-      'MBL${DateTime.now().year % 100}${DateTime.now().month.toString().padLeft(2, '0')}${DateTime.now().day.toString().padLeft(2, '0')}${(Random().nextInt(900) + 100)}';
 
   List<ProductModel> _products = [];
   Map<String, int> _quantities = {}; // stokKodu -> miktar
   Map<String, double> _customPrices = {}; // stokKodu -> custom fiyat
 
+  // ✅ FisNo generated in initState
+  String _currentFisNo = '';
+
   @override
   void initState() {
     super.initState();
+    _generateFisNo(); // Generate FisNo on init
     fetchData();
     loadProducts();
+  }
+
+  /// Generate unique fisNo for refund using FisNoGenerator
+  Future<void> _generateFisNo() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final result = await db.query('Login', limit: 1);
+      final int userId = result.isNotEmpty ? (result.first['id'] as int) : 1;
+
+      // Generate fisNo (15 characters: MO + 13 digits)
+      final fisNo = FisNoGenerator.generate(userId: userId);
+      print('✅ Refund FisNo generated: $fisNo (UserID: $userId)');
+
+      if (mounted) {
+        setState(() {
+          _currentFisNo = fisNo;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Error generating refund fisNo: $e');
+      // Fallback
+      if (mounted) {
+        setState(() {
+          _currentFisNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(3, 17)}';
+        });
+      }
+    }
   }
 Future<void> fetchData() async {
   final refundRepository = Provider.of<RefundRepository>(context, listen: false);
@@ -155,6 +186,7 @@ void updateTotal() {
     }).toList();
   }
 
+  // ⚠️ DEPRECATED: This method is not used anymore
   void sendRefundItems() async {
     final refundRepository = Provider.of<RefundRepository>(context, listen: false);
     final musteriProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
@@ -182,7 +214,7 @@ void updateTotal() {
     }).toList();
 
     RefundFisModel fisModel = RefundFisModel(
-      fisNo: fisNo,
+      fisNo: _currentFisNo,
       aciklama: _aciklama,
       iadeNedeni: _selectedIadeNedeni,
       fistarihi: DateFormat('dd.MM.yyyy').format(_selectedDate),
@@ -296,7 +328,7 @@ void updateTotal() {
                             ),
                             SizedBox(width: 2.w),
                             Text(
-                              fisNo,
+                              _currentFisNo,
                               style: TextStyle(
                                 fontSize: 13.sp,
                                 fontWeight: FontWeight.bold,
@@ -391,7 +423,7 @@ void updateTotal() {
                   child: ElevatedButton(
                     onPressed: () {
                       RefundFisModel fisModel = RefundFisModel(
-                        fisNo: fisNo,
+                        fisNo: _currentFisNo,
                         aciklama: _aciklama,
                         iadeNedeni: _selectedIadeNedeni,
                         fistarihi: DateFormat('dd.MM.yyyy').format(_selectedDate),

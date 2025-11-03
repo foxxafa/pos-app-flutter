@@ -68,6 +68,11 @@ class SyncService {
       }
     });
 
+    // Depostok senkronizasyonu - ÖNCE DEPO (Product sync içinde kullanılıyor)
+    print('📦 Depo stok bilgileri senkronizasyonu başlatılıyor...');
+    await SyncDepostok();
+    print('✅ Depo stok senkronizasyonu tamamlandı');
+
     print('📦 Ürün senkronizasyonu başlatılıyor...');
     //sync işlemleri
     await SyncProducts(DateTime(2024, 5, 1, 15, 55, 30));
@@ -88,11 +93,6 @@ class SyncService {
         print('⚠️ Birimler ve Barkodlar senkronizasyonu başarısız');
       }
     }
-
-    // Depostok senkronizasyonu
-    print('📦 Depo stok bilgileri senkronizasyonu başlatılıyor...');
-    await SyncDepostok();
-    print('✅ Depo stok senkronizasyonu tamamlandı');
 
     print('⏰ Son güncelleme zamanı kaydediliyor...');
     //update sonu son update saati güncelleme
@@ -415,10 +415,9 @@ class SyncService {
     } else {
       print('No API Key found.');
     }
-    // Sadece pending ve retry_count < 3 olanları al
+    // Tüm pending ve failed siparişleri al - Sync butonuna her basıldığında hepsini dene
     final pendingList = await db.query(
       'PendingSales',
-      where: "(status = 'pending' OR status IS NULL) AND (retry_count < 3 OR retry_count IS NULL)",
       orderBy: 'created_at ASC',
     );
 
@@ -498,35 +497,20 @@ class SyncService {
         final errorMsg = e.toString();
         debugPrint("❌ Gönderim hatası (ID: $itemId): $errorMsg");
 
-        // Retry count artır ve hatayı kaydet
+        // Retry count artır ve hatayı kaydet (sınırlama yok - her sync'te denenecek)
         final newRetryCount = retryCount + 1;
 
-        if (newRetryCount >= 3) {
-          // 3 deneme sonrası failed olarak işaretle
-          await db.update(
-            'PendingSales',
-            {
-              'retry_count': newRetryCount,
-              'status': 'failed',
-              'last_error': errorMsg.length > 500 ? errorMsg.substring(0, 500) : errorMsg,
-            },
-            where: 'id = ?',
-            whereArgs: [itemId],
-          );
-          debugPrint("⛔ Sipariş başarısız olarak işaretlendi (3 deneme): ID $itemId");
-        } else {
-          // Retry count artır, status pending kalsın
-          await db.update(
-            'PendingSales',
-            {
-              'retry_count': newRetryCount,
-              'last_error': errorMsg.length > 500 ? errorMsg.substring(0, 500) : errorMsg,
-            },
-            where: 'id = ?',
-            whereArgs: [itemId],
-          );
-          debugPrint("🔄 Sipariş tekrar denenecek: ID $itemId (Deneme: $newRetryCount/3)");
-        }
+        await db.update(
+          'PendingSales',
+          {
+            'retry_count': newRetryCount,
+            'status': 'pending', // Her zaman pending kalsın
+            'last_error': errorMsg.length > 500 ? errorMsg.substring(0, 500) : errorMsg,
+          },
+          where: 'id = ?',
+          whereArgs: [itemId],
+        );
+        debugPrint("🔄 Sipariş başarısız (Deneme: $newRetryCount) - Bir sonraki sync'te tekrar denenecek: ID $itemId");
       }
     }
 

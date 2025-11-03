@@ -388,6 +388,27 @@ class ApimobilController extends Controller
             return ['status' => 'error', 'message' => 'Geçersiz veri formatı'];
         }
 
+        // ✅ FisNo formatını kontrol et (MO + 13 rakam = 15 karakter)
+        // Format: MO + YY + MM + DD + UserID + Minute + Microsecond
+        // Example: MO251103010719286 (15 characters)
+        if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Geçersiz iade numarası formatı. Beklenen: MO + 13 rakam (örn: MO2511030107192)'
+            ];
+        }
+
+        // ✅ Duplicate FisNo kontrolü
+        $existingFis = Iadefisleri::find()->where(['FisNo' => $data['fis']['FisNo']])->one();
+        if ($existingFis) {
+            return [
+                'IsSuccessStatusCode' => false,
+                'status' => 'error',
+                'message' => 'Bu iade numarası daha önce kullanılmış'
+            ];
+        }
+
         $transaction = Yii::$app->db->beginTransaction();
         try {
             // Save SatisFisleri
@@ -422,13 +443,24 @@ class ApimobilController extends Controller
             }
 
             $transaction->commit();
-            Dia::fisgonder($fis,7);
-            return [
+
+            // ✅ Return response first, then send to DIA (to avoid JSON corruption)
+            $response = [
                 'IsSuccessStatusCode'=>true,
                 'status' => 'success',
                 'message' => 'Veri başarıyla kaydedildi',
                 'fisNo' => $fis->FisNo
             ];
+
+            // Send to DIA after response is prepared (non-blocking)
+            try {
+                Dia::fisgonder($fis,7);
+            } catch (\Exception $e) {
+                // Log error but don't fail the response
+                Yii::error("DIA gönderim hatası (Refund {$fis->FisNo}): " . $e->getMessage());
+            }
+
+            return $response;
 
 
 
@@ -469,9 +501,11 @@ class ApimobilController extends Controller
         }
         file_put_contents($filePath, "2. Veri formatı doğrulandı.\n", FILE_APPEND);
 
-        // ✅ FisNo formatını kontrol et (MO + 14 rakam = 16 karakter)
-        if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{14}$/', $data['fis']['FisNo'])) {
-            file_put_contents($filePath, "HATA: Geçersiz FisNo formatı. Beklenen: MO + 14 rakam (örn: MO25072405358823)\n", FILE_APPEND);
+        // ✅ FisNo formatını kontrol et (MO + 13 rakam = 15 karakter)
+        // Format: MO + YY + MM + DD + UserID + Minute + Microsecond
+        // Example: MO251103010719286 (15 characters)
+        if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
+            file_put_contents($filePath, "HATA: Geçersiz FisNo formatı. Beklenen: MO + 13 rakam (örn: MO2511030107192)\n", FILE_APPEND);
             file_put_contents($filePath, "Gelen FisNo: " . ($data['fis']['FisNo'] ?? 'BOŞ') . "\n", FILE_APPEND);
             return ['IsSuccessStatusCode' => false, 'status' => 'error', 'message' => 'Geçersiz sipariş numarası formatı'];
         }
@@ -555,8 +589,11 @@ class ApimobilController extends Controller
             return ['IsSuccessStatusCode'=>false,'status' => 'error', 'message' => $e->getMessage()];
         }
     }
-    public function actionGetekstre($carikod,$tarih="2025-01-01",$detay=1){
-        return Dia::getEkstre($carikod,$tarih,$detay);
+    public function actionGetekstre($carikod,$tarih="2025-01-01",$detay=1,$tarih2=null,$ft=0){
+        if($tarih2==null)
+            $trih2=date("Y-m-d H:i:s");
+
+        return Dia::getEkstre($carikod,$tarih,$detay,$tarih2,$ft);
     }
     public function actionMusterilistesi(){
         $this->layout = false;

@@ -306,17 +306,33 @@ class UnitRepositoryImpl implements UnitRepository {
     if (birimler.isEmpty) return;
 
     final db = await _dbHelper.database;
-    final batch = db.batch();
+    const batchSize = 1000; // Her batch'te 1000 kayıt
+    int totalInserted = 0;
 
-    for (final birim in birimler) {
-      batch.insert(
-        'Birimler',
-        birim.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+    // Batch'leri 1000'lik parçalara böl (SQLite deadlock önleme)
+    for (int i = 0; i < birimler.length; i += batchSize) {
+      final batch = db.batch();
+      final end = (i + batchSize < birimler.length)
+                  ? i + batchSize
+                  : birimler.length;
+
+      for (int j = i; j < end; j++) {
+        batch.insert(
+          'Birimler',
+          birimler[j].toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      await batch.commit(noResult: true);
+      totalInserted += (end - i);
+
+      // Her 5000 kayıtta bir ilerleme göster
+      if (totalInserted % 5000 == 0 || totalInserted == birimler.length) {
+        debugPrint('📦 Birimler: $totalInserted/${birimler.length} eklendi...');
+      }
     }
 
-    await batch.commit(noResult: true);
     debugPrint('✅ Batch inserted ${birimler.length} birimler');
   }
 
@@ -325,17 +341,33 @@ class UnitRepositoryImpl implements UnitRepository {
     if (barkodlar.isEmpty) return;
 
     final db = await _dbHelper.database;
-    final batch = db.batch();
+    const batchSize = 1000; // Her batch'te 1000 kayıt
+    int totalInserted = 0;
 
-    for (final barkod in barkodlar) {
-      batch.insert(
-        'Barkodlar',
-        barkod.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+    // Batch'leri 1000'lik parçalara böl (SQLite deadlock önleme)
+    for (int i = 0; i < barkodlar.length; i += batchSize) {
+      final batch = db.batch();
+      final end = (i + batchSize < barkodlar.length)
+                  ? i + batchSize
+                  : barkodlar.length;
+
+      for (int j = i; j < end; j++) {
+        batch.insert(
+          'Barkodlar',
+          barkodlar[j].toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+
+      await batch.commit(noResult: true);
+      totalInserted += (end - i);
+
+      // Her 5000 kayıtta bir ilerleme göster
+      if (totalInserted % 5000 == 0 || totalInserted == barkodlar.length) {
+        debugPrint('📦 Barkodlar: $totalInserted/${barkodlar.length} eklendi...');
+      }
     }
 
-    await batch.commit(noResult: true);
     debugPrint('✅ Batch inserted ${barkodlar.length} barkodlar');
   }
 }
