@@ -13,7 +13,7 @@ class CartItem {
   String birimTipi;
   int durum;
   String urunBarcode;
-  int iskonto;
+  double iskonto;
   String? imsrc;
 
   String adetFiyati; // yeni alan
@@ -121,13 +121,13 @@ class CartProvider extends ChangeNotifier {
 
   String get eskiFisNo => _eskiFisNo;
 
-  int getIskonto(String stokKodu, [String? birimTipi]) {
+  double getIskonto(String stokKodu, [String? birimTipi]) {
     if (birimTipi != null) {
       final cartKey = '${stokKodu}_$birimTipi';
-      return _items[cartKey]?.iskonto ?? 0;
+      return _items[cartKey]?.iskonto ?? 0.0;
     }
     // Backward compatibility: eski key ile dene
-    return _items[stokKodu]?.iskonto ?? 0;
+    return _items[stokKodu]?.iskonto ?? 0.0;
   }
 
   String getBirimTipi(String stokKodu, [String? birimTipi]) {
@@ -186,7 +186,7 @@ class CartProvider extends ChangeNotifier {
     required String urunBarcode,
     String? imsrc,
     int miktar = 1,
-    int iskonto = 0,
+    double iskonto = 0.0,
     String birimTipi = 'Box',
     int durum = 1,
     int vat = 18,
@@ -604,8 +604,8 @@ class CartProvider extends ChangeNotifier {
             : int.tryParse(item['miktar']?.toString() ?? '0') ?? 0,
         urunBarcode: item['urunBarcode']?.toString() ?? '',
         iskonto: (item['iskonto'] is num)
-            ? (item['iskonto'] as num).toInt()
-            : int.tryParse(item['iskonto']?.toString() ?? '0') ?? 0,
+            ? (item['iskonto'] as num).toDouble()
+            : double.tryParse(item['iskonto']?.toString() ?? '0') ?? 0.0,
         birimTipi: item['birimTipi']?.toString() ?? 'Box',
         durum: (item['durum'] is num)
             ? (item['durum'] as num).toInt()

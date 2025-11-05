@@ -15,8 +15,8 @@ set customerName(String value) {
 
 String get customerName => _customerName;
 
-  int getIskonto(String stokKodu) {
-    return _items[stokKodu]?.iskonto ?? 0;
+  double getIskonto(String stokKodu) {
+    return _items[stokKodu]?.iskonto ?? 0.0;
   }
 
   String getBirimTipi(String stokKodu) {
@@ -53,7 +53,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
     required String urunBarcode,
     String? imsrc,
     int miktar = 1,
-    int iskonto = 0,
+    double iskonto = 0.0,
     String birimTipi = 'Box',
     int durum = 1,
     int vat = 18,

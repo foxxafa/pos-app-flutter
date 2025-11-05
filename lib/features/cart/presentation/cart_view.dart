@@ -201,7 +201,9 @@ class _CartViewState extends State<CartView> {
 
     final products = initialProducts.map((json) => ProductModel.fromMap(json)).toList();
 
-    // ✅ Ürünler zaten sync sırasında sıralandı
+    // ✅ Ürünleri alfabetik + stok bazlı sırala
+    await _sortProductsWithStock(products);
+
     setState(() {
       _allProducts = products; // İlk başta sadece 50 ürün
       _filteredProducts = products;
@@ -237,6 +239,59 @@ class _CartViewState extends State<CartView> {
 
     _productsLoaded = true;
     _checkLoadingComplete();
+  }
+
+  /// Ürünleri alfabetik + stok miktarına göre sırala
+  /// Primary: A'dan Z'ye (alfabetik)
+  /// Secondary: Stok miktarı (fazladan aza - suspended sonra gelir)
+  Future<void> _sortProductsWithStock(List<ProductModel> products) async {
+    try {
+      final db = await DatabaseHelper().database;
+
+      // Tüm stokları tek sorguda çek (UNIT bazlı)
+      final allStocks = await db.query(
+        'Depostok',
+        columns: ['StokKodu', 'miktar'],
+        where: 'UPPER(birim) = ?',
+        whereArgs: ['UNIT'],
+      );
+
+      // Map'e dönüştür: StokKodu -> miktar
+      final stockMap = Map<String, double>.fromEntries(
+        allStocks.map((row) => MapEntry(
+          row['StokKodu'].toString(),
+          (row['miktar'] as num?)?.toDouble() ?? 0.0,
+        ))
+      );
+
+      // Çift kriterli sıralama
+      products.sort((a, b) {
+        // 1. Primary: Alfabetik sıralama (A-Z)
+        final nameA = a.urunAdi.trim().toLowerCase();
+        final nameB = b.urunAdi.trim().toLowerCase();
+        final nameComparison = nameA.compareTo(nameB);
+
+        if (nameComparison != 0) {
+          return nameComparison; // Farklı isimse alfabetik sırala
+        }
+
+        // 2. Secondary: Aynı isimde (veya çok benzer) ise stok miktarına göre
+        // Depostok'tan al, yoksa Product.miktar fallback
+        final stockA = stockMap[a.stokKodu] ?? a.miktar ?? 0.0;
+        final stockB = stockMap[b.stokKodu] ?? b.miktar ?? 0.0;
+
+        // Büyükten küçüğe sırala (stok fazla olan önce, suspended/0 stok sonra)
+        return stockB.compareTo(stockA);
+      });
+
+      print('✅ Ürünler sıralandı: ${products.length} ürün (A-Z + Stok bazlı)');
+    } catch (e) {
+      print('⚠️ Sıralama hatası: $e');
+      // Hata olursa sadece alfabetik sırala
+      products.sort((a, b) =>
+        a.urunAdi.trim().toLowerCase().compareTo(b.urunAdi.trim().toLowerCase())
+      );
+    }
   }
 
   Future<void> _syncWithProvider() async {
@@ -480,7 +535,8 @@ class _CartViewState extends State<CartView> {
 
     final filtered = searchResults.map((json) => ProductModel.fromMap(json)).toList();
 
-    // Zaten sortOrder ile sıralı geldi, tekrar sıralamaya gerek yok
+    // ✅ Ürünleri alfabetik + stok bazlı sırala
+    await _sortProductsWithStock(filtered);
 
     setState(() {
       _filteredProducts = filtered; // Zaten 50 ile limitli
@@ -1557,7 +1613,7 @@ class _ProductDetailsState extends State<ProductDetails> {
         widget.provider.addOrUpdateItem(
           stokKodu: widget.product.stokKodu,
           miktar: 0,
-          iskonto: 0,
+          iskonto: 0.0,
           birimTipi: selectedType,
           urunAdi: widget.product.urunAdi,
           birimFiyat: double.tryParse(originalPrice.toString()) ?? 0,
@@ -1569,7 +1625,7 @@ class _ProductDetailsState extends State<ProductDetails> {
           selectedBirimKey: widget.selectedBirim?.key,
         );
       } else {
-        int discountPercent = int.tryParse(val) ?? 0;
+        double discountPercent = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
         if (discountPercent > 100) discountPercent = 100;
 
         final originalPrice = selectedType == 'Unit'
@@ -1622,8 +1678,8 @@ class _ProductDetailsState extends State<ProductDetails> {
       if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
       final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-          ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-          : 0;
+          ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+          : 0.0;
 
       widget.provider.addOrUpdateItem(
         stokKodu: widget.product.stokKodu,
@@ -1840,8 +1896,8 @@ class _ProductDetailsState extends State<ProductDetails> {
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-              ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-              : 0;
+              ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+              : 0.0;
 
           // Sadece discount controller'ı güncelle (local state)
           if (!widget.discountFocusNode.hasFocus) {
@@ -1858,8 +1914,8 @@ class _ProductDetailsState extends State<ProductDetails> {
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-              ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-              : 0;
+              ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+              : 0.0;
 
           widget.provider.addOrUpdateItem(
             stokKodu: widget.product.stokKodu,
@@ -1887,8 +1943,8 @@ class _ProductDetailsState extends State<ProductDetails> {
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-              ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-              : 0;
+              ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+              : 0.0;
 
           widget.provider.addOrUpdateItem(
             stokKodu: widget.product.stokKodu,
@@ -1917,7 +1973,7 @@ class _ProductDetailsState extends State<ProductDetails> {
         SizedBox(width: 1.w),
         Expanded(
           child: TextField(
-            keyboardType: TextInputType.number,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             controller: widget.discountController,
             focusNode: widget.discountFocusNode,
             decoration: InputDecoration(
@@ -1939,7 +1995,7 @@ class _ProductDetailsState extends State<ProductDetails> {
                 return;
               }
 
-              int discountPercent = int.tryParse(val) ?? 0;
+              double discountPercent = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
               if (discountPercent > 100) discountPercent = 100;
 
               final originalPrice = selectedType == 'Unit'
@@ -1952,12 +2008,6 @@ class _ProductDetailsState extends State<ProductDetails> {
               if (!widget.priceFocusNode.hasFocus) {
                 widget.priceController.text = discountedPrice.toStringAsFixed(2);
               }
-
-              // Yüzde formatını düzelt
-              if (val != discountPercent.toString()) {
-                widget.discountController.text = discountPercent.toString();
-                widget.discountController.selection = TextSelection.fromPosition(TextPosition(offset: widget.discountController.text.length));
-              }
             },
             // ✅ Focus kaybında provider'a kaydet
             onEditingComplete: () {
@@ -1968,7 +2018,7 @@ class _ProductDetailsState extends State<ProductDetails> {
                 widget.provider.addOrUpdateItem(
                   stokKodu: widget.product.stokKodu,
                   miktar: 0,
-                  iskonto: 0,
+                  iskonto: 0.0,
                   birimTipi: selectedType,
                   urunAdi: widget.product.urunAdi,
                   birimFiyat: double.tryParse(originalPrice) ?? 0,
@@ -1980,7 +2030,7 @@ class _ProductDetailsState extends State<ProductDetails> {
                   selectedBirimKey: widget.selectedBirim?.key,
                 );
               } else {
-                int discountPercent = int.tryParse(val) ?? 0;
+                double discountPercent = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
                 if (discountPercent > 100) discountPercent = 100;
 
                 final originalPrice = selectedType == 'Unit'

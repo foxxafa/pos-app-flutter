@@ -739,10 +739,10 @@ class _CartItemCardState extends State<_CartItemCard> {
       // Orijinal (indirimsiz) fiyatı al
       final orjinalFiyat = widget.item.birimFiyat;
 
-      // İndirim yüzdesini hesapla
+      // İndirim yüzdesini hesapla (ondalıklı olarak 2 basamak)
       final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-          ? ((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100).round()
-          : 0;
+          ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+          : 0.0;
 
       // İndirim controller'ını güncelle - sadece focus değilse
       if (!_discountFocusNode.hasFocus) {
@@ -777,13 +777,13 @@ class _CartItemCardState extends State<_CartItemCard> {
       // Fiyatı orjinal fiyata döndür
       _priceController.text = widget.item.birimFiyat.toStringAsFixed(2);
       // Provider'ı 0 indirim ile güncelle
-      _updateProviderItem(iskonto: 0);
+      _updateProviderItem(iskonto: 0.0);
       return;
     }
 
-    // İndirim yüzdesini al ve sınırla
-    int discountPercent = int.tryParse(value) ?? 0;
-    discountPercent = discountPercent.clamp(0, 100);
+    // İndirim yüzdesini al ve sınırla (ondalıklı olarak)
+    double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
+    discountPercent = discountPercent.clamp(0.0, 100.0);
 
     // Orjinal fiyat HER ZAMAN item'ın kendi birim fiyatıdır.
     final originalPrice = widget.item.birimFiyat;
@@ -917,7 +917,7 @@ class _CartItemCardState extends State<_CartItemCard> {
   /// `iskonto` null ise mevcut indirimi korur.
   void _updateProviderItem({
     int miktar = 0,
-    int? iskonto,
+    double? iskonto,
     double? birimFiyat,
     String? birimTipi,
     String? selectedBirimKey,
@@ -1118,7 +1118,7 @@ class _CartItemCardState extends State<_CartItemCard> {
                 child: TextField(
                   controller: _discountController,
                   focusNode: _discountFocusNode,
-                  keyboardType: TextInputType.number,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: _onDiscountChanged,
                   decoration: InputDecoration(
                     filled: true,

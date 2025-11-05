@@ -65,7 +65,7 @@ class RefundItemModel {
   final String birimTipi;
   final String durum;
   final String urunBarcode;
-  final int iskonto;
+  final double iskonto;
   final String aciklama; // ✅ Yeni alan
 
   RefundItemModel({

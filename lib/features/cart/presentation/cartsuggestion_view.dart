@@ -588,8 +588,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         if (orjinalFiyatHesap <= 0) orjinalFiyatHesap = yeniFiyat;
 
         final indirimOrani = (orjinalFiyatHesap > 0 && yeniFiyat < orjinalFiyatHesap)
-            ? ((orjinalFiyatHesap - yeniFiyat) / orjinalFiyatHesap * 100).round()
-            : 0;
+            ? double.parse((((orjinalFiyatHesap - yeniFiyat) / orjinalFiyatHesap * 100)).toStringAsFixed(2))
+            : 0.0;
 
         if (!discountFocusNode.hasFocus) {
           discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
@@ -685,8 +685,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 return;
               }
 
-              int discountPercent = int.tryParse(value) ?? 0;
-              discountPercent = discountPercent.clamp(0, 100);
+              double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
+              discountPercent = discountPercent.clamp(0.0, 100.0);
 
               // İndirimli fiyatı hesapla
               final discountAmount = (originalPrice * discountPercent) / 100;

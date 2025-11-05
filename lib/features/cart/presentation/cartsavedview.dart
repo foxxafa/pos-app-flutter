@@ -98,9 +98,13 @@ class _CartListPageState extends State<CartListPage> {
       final vat = (item['vat'] is num)
           ? item['vat'].toDouble()
           : double.tryParse(item['vat'].toString()) ?? 0.0;
+      final discount = (item['iskonto'] is num)
+          ? item['iskonto'].toDouble()
+          : double.tryParse(item['iskonto'].toString()) ?? 0.0;
 
-      // Calculate total with VAT
-      total += quantity * price * (1 + vat / 100);
+      // Calculate total with discount and VAT
+      final discountedPrice = price * (1 - discount / 100);
+      total += quantity * discountedPrice * (1 + vat / 100);
     }
     return total;
   }
@@ -206,9 +210,13 @@ class _CartListPageState extends State<CartListPage> {
     final vat = (item['vat'] is num)
         ? item['vat'].toDouble()
         : double.tryParse(item['vat'].toString()) ?? 0.0;
+    final discount = (item['iskonto'] is num)
+        ? item['iskonto'].toDouble()
+        : double.tryParse(item['iskonto'].toString()) ?? 0.0;
 
-    // Calculate total with VAT
-    final total = quantity * price * (1 + vat / 100);
+    // Calculate discounted price and total with VAT
+    final discountedPrice = price * (1 - discount / 100);
+    final total = quantity * discountedPrice * (1 + vat / 100);
     final unitType = item['birimTipi']?.toString() ?? 'Unit';
 
     // Birim tipine göre fiyat etiketi belirle
@@ -229,20 +237,6 @@ class _CartListPageState extends State<CartListPage> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 12.w,
-            height: 12.w,
-            decoration: BoxDecoration(
-              color: AppTheme.lightPrimaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.inventory_2_outlined,
-              color: AppTheme.lightPrimaryColor,
-              size: 6.w,
-            ),
-          ),
-          SizedBox(width: 3.w),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,30 +251,96 @@ class _CartListPageState extends State<CartListPage> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 0.5.h),
-                Row(
-                  children: [
-                    Text(
-                      '${'saved_carts.quantity'.tr()}: ${quantity % 1 == 0 ? quantity.toInt() : quantity} $unitType',
-                      style: TextStyle(
-                        fontSize: 15.sp,
-                        color: Colors.grey[600],
+                // Show discount if applied
+                if (discount > 0) ...[
+                  // Quantity on first line
+                  Text(
+                    '${'saved_carts.quantity'.tr()}: ${quantity % 1 == 0 ? quantity.toInt() : quantity} $unitType',
+                    style: TextStyle(
+                      fontSize: 15.sp,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  SizedBox(height: 0.3.h),
+                  // Price with discount on second line
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '$priceLabel: ',
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            color: Colors.grey[600],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    SizedBox(width: 2.w),
-                    Text(
-                      '•',
-                      style: TextStyle(color: Colors.grey[400]),
-                    ),
-                    SizedBox(width: 2.w),
-                    Text(
-                      '$priceLabel: £${price.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 15.sp,
-                        color: Colors.grey[600],
+                      Text(
+                        '£${price.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: Colors.grey[500],
+                          decoration: TextDecoration.lineThrough,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                      SizedBox(width: 1.w),
+                      Text(
+                        '£${discountedPrice.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 15.sp,
+                          color: Colors.red[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 1.w),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 1.5.w, vertical: 0.2.h),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '-${discount.toInt()}%',
+                          style: TextStyle(
+                            fontSize: 13.sp,
+                            color: Colors.red[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ] else
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${'saved_carts.quantity'.tr()}: ${quantity % 1 == 0 ? quantity.toInt() : quantity} $unitType',
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            color: Colors.grey[600],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(width: 2.w),
+                      Text(
+                        '•',
+                        style: TextStyle(color: Colors.grey[400]),
+                      ),
+                      SizedBox(width: 2.w),
+                      Flexible(
+                        child: Text(
+                          '$priceLabel: £${price.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            fontSize: 15.sp,
+                            color: Colors.grey[600],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

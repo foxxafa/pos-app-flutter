@@ -10,7 +10,7 @@ class Refund {
   final String birim;
   final double birimFiyat;
   final int vat;
-  final int iskonto;
+  final double iskonto;
 
   Refund({
     required this.fisNo,
@@ -22,7 +22,7 @@ class Refund {
     required this.urunBarcode,
     required this.miktar,
     required this.birim,
-    required this.birimFiyat,  
+    required this.birimFiyat,
   required this.vat,
   required this.iskonto,
   });
@@ -37,7 +37,8 @@ class Refund {
       urunAdi: json['UrunAdi'] ?? '',
       urunBarcode: json['UrunBarcode'] ?? '',
       miktar: double.tryParse(json['Miktar'] ?? '0') ?? 0,
-            vat: int.tryParse(json['vat'] ?? '0') ?? 0,      iskonto: int.tryParse(json['iskonto'] ?? '0') ?? 0,
+      vat: int.tryParse(json['vat'] ?? '0') ?? 0,
+      iskonto: double.tryParse(json['iskonto'] ?? '0') ?? 0.0,
       birim: json['Birim'] ?? '',
       birimFiyat: double.tryParse(json['BirimFiyat'] ?? '0') ?? 0,
     );

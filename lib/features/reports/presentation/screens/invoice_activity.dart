@@ -259,9 +259,9 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
       final double birimFiyat = (s['BirimFiyat'] is num)
           ? s['BirimFiyat'].toDouble()
           : double.tryParse(s['BirimFiyat'].toString()) ?? 0.0;
-      final int iskonto = (s['Iskonto'] is num)
-          ? (s['Iskonto'] as num).round()
-          : int.tryParse(s['Iskonto'].toString()) ?? 0;
+      final double iskonto = (s['Iskonto'] is num)
+          ? (s['Iskonto'] as num).toDouble()
+          : double.tryParse(s['Iskonto'].toString()) ?? 0.0;
       final int vat = (s['vat'] is num)
           ? (s['vat'] as num).round()
           : int.tryParse(s['vat'].toString()) ?? 18;
