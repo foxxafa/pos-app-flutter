@@ -219,7 +219,10 @@ class _CartView2State extends State<CartView2> {
       cartProvider.clearCartMemoryOnly();
 
       // Bir sonraki sipariş için YENİ fisNo oluştur
-      orderInfoProvider.generateNewOrderNo();
+      await orderInfoProvider.generateNewOrderNo();
+
+      // ✅ KRITIK: CartProvider'ı yeni fisNo ile senkronize et
+      cartProvider.fisNo = orderInfoProvider.orderNo;
 
       // --- İşlem Sonrası ve Navigasyon ---
 

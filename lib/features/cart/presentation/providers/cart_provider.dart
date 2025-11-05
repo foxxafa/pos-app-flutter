@@ -113,6 +113,14 @@ class CartProvider extends ChangeNotifier {
 
   String get fisNo => _fisNo;
 
+  // ✅ Eski fisNo'yu geçici olarak sakla (Load Order için)
+  String _eskiFisNo = '';
+  set eskiFisNo(String value) {
+    _eskiFisNo = value;
+  }
+
+  String get eskiFisNo => _eskiFisNo;
+
   int getIskonto(String stokKodu, [String? birimTipi]) {
     if (birimTipi != null) {
       final cartKey = '${stokKodu}_$birimTipi';
@@ -187,10 +195,12 @@ class CartProvider extends ChangeNotifier {
     String? selectedBirimKey, // ✅ Seçili birimin key'i (BirimModel.key)
   }) {
     // ⚠️ KRITIK: fisNo set edilmemişse UYARI (OrderInfoProvider tarafından set edilmelidir)
-    if (_fisNo.isEmpty || _fisNo == '') {
-      print("⚠️ CRITICAL: addOrUpdateItem called but fisNo is empty!");
-      print("⚠️ Please ensure cartProvider.fisNo is set from OrderInfoProvider BEFORE calling addOrUpdateItem!");
-      print("⚠️ Stack trace: ${StackTrace.current}");
+    // NOT: Load Order sırasında fisNo boş olabilir (yeni fisNo Invoice2Activity'de oluşturulacak)
+    // Bu durumda warning gösterme, sadece items zaten varsa ve fisNo boşsa warning göster
+    if ((_fisNo.isEmpty || _fisNo == '') && _items.isNotEmpty) {
+      print("! CRITICAL: addOrUpdateItem called but fisNo is empty!");
+      print("! Please ensure cartProvider.fisNo is set from OrderInfoProvider BEFORE calling addOrUpdateItem!");
+      print("! Stack trace: ${StackTrace.current}");
     }
 
     // ⚠️ KRITIK: customerKod set edilmemişse UYARI
@@ -290,7 +300,11 @@ class CartProvider extends ChangeNotifier {
   void clearCartMemoryOnly() {
     print("DEBUG: CartProvider.clearCartMemoryOnly() called - items before clear: ${_items.length}");
     _items.clear();
-    print("DEBUG: CartProvider memory cleared - database kept intact");
+    // ⚠️ NOT: fisNo'yu TEMİZLEMİYORUZ!
+    // Çünkü _clearCart() metodu zaten yeni fisNo set ediyor.
+    // fisNo sadece Place Order sonrası yeni sipariş için temizlenmeli (generateNewOrderNo ile)
+    _eskiFisNo = ''; // ✅ Geçici eski fisNo değişkenini temizle
+    print("DEBUG: CartProvider memory cleared (items only) - database kept intact, fisNo preserved: $_fisNo");
 
     // ✅ KRITIK: debounce timer'ı iptal et - database'e kaydetme!
     // Çünkü bellekten temizliyoruz ama database'de kalması gerekiyor (isPlaced=1 kayıtları)

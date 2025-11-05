@@ -27,7 +27,6 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
   DateTime selectedDeliveryDate = DateTime.now();
   List<String> _refundProductNames=[];
   List<Refund> refunds = [];
-  bool _fisNoGenerated = false;  // FisNo'nun oluşturulup oluşturulmadığını takip eder
 
   // ✅ Double-click protection for Select Products button
   bool _isNavigatingToProducts = false;
@@ -46,12 +45,9 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
   @override
   void initState() {
     super.initState();
-    // ✅ Sayfa açıldığında mevcut siparişi kontrol et
+    // ✅ Sayfa her açıldığında mevcut siparişi kontrol et (flag YOK, her zaman çalışır)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!_fisNoGenerated) {
-        await _initializeOrder();
-        _fisNoGenerated = true;
-      }
+      await _initializeOrder();
     });
   }
 
@@ -85,6 +81,44 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
           setState(() {
             orderNo = cartProvider.fisNo;
           });
+        }
+        return;
+      }
+
+      // ✅ YENİ YAKLAŞIM: Eğer sepette ürün VAR ama fisNo BOŞ ise, YENİ fisNo oluştur
+      // Bu durum Load Order yapıldığında oluşur (eski fisNo set edilmedi)
+      if (cartProvider.items.isNotEmpty && cartProvider.fisNo.isEmpty) {
+        print('✅ Load edilen sipariş tespit edildi - YENİ fisNo oluşturuluyor...');
+
+        // Eski fisNo'yu sakla (silmek için)
+        final eskiFisNo = cartProvider.eskiFisNo;
+
+        // Yeni fisNo oluştur
+        await _generateFisNo();
+
+        // CartProvider'a yeni fisNo'yu set et
+        cartProvider.fisNo = orderNo;
+        orderInfoProvider.orderNo = orderNo;
+
+        print('✅ Yeni FisNo oluşturuldu: $orderNo');
+
+        // ⚡ KRITIK: Database'e HEMEN kaydet (telefon kapanırsa sepet kaybolmasın)
+        await cartProvider.forceSaveToDatabase();
+        print('✅ Sepet database\'e kaydedildi (${cartProvider.items.length} ürün)');
+
+        // ✅ Eski fisNo'ya ait cart_items kayıtlarını SİL (güvenli, yeni fisNo kaydedildi)
+        if (eskiFisNo.isNotEmpty) {
+          final dbHelper = DatabaseHelper();
+          final db = await dbHelper.database;
+          await db.delete('cart_items', where: 'fisNo = ?', whereArgs: [eskiFisNo]);
+          print('✅ Eski fisNo temizlendi: $eskiFisNo');
+
+          // Geçici değişkeni temizle
+          cartProvider.eskiFisNo = '';
+        }
+
+        if (mounted) {
+          setState(() {});
         }
         return;
       }

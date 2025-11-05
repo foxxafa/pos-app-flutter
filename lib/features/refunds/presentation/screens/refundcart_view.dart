@@ -167,28 +167,32 @@ class _RefundCartViewState extends State<RefundCartView> {
     }
   }
 
-  /// ✅ Ürün fiyatını dinamik birimlerden al (fiyat7), fallback: adetFiyati/kutuFiyati
-  Future<double> _getBirimFiyat(ProductModel product, String birimTipi) async {
-    final stokKodu = product.stokKodu;
+  /// ✅ Birim tipi değiştiğinde seçili birimi güncelle ve yeni birimi döndür
+  BirimModel? _updateSelectedBirimForType(String stokKodu, String newBirimTipi) {
+    if (!_productBirimlerMap.containsKey(stokKodu)) return null;
 
-    // ✅ Önce birimler yüklü mü kontrol et
-    if (!_productBirimlerMap.containsKey(stokKodu)) {
-      await _loadBirimlerForProduct(stokKodu);
-    }
+    final birimler = _productBirimlerMap[stokKodu];
+    if (birimler == null || birimler.isEmpty) return null;
 
-    // ✅ Seçili birimi al
-    final selectedBirim = _selectedBirimMap[stokKodu];
-    if (selectedBirim != null && selectedBirim.fiyat7 != null && selectedBirim.fiyat7! > 0) {
-      return selectedBirim.fiyat7!;
-    }
+    final newBirim = birimler.firstWhere(
+      (b) {
+        final birimAdi = b.birimadi?.toLowerCase() ?? '';
+        if (newBirimTipi == 'Box') {
+          return birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
+        } else {
+          return birimAdi.contains('unit') || birimAdi.contains('adet') || birimAdi.contains('pcs');
+        }
+      },
+      orElse: () => birimler.first,
+    );
 
-    // ✅ Fallback: Eski sistem (adetFiyati/kutuFiyati)
-    if (birimTipi == 'Box') {
-      return double.tryParse(product.kutuFiyati.toString()) ?? 0;
-    } else {
-      return double.tryParse(product.adetFiyati.toString()) ?? 0;
-    }
+    setState(() {
+      _selectedBirimMap[stokKodu] = newBirim;
+    });
+
+    return newBirim;
   }
+
 
   @override
   void dispose() {
@@ -437,7 +441,6 @@ class _RefundCartViewState extends State<RefundCartView> {
       if (_filteredProducts.length == 1 && RegExp(r'^\d+$').hasMatch(query)) {
         final product = _filteredProducts.first;
         final key = product.stokKodu;
-        final birimTipi = provider.getBirimTipi(key);
 
         // ✅ Birimler yüklenmişse devam et
         await _loadBirimlerForProduct(key);
@@ -525,7 +528,7 @@ class _RefundCartViewState extends State<RefundCartView> {
         urunBarcode: product.barcode1,
         miktar: difference,
         iskonto: iskonto,
-        birimTipi: birimTipi,
+        birimTipi: selectedBirim?.birimadi ?? 'Unit',
         imsrc: product.imsrc,
       );
     }
@@ -753,19 +756,29 @@ class _RefundCartViewState extends State<RefundCartView> {
         }
 
         if (!_priceControllers.containsKey(key)) {
-          final selectedType = _birimTipiMap[key] ?? getBirimTipiFromProduct(product) ?? 'Unit';
           // Check if item exists in provider (cart)
           final cartPrice = provider.getBirimFiyat(key);
 
           // Eğer sepette varsa o fiyatı kullan, yoksa %70'lik fiyatı göster
-          final priceToUse = cartPrice > 0 ? cartPrice : (() {
-            final originalPrice = selectedType == 'Unit'
-                ? double.tryParse(product.adetFiyati.toString()) ?? 0
-                : double.tryParse(product.kutuFiyati.toString()) ?? 0;
-            // ✅ Ekranda %70'lik fiyat gösterilir (her durumda)
-            return originalPrice * 0.7;
-          })();
-          _priceControllers[key] = TextEditingController(text: priceToUse.toStringAsFixed(2));
+          if (cartPrice > 0) {
+            _priceControllers[key] = TextEditingController(text: cartPrice.toStringAsFixed(2));
+          } else {
+            // ✅ Async olarak birimler yükle ve fiyat7'den al (build'den sonra)
+            _priceControllers[key] = TextEditingController(text: '0.00');
+
+            // Build tamamlandıktan sonra birim verilerini yükle
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _loadBirimlerForProduct(key).then((_) {
+                if (mounted && _priceControllers.containsKey(key)) {
+                  final selectedBirim = _selectedBirimMap[key];
+                  final originalPrice = selectedBirim?.fiyat7 ?? 0;
+                  // ✅ Ekranda %70'lik fiyat gösterilir (her durumda)
+                  final discountedPrice = originalPrice * 0.7;
+                  _priceControllers[key]!.text = discountedPrice.toStringAsFixed(2);
+                }
+              });
+            });
+          }
         } else {
           // Update existing controller with provider price if item is in cart
           final cartPrice = provider.getBirimFiyat(key);
@@ -789,6 +802,8 @@ class _RefundCartViewState extends State<RefundCartView> {
           priceController: _priceControllers[key]!,
           priceFocusNode: _priceFocusNodes[key]!,
           quantity: context.watch<RCartProvider>().getmiktar(key),
+          selectedBirim: _selectedBirimMap[key],
+          onLoadBirimler: () => _loadBirimlerForProduct(key),
           onQuantityChanged: (newQuantity) {
             setState(() {
               _quantityMap[key] = newQuantity;
@@ -800,6 +815,8 @@ class _RefundCartViewState extends State<RefundCartView> {
             setState(() {
               _birimTipiMap[key] = newBirimTipi;
             });
+            // ✅ Seçili birimi güncelle ve yeni birimi döndür
+            return _updateSelectedBirimForType(key, newBirimTipi);
           },
           onReturnReasonPressed: () => _showReturnReasonDialog(context, key, provider),
         );
@@ -826,10 +843,12 @@ class RefundProductListItem extends StatefulWidget {
   final TextEditingController priceController;
   final FocusNode priceFocusNode;
   final int quantity;
+  final BirimModel? selectedBirim;
+  final Future<void> Function() onLoadBirimler;
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
   final String? Function() getBirimTipi;
-  final ValueChanged<String> onBirimTipiChanged;
+  final BirimModel? Function(String) onBirimTipiChanged; // ✅ Yeni birimi döndürür
   final VoidCallback onReturnReasonPressed;
 
   const RefundProductListItem({
@@ -843,6 +862,8 @@ class RefundProductListItem extends StatefulWidget {
     required this.priceController,
     required this.priceFocusNode,
     required this.quantity,
+    this.selectedBirim,
+    required this.onLoadBirimler,
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
     required this.getBirimTipi,
@@ -959,6 +980,8 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
               priceFocusNode: widget.priceFocusNode,
               quantityFocusNode: _quantityFocusNode,
               quantity: anlikMiktar,
+              selectedBirim: widget.selectedBirim,
+              onLoadBirimler: widget.onLoadBirimler,
               onQuantityChanged: widget.onQuantityChanged,
               updateQuantityFromTextField: widget.updateQuantityFromTextField,
               getBirimTipi: widget.getBirimTipi,
@@ -1089,10 +1112,12 @@ class RefundProductDetails extends StatelessWidget {
   final FocusNode priceFocusNode;
   final FocusNode quantityFocusNode;
   final int quantity;
+  final BirimModel? selectedBirim;
+  final Future<void> Function() onLoadBirimler;
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
   final String? Function() getBirimTipi;
-  final ValueChanged<String> onBirimTipiChanged;
+  final BirimModel? Function(String) onBirimTipiChanged; // ✅ Yeni birimi döndürür
   final VoidCallback onReturnReasonPressed;
 
   const RefundProductDetails({
@@ -1106,6 +1131,8 @@ class RefundProductDetails extends StatelessWidget {
     required this.priceFocusNode,
     required this.quantityFocusNode,
     required this.quantity,
+    this.selectedBirim,
+    required this.onLoadBirimler,
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
     required this.getBirimTipi,
@@ -1204,13 +1231,20 @@ class RefundProductDetails extends StatelessWidget {
         ],
         onChanged: (val) {
           if (val != null) {
-            // Parent'a birim değişikliğini bildir
-            onBirimTipiChanged(val);
+            // ✅ Parent'a birim değişikliğini bildir ve YENİ birimi al
+            final newBirim = onBirimTipiChanged(val);
 
-            // Birim değişikliği yapılırken yeni birim için %70'lik fiyatı hesapla
-            final originalPrice = val == 'Box'
-                ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-                : double.tryParse(product.adetFiyati.toString()) ?? 0;
+            // ✅ Yeni birimden fiyat7'yi al
+            double originalPrice = 0;
+            if (newBirim != null && newBirim.fiyat7 != null && newBirim.fiyat7! > 0) {
+              originalPrice = newBirim.fiyat7!;
+            } else {
+              // Fallback: Eski sistem (sadece birim yüklenemediğinde)
+              originalPrice = val == 'Box'
+                  ? double.tryParse(product.kutuFiyati.toString()) ?? 0
+                  : double.tryParse(product.adetFiyati.toString()) ?? 0;
+            }
+
             final birimFiyat = originalPrice * 0.7; // %70 fiyat
 
             // Eğer ürün sepette varsa güncelle, yoksa güncellemeye gerek yok (henüz eklenmemiş)
@@ -1384,6 +1418,11 @@ class RefundProductDetails extends StatelessWidget {
               final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
 
               return latestRefund?.birimFiyat ?? (() {
+                // ✅ Önce selectedBirim'den fiyat7'yi al
+                if (selectedBirim != null && selectedBirim!.fiyat7 != null && selectedBirim!.fiyat7! > 0) {
+                  return selectedBirim!.fiyat7! * 0.7; // %70 indirimli fiyat
+                }
+                // Fallback: Eski sistem (sadece birim yüklenmemişse)
                 final originalPrice = selectedType == 'Box'
                   ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                   : double.tryParse(product.adetFiyati.toString()) ?? 0;

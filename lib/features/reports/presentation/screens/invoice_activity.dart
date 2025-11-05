@@ -217,9 +217,9 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
     final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
     final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
 
-    // ✅ KRITIK: Load Order yaparken fisNo, customerKod set et
+    // ✅ KRITIK: Load Order yaparken fisNo'yu SET ETME - Yeni fisNo oluşturulacak
     final customerKod = fis['MusteriId']?.toString() ?? '';
-    provider.fisNo = fis['FisNo']?.toString() ?? order.no;
+    provider.fisNo = '';  // ❌ Eski fisNo'yu kullanma, boş bırak
     provider.customerKod = customerKod;
 
     // ✅ CustomerBalance'dan customer bilgisini çek
@@ -238,10 +238,10 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
 
     provider.customerName = customerName;
 
-    // ✅ OrderInfoProvider'a da fisNo set et
-    orderInfoProvider.orderNo = provider.fisNo;
+    // ✅ OrderInfoProvider'a da fisNo'yu BOŞ bırak - Yeni fisNo oluşturulacak
+    orderInfoProvider.orderNo = '';
 
-    // ✅ Clear cart AFTER setting fisNo and customer info
+    // ✅ Clear cart AFTER setting customer info
     await provider.clearCart();
 
     print("DEBUG: Load Order - fisNo: ${provider.fisNo}, customerKod: ${provider.customerKod}, customerName: ${provider.customerName}");
@@ -283,10 +283,15 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
       );
     }
 
-    // ✅ KRITIK: Force immediate save to database after loading all items
-    // This ensures the cart persists even if app is closed before debounce timer fires
-    print("DEBUG: Load Order - Forcing immediate database save (${satirlar.length} items loaded)");
-    await provider.forceSaveToDatabase();
+    // ❌ ARTIK forceSaveToDatabase ÇAĞIRMIYORUZ
+    // FisNo boş olduğu için database'e kaydetmeye gerek yok
+    // Invoice2Activity'de yeni fisNo oluşturulacak ve otomatik kaydedilecek
+
+    // ✅ Eski fisNo'yu provider'a geçici olarak sakla (Invoice2Activity'de silinecek)
+    final eskiFisNo = fis['FisNo']?.toString() ?? order.no;
+    provider.eskiFisNo = eskiFisNo;  // Geçici olarak sakla
+
+    print("DEBUG: Load Order - ${satirlar.length} item loaded, eski fisNo: $eskiFisNo, yeni fisNo Invoice2Activity'de oluşturulacak");
 
     if (matchingId != null) {
       await db.delete('PendingSales', where: 'id = ?', whereArgs: [matchingId]);
@@ -297,6 +302,8 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
 
     // ✅ Navigate to cart screen (invoice2_activity)
     if (mounted) {
+      print("DEBUG: Load Order - BEFORE navigation: fisNo='${provider.fisNo}', items=${provider.items.length}");
+
       // Find invoice2_activity import
       final route = MaterialPageRoute(
         builder: (_) => Invoice2Activity(),
@@ -305,6 +312,8 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
       // Pop current screen and push cart screen
       Navigator.of(context).pop();
       Navigator.of(context).push(route);
+
+      print("DEBUG: Load Order - AFTER navigation started");
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
