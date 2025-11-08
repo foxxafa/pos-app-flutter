@@ -241,9 +241,10 @@ class _CartViewState extends State<CartView> {
     _checkLoadingComplete();
   }
 
-  /// Ürünleri alfabetik + stok miktarına göre sırala
-  /// Primary: A'dan Z'ye (alfabetik)
-  /// Secondary: Stok miktarı (fazladan aza - suspended sonra gelir)
+  /// Ürünleri sırala: durum (suspended sona) > stok (fazladan aza) > alfabetik (A-Z)
+  /// Primary: Durum (aktif=1 önce, suspended=0 sona)
+  /// Secondary: Stok miktarı (fazladan aza)
+  /// Tertiary: Alfabetik (A-Z)
   Future<void> _sortProductsWithStock(List<ProductModel> products) async {
     try {
       final db = await DatabaseHelper().database;
@@ -264,27 +265,28 @@ class _CartViewState extends State<CartView> {
         ))
       );
 
-      // Çift kriterli sıralama
+      // Üçlü kriterli sıralama
       products.sort((a, b) {
-        // 1. Primary: Alfabetik sıralama (A-Z)
-        final nameA = a.urunAdi.trim().toLowerCase();
-        final nameB = b.urunAdi.trim().toLowerCase();
-        final nameComparison = nameA.compareTo(nameB);
-
-        if (nameComparison != 0) {
-          return nameComparison; // Farklı isimse alfabetik sırala
+        // 1. Primary: Durum (suspended=0 sona, aktif=1 önce)
+        if (a.aktif != b.aktif) {
+          return b.aktif.compareTo(a.aktif); // 1 önce, 0 sona
         }
 
-        // 2. Secondary: Aynı isimde (veya çok benzer) ise stok miktarına göre
-        // Depostok'tan al, yoksa Product.miktar fallback
+        // 2. Secondary: Stok miktarına göre (fazla olan önce)
         final stockA = stockMap[a.stokKodu] ?? a.miktar ?? 0.0;
         final stockB = stockMap[b.stokKodu] ?? b.miktar ?? 0.0;
 
-        // Büyükten küçüğe sırala (stok fazla olan önce, suspended/0 stok sonra)
-        return stockB.compareTo(stockA);
+        if (stockA != stockB) {
+          return stockB.compareTo(stockA); // Büyükten küçüğe
+        }
+
+        // 3. Tertiary: Alfabetik sıralama (A-Z)
+        final nameA = a.urunAdi.trim().toLowerCase();
+        final nameB = b.urunAdi.trim().toLowerCase();
+        return nameA.compareTo(nameB);
       });
 
-      print('✅ Ürünler sıralandı: ${products.length} ürün (A-Z + Stok bazlı)');
+      print('✅ Ürünler sıralandı: ${products.length} ürün (Durum > Stok > A-Z)');
     } catch (e) {
       print('⚠️ Sıralama hatası: $e');
       // Hata olursa sadece alfabetik sırala

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 8;  // Version artırıldı (Depostok tablosu FIX için)
+  static const _databaseVersion = 9;  // Version artırıldı (cartrefund_items iskonto REAL için)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -51,131 +51,10 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     debugPrint('Upgrading database from version $oldVersion to $newVersion');
+    debugPrint('⚠️ Database schema changed. Please uninstall and reinstall the app to apply changes.');
 
-    if (oldVersion < 2) {
-      // Version 2: cart_items tablosuna fisNo kolonu ekle
-      await db.execute('ALTER TABLE cart_items ADD COLUMN fisNo TEXT');
-      debugPrint('Added fisNo column to cart_items table');
-    }
-
-    if (oldVersion < 3) {
-      // Version 3: cart_items tablosuna customerKod kolonu ekle
-      await db.execute('ALTER TABLE cart_items ADD COLUMN customerKod TEXT');
-      debugPrint('Added customerKod column to cart_items table');
-
-      // Mevcut customerName verilerini customerKod'a kopyala (geçiş için)
-      // Not: customerName hala mevcut ama artık kullanılmayacak
-      debugPrint('Migrating customerName data to customerKod...');
-    }
-
-    if (oldVersion < 4) {
-      // Version 4: cart_items tablosuna isPlaced kolonu ekle (sipariş verildi mi?)
-      await db.execute('ALTER TABLE cart_items ADD COLUMN isPlaced INTEGER DEFAULT 0');
-      debugPrint('Added isPlaced column to cart_items table');
-      // 0 = Henüz Place Order yapılmadı (edit edilebilir)
-      // 1 = Place Order yapıldı (read-only, sadece görüntüleme)
-    }
-
-    if (oldVersion < 5) {
-      // Version 5: Product tablosuna miktar (qty) kolonu ekle
-      await db.execute('ALTER TABLE Product ADD COLUMN miktar REAL');
-      debugPrint('Added miktar column to Product table');
-    }
-
-    if (oldVersion < 6) {
-      // Version 6: Birimler ve Barkodlar tabloları ekleme
-      debugPrint('Creating Birimler and Barkodlar tables...');
-
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS Birimler (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          birimadi TEXT,
-          birimkod TEXT,
-          carpan REAL DEFAULT 1.0,
-          fiyat1 REAL,
-          fiyat2 REAL,
-          fiyat3 REAL,
-          fiyat4 REAL,
-          fiyat5 REAL,
-          fiyat6 REAL,
-          fiyat7 REAL,
-          fiyat8 REAL,
-          fiyat9 REAL,
-          fiyat10 REAL,
-          _key TEXT,
-          _key_scf_stokkart TEXT,
-          StokKodu TEXT,
-          created_at TEXT,
-          updated_at TEXT
-        )
-      ''');
-
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS Barkodlar (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          _key TEXT,
-          _key_scf_stokkart_birimleri TEXT,
-          barkod TEXT,
-          turu TEXT,
-          created_at TEXT,
-          updated_at TEXT
-        )
-      ''');
-
-      debugPrint('Birimler and Barkodlar tables created successfully');
-    }
-
-    if (oldVersion < 7) {
-      // Version 7: Depostok (Depot Stock) tablosu ekleme
-      debugPrint('Creating Depostok table...');
-
-      // Eski tabloyu sil (eğer varsa)
-      await db.execute('DROP TABLE IF EXISTS Depostok');
-
-      // Yeni tabloyu oluştur
-      await db.execute('''
-        CREATE TABLE Depostok (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          StokKodu TEXT NOT NULL,
-          birim TEXT NOT NULL,
-          miktar REAL DEFAULT 0.0
-        )
-      ''');
-
-      // Index ekle - performans için (StokKodu + birim composite index)
-      await db.execute('''
-        CREATE INDEX idx_depostok_stokkodu_birim
-        ON Depostok(StokKodu, birim)
-      ''');
-
-      debugPrint('Depostok table created successfully');
-    }
-
-    if (oldVersion < 8) {
-      // Version 8: Depostok tablosunu düzelt (yanlış şema fix)
-      debugPrint('Fixing Depostok table schema...');
-
-      // Eski tabloyu sil
-      await db.execute('DROP TABLE IF EXISTS Depostok');
-
-      // Doğru şema ile yeniden oluştur
-      await db.execute('''
-        CREATE TABLE Depostok (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          StokKodu TEXT NOT NULL,
-          birim TEXT NOT NULL,
-          miktar REAL DEFAULT 0.0
-        )
-      ''');
-
-      // Index ekle
-      await db.execute('''
-        CREATE INDEX idx_depostok_stokkodu_birim
-        ON Depostok(StokKodu, birim)
-      ''');
-
-      debugPrint('Depostok table fixed successfully');
-    }
+    // Migration kaldırıldı - Kullanıcılar uygulamayı yeniden yüklemelidir
+    // Tüm tablolar _createAllTables metodunda güncel şema ile oluşturulur
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -251,7 +130,7 @@ class DatabaseHelper {
         birimFiyat REAL,
         miktar INTEGER,
         urunBarcode TEXT,
-        iskonto INTEGER,
+        iskonto REAL,
         birimTipi TEXT,
         durum INTEGER,
         imsrc TEXT,
@@ -273,7 +152,7 @@ class DatabaseHelper {
         urunBarcode TEXT,
         miktar REAL,
         vat INTEGER,
-        iskonto INTEGER,
+        iskonto REAL,
         birim TEXT,
         birimFiyat REAL
       )
@@ -289,7 +168,7 @@ class DatabaseHelper {
         birimFiyat REAL,
         miktar INTEGER,
         urunBarcode TEXT,
-        iskonto INTEGER,
+        iskonto REAL,
         birimTipi TEXT,
         durum INTEGER,
         imsrc TEXT,

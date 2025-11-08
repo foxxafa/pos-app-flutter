@@ -294,8 +294,10 @@ ScaffoldMessenger.of(context).showSnackBar(
                     title: 'transaction.enter_amount'.tr(),
                     content: TextField(
                       controller: _tutarController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                      ],
                       style: theme.textTheme.bodyMedium,
                       decoration: InputDecoration(
                         border: InputBorder.none,

@@ -300,7 +300,7 @@ class _CartListPageState extends State<CartListPage> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          '-${discount.toInt()}%',
+                          '-${discount % 1 == 0 ? discount.toInt() : discount.toStringAsFixed(2)}%',
                           style: TextStyle(
                             fontSize: 13.sp,
                             color: Colors.red[700],

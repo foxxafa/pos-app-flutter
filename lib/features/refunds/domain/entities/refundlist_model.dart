@@ -70,9 +70,11 @@ class Refund {
       stokKodu: map['stokKodu'],
       urunAdi: map['urunAdi'],
       urunBarcode: map['urunBarcode'],
-      miktar: map['miktar'],vat: map['vat'],iskonto: map['iskonto'],
+      miktar: (map['miktar'] is num) ? (map['miktar'] as num).toDouble() : 0.0,
+      vat: (map['vat'] is num) ? (map['vat'] as num).toInt() : 0,
+      iskonto: (map['iskonto'] is num) ? (map['iskonto'] as num).toDouble() : 0.0,
       birim: map['birim'],
-      birimFiyat: map['birimFiyat'],
+      birimFiyat: (map['birimFiyat'] is num) ? (map['birimFiyat'] as num).toDouble() : 0.0,
     );
   }
 
