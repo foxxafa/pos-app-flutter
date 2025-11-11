@@ -332,7 +332,7 @@ class _CartView2State extends State<CartView2> {
                   // Her item için kendi state'ini yöneten bir kart oluştur
                   return _CartItemCard(
                     key: ValueKey(
-                        '${item.stokKodu}_${item.birimTipi}'), // Benzersiz key
+                        '${item.stokKodu}_${item.birimTipi}'), // Benzersiz key (sadece stokKodu + birimTipi)
                     item: item,
                     imageFuture: _imageFutures[item.stokKodu],
                   );
@@ -578,24 +578,14 @@ class _CartItemCardState extends State<_CartItemCard> {
         _birimlersLoading = false;
 
         // ✅ Mevcut seçili birimi bul (CartItem'daki selectedBirimKey kullanarak)
-        if (widget.item.selectedBirimKey != null) {
+        if (widget.item.selectedBirimKey != null && _birimler.isNotEmpty) {
           _selectedBirim = _birimler.firstWhere(
             (b) => b.key == widget.item.selectedBirimKey,
-            orElse: () => _birimler.isNotEmpty ? _birimler.first : BirimModel(key: '', birimadi: '', fiyat7: 0),
-          );
-        } else if (_birimler.isNotEmpty) {
-          // Eğer selectedBirimKey yoksa, mevcut birimTipi'ne göre seç
-          _selectedBirim = _birimler.firstWhere(
-            (b) {
-              final birimAdi = b.birimadi?.toLowerCase() ?? '';
-              if (widget.item.birimTipi == 'Box') {
-                return birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
-              } else {
-                return birimAdi.contains('unit') || birimAdi.contains('adet') || birimAdi.contains('pcs');
-              }
-            },
             orElse: () => _birimler.first,
           );
+        } else if (_birimler.isNotEmpty) {
+          // selectedBirimKey yoksa ilk birimi seç (default)
+          _selectedBirim = _birimler.first;
         }
       });
     } catch (e) {
@@ -639,14 +629,48 @@ class _CartItemCardState extends State<_CartItemCard> {
   @override
   void didUpdateWidget(_CartItemCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Provider'dan gelen veri değiştiyse (örn: miktar +/- butonları)
-    // ve kullanıcı o anda o alanı düzenlemiyorsa, controller'ları güncelle.
-    // Miktar, fiyat veya indirim değişikliklerini kontrol et
-    if (widget.item.miktar != oldWidget.item.miktar ||
-        widget.item.birimFiyat != oldWidget.item.birimFiyat ||
-        widget.item.iskonto != oldWidget.item.iskonto) {
-      _updateTextControllers(widget.item);
+
+    // ⚠️ KRITIK: widget.item eski olabilir! Provider'dan GÜNCEL item'ı al
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final cartKey = '${widget.item.stokKodu}_${widget.item.birimTipi}';
+    final actualItem = cartProvider.items[cartKey];
+
+    // Eğer bu item provider'da yoksa, widget silinmiş demektir
+    if (actualItem == null) {
+      print('⚠️ didUpdateWidget: Item bulunamadı ($cartKey), widget silinecek');
+      return;
     }
+
+    print('📊 didUpdateWidget - ${widget.item.stokKodu}:');
+    print('   Widget Old: birim=${oldWidget.item.birimTipi}, fiyat=${oldWidget.item.birimFiyat}');
+    print('   Widget New: birim=${widget.item.birimTipi}, fiyat=${widget.item.birimFiyat}');
+    print('   Provider Actual: birim=${actualItem.birimTipi}, fiyat=${actualItem.birimFiyat}');
+
+    // ✅ Birim değişimi kontrolü (UNIT ↔ BOX)
+    if (actualItem.birimTipi != oldWidget.item.birimTipi ||
+        actualItem.selectedBirimKey != oldWidget.item.selectedBirimKey) {
+      print('   ➡️ Birim değişti, dropdown güncelleniyor');
+      // Birim değişti → Dropdown'ı güncelle (asenkron)
+      _loadBirimlerForItem();
+    }
+
+    // ✅ Fiyat değişimi kontrolü - birim değişince fiyat da değişir
+    // Provider'dan gelen GÜNCEL fiyatı kullan
+    if (actualItem.birimFiyat != oldWidget.item.birimFiyat) {
+      print('   ➡️ Fiyat değişti: ${oldWidget.item.birimFiyat} → ${actualItem.birimFiyat}');
+      // ⚠️ KRITIK: Focus aktif değilse controller'ı güncelle
+      if (!_priceFocusNode.hasFocus) {
+        final singleItemDiscountedPrice = actualItem.birimFiyat * (1 - actualItem.iskonto / 100);
+        _priceController.text = singleItemDiscountedPrice.toStringAsFixed(2);
+        _oldPriceValue = _priceController.text;
+        print('   ✅ Controller güncellendi: ${_priceController.text}');
+      } else {
+        print('   ⚠️ Focus aktif, controller güncellenmedi');
+      }
+    }
+
+    // ✅ HER ZAMAN controller'ları güncelle (Provider'dan gelen GÜNCEL veri)
+    _updateTextControllers(actualItem);
   }
 
   /// Controller'ların metinlerini güncelleyen yardımcı metod.
@@ -656,14 +680,25 @@ class _CartItemCardState extends State<_CartItemCard> {
     // Doğru hesaplama: item.birimFiyat * (1 - item.iskonto / 100)
     final singleItemDiscountedPrice = item.birimFiyat * (1 - item.iskonto / 100);
 
+    print('   📝 _updateTextControllers:');
+    print('      item.birimFiyat: ${item.birimFiyat}');
+    print('      item.birimTipi: ${item.birimTipi}');
+    print('      Hesaplanan fiyat: $singleItemDiscountedPrice');
+    print('      Mevcut controller: ${_priceController.text}');
+
     // ✅ MİMARİ İYİLEŞTİRME: Focus kontrolü ile güncelleme
     // Kullanıcı o alanı düzenlerken güncelleme yapma
     if (!_priceFocusNode.hasFocus) {
       final newPriceText = singleItemDiscountedPrice.toStringAsFixed(2);
       if (_priceController.text != newPriceText) {
+        print('      ✅ Controller güncelleniyor: $newPriceText');
         _priceController.text = newPriceText;
         _oldPriceValue = newPriceText;
+      } else {
+        print('      ⏭️ Controller zaten doğru değerde');
       }
+    } else {
+      print('      ⚠️ Focus aktif, güncelleme yapılmadı');
     }
 
     // İndirim controller'ı
@@ -739,18 +774,29 @@ class _CartItemCardState extends State<_CartItemCard> {
       // Orijinal (indirimsiz) fiyatı al
       final orjinalFiyat = widget.item.birimFiyat;
 
-      // İndirim yüzdesini hesapla (ondalıklı olarak 2 basamak)
-      final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-          ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
-          : 0.0;
+      // ✅ FİYAT OVERRIDE MANTĞI: Fiyat artışı = Price Override
+      double gonderilecekBirimFiyat;
+      double hesaplananIskonto;
+
+      if (yeniFiyat >= orjinalFiyat && orjinalFiyat > 0) {
+        // Fiyat artışı veya aynı fiyat = Price Override (birimFiyat güncelle, iskonto=0)
+        gonderilecekBirimFiyat = yeniFiyat;
+        hesaplananIskonto = 0.0;
+      } else {
+        // Fiyat azalışı = İndirim (birimFiyat sabit kal, iskonto hesapla)
+        gonderilecekBirimFiyat = orjinalFiyat;
+        hesaplananIskonto = (orjinalFiyat > 0)
+            ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+            : 0.0;
+      }
 
       // İndirim controller'ını güncelle - sadece focus değilse
       if (!_discountFocusNode.hasFocus) {
-        _discountController.text = indirimOrani > 0 ? indirimOrani.toString() : '';
+        _discountController.text = hesaplananIskonto > 0 ? hesaplananIskonto.toString() : '';
       }
 
-      // Provider'ı güncelle (HER ZAMAN orjinal fiyat ve yeni indirim oranı ile)
-      _updateProviderItem(iskonto: indirimOrani);
+      // Provider'ı güncelle (fiyat artışında birimFiyat güncellenir)
+      _updateProviderItem(birimFiyat: gonderilecekBirimFiyat, iskonto: hesaplananIskonto);
     }
   }
 
@@ -860,6 +906,13 @@ class _CartItemCardState extends State<_CartItemCard> {
     // ✅ Yeni birimin fiyatını fiyat7'den al
     final fiyat = newBirim.fiyat7 ?? 0.0;
 
+    print('🔄 BIRIM DEĞİŞİMİ:');
+    print('  Eski birim: ${item.birimTipi}');
+    print('  Eski fiyat: ${item.birimFiyat}');
+    print('  Yeni birim: ${newBirim.birimkod}');
+    print('  Yeni fiyat: $fiyat');
+    print('  BirimModel.fiyat7: ${newBirim.fiyat7}');
+
     // Fiyat kontrolü - eğer 0 veya null ise hata göster
     if (fiyat <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -878,19 +931,19 @@ class _CartItemCardState extends State<_CartItemCard> {
       _selectedBirim = newBirim;
     });
 
-    // ✅ Birim tipini belirle (Box/Unit - UI gösterimi için)
-    final birimAdi = newBirim.birimadi?.toLowerCase() ?? '';
-    final isBox = birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
-    final newBirimTipi = isBox ? 'Box' : 'Unit';
+    // ✅ Yeni birimTipi = birimkod (BOX, UNIT, KG vs. - UPPERCASE)
+    final newBirimTipi = (newBirim.birimkod ?? newBirim.birimadi ?? 'UNIT').toUpperCase();
+
+    print('  Final birimTipi: $newBirimTipi');
 
     // ✅ KRITIK: Eski birimi silip yeni birimle ekle (birim değişiminde)
     if (newBirimTipi != item.birimTipi) {
+      print('  ➡️ Birim farklı, eski item siliniyor ve yeni item ekleniyor');
       // Eski item'ın miktarını al
       final oldMiktar = item.miktar;
 
-      // Eski item'ı sil (eski birim tipiyle)
-      final oldCartKey = '${item.stokKodu}_${item.birimTipi}';
-      cartProvider.removeItem(oldCartKey);
+      // ✅ Eski item'ı sil (iki parametre ile doğru çağrı)
+      cartProvider.removeItem(item.stokKodu, item.birimTipi);
 
       // Yeni item'ı ekle (yeni birim tipiyle, eski miktarla)
       _updateProviderItem(
@@ -900,7 +953,10 @@ class _CartItemCardState extends State<_CartItemCard> {
         miktar: oldMiktar, // ✅ Eski miktarı koru
         iskonto: item.iskonto,
       );
+
+      print('  ✅ Yeni item eklendi: ${item.stokKodu}_$newBirimTipi, fiyat=$fiyat');
     } else {
+      print('  ➡️ Aynı birim, sadece fiyat güncelleniyor');
       // Aynı birim seçildiyse sadece fiyatı güncelle
       _updateProviderItem(
         birimFiyat: fiyat,
@@ -930,12 +986,18 @@ class _CartItemCardState extends State<_CartItemCard> {
     cartProvider.customerName = customerProvider.selectedCustomer!.unvan ??
         customerProvider.selectedCustomer!.kod!;
 
+    final finalBirimFiyat = birimFiyat ?? widget.item.birimFiyat;
+
+    print('  🔧 _updateProviderItem:');
+    print('     birimFiyat param: $birimFiyat');
+    print('     widget.item.birimFiyat: ${widget.item.birimFiyat}');
+    print('     finalBirimFiyat: $finalBirimFiyat');
+    print('     birimTipi: ${birimTipi ?? widget.item.birimTipi}');
+
     cartProvider.addOrUpdateItem(
       stokKodu: widget.item.stokKodu,
       urunAdi: widget.item.urunAdi,
-      birimFiyat: birimFiyat ??
-          widget.item
-              .birimFiyat, // Yeni fiyat yoksa eskisini kullan (orijinal)
+      birimFiyat: finalBirimFiyat,
       urunBarcode: widget.item.urunBarcode,
       miktar: miktar,
       iskonto: iskonto ?? widget.item.iskonto, // Yeni indirim yoksa eskisini
@@ -947,12 +1009,17 @@ class _CartItemCardState extends State<_CartItemCard> {
       kutuFiyati: widget.item.kutuFiyati,
       selectedBirimKey: selectedBirimKey ?? widget.item.selectedBirimKey, // ✅ Dinamik birim key'i
     );
+
+    print('     ✅ addOrUpdateItem çağrıldı');
   }
 
   @override
   Widget build(BuildContext context) {
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final item = widget.item; // Daha kolay erişim için
+
+    // ✅ REMOVED: PostFrameCallback - didUpdateWidget zaten controller'ları güncelliyor
+    // Bu callback gereksiz yere duplicate güncelleme yapıyordu
 
     return Column(
       children: [

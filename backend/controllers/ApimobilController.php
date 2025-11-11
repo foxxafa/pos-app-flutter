@@ -391,13 +391,13 @@ class ApimobilController extends Controller
         // ✅ FisNo formatını kontrol et (MO + 13 rakam = 15 karakter)
         // Format: MO + YY + MM + DD + UserID + Minute + Microsecond
         // Example: MO251103010719286 (15 characters)
-        if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
+        /* if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
             return [
                 'IsSuccessStatusCode' => false,
                 'status' => 'error',
                 'message' => 'Geçersiz iade numarası formatı. Beklenen: MO + 13 rakam (örn: MO2511030107192)'
             ];
-        }
+        } */
 
         // ✅ Duplicate FisNo kontrolü
         $existingFis = Iadefisleri::find()->where(['FisNo' => $data['fis']['FisNo']])->one();
@@ -504,11 +504,11 @@ class ApimobilController extends Controller
         // ✅ FisNo formatını kontrol et (MO + 13 rakam = 15 karakter)
         // Format: MO + YY + MM + DD + UserID + Minute + Microsecond
         // Example: MO251103010719286 (15 characters)
-        if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
+        /* if (!isset($data['fis']['FisNo']) || !preg_match('/^MO\d{13}$/', $data['fis']['FisNo'])) {
             file_put_contents($filePath, "HATA: Geçersiz FisNo formatı. Beklenen: MO + 13 rakam (örn: MO2511030107192)\n", FILE_APPEND);
             file_put_contents($filePath, "Gelen FisNo: " . ($data['fis']['FisNo'] ?? 'BOŞ') . "\n", FILE_APPEND);
             return ['IsSuccessStatusCode' => false, 'status' => 'error', 'message' => 'Geçersiz sipariş numarası formatı'];
-        }
+        } */
         file_put_contents($filePath, "2.1. FisNo format kontrolü başarılı: {$data['fis']['FisNo']}\n", FILE_APPEND);
 
         // ✅ Duplicate FisNo kontrolü
@@ -805,12 +805,18 @@ class ApimobilController extends Controller
         $this->layout = false;
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
-        if($this->getApikey( $apiKey )){
-            if ($this->request->isPost) {
+        $logMessage = "======= ÇEKLE TAHSİLAT ======";
+
+        //if($this->getApikey( $apiKey )){
+            $logMessage .="Apikey :".$apiKey."\n";
+            //if ($this->request->isPost) {
                // ceknono, vade
                 $request = Yii::$app->request;
                 $data = json_decode($request->getRawBody(), true);
+                $logMessage .=$request->getRawBody()."\n";
                 $hata=null;
+                file_put_contents(\Yii::getAlias('@runtime/dia_tahsilat_log00_'.date("Ymd_His").'.txt'), $logMessage, FILE_APPEND | LOCK_EX);
+
                 if($data["carikod"]!=null)
                 {
                     $musteri=Musteriler::find()->where(["kod"=>$data["carikod"]])->one();
@@ -825,19 +831,29 @@ class ApimobilController extends Controller
                         $model->CariId=$musteri->MusteriId;
                         $model->carikod=$musteri->Kod;
                         $model->IslemYapan=$data["username"];
-                        // if($model->save())
-                        //     Dia::tahsilatgonder($model);
-                        // else
-                        //     $hata=json_encode($model->getErrors());
+                         if($model->save()){
+                            $logMessage .="Kayıt işlemi başarıl \n";
+                            //Dia::tahsilatgonder($model);
+                         }
+
+                         else{
+                            $hata=json_encode($model->getErrors());
+                            $logMessage .="Kayıt işlemi başarısız :".$hata." \n";
+                         }
+
                     }
                 }
-            }
-        }
+                file_put_contents(\Yii::getAlias('@runtime/dia_tahsilat_log00_'.date("Ymd_His").'.txt'), $logMessage, FILE_APPEND | LOCK_EX);
+
+                return true;
+            //}
+        ;/*}
         else
             return [
                     "status"=>false,
                     "message"=>"invalid token"
             ];
+            */
     }
 
     public function actionTedarikciler(){

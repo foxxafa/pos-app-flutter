@@ -161,20 +161,18 @@ class _CartViewState extends State<CartView> {
     if (mounted) {
       setState(() {
         _productBirimlerMap[key] = birimler;
-        // ✅ Default birimi seç (ÖNCE Box/Koli/Kutu ara, yoksa ilk birimi seç)
+        // ✅ Default birimi seç (ÖNCE BOX ara, yoksa ilk birimi seç)
         if (birimler.isNotEmpty) {
-          // VARSAYILAN olarak Box/Koli/Kutu içeren birimi ara
+          // VARSAYILAN olarak BOX içeren birimi ara
           BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
             (b) {
               final birimAdi = b?.birimadi?.toLowerCase() ?? '';
-              return birimAdi.contains('box') ||
-                     birimAdi.contains('koli') ||
-                     birimAdi.contains('kutu');
+              return birimAdi.contains('box');
             },
             orElse: () => null,
           );
 
-          // Box/Koli/Kutu bulunamadıysa ilk birimi seç
+          // BOX bulunamadıysa ilk birimi seç
           _selectedBirimMap[key] = defaultBirim ?? birimler.first;
         }
       });
@@ -226,9 +224,7 @@ class _CartViewState extends State<CartView> {
         final selectedBirim = _selectedBirimMap[key];
         if (selectedBirim != null) {
           final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
-          _isBoxMap[key] = birimAdi.contains('box') ||
-                          birimAdi.contains('koli') ||
-                          birimAdi.contains('kutu');
+          _isBoxMap[key] = birimAdi.contains('box');
         } else {
           // Birim yoksa default Unit
           _isBoxMap[key] = false;
@@ -554,6 +550,7 @@ class _CartViewState extends State<CartView> {
 
       // Sadece daha önce set edilmemişse default değer ata
       if (!_isBoxMap.containsKey(key)) {
+        print('📋 _filterProducts: Loading birimler for $key');
         // Birimler listesini yükle (içinde _selectedBirimMap set ediliyor)
         await _loadBirimlerForProduct(product);
 
@@ -561,13 +558,16 @@ class _CartViewState extends State<CartView> {
         final selectedBirim = _selectedBirimMap[key];
         if (selectedBirim != null) {
           final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
-          _isBoxMap[key] = birimAdi.contains('box') ||
-                          birimAdi.contains('koli') ||
-                          birimAdi.contains('kutu');
+          _isBoxMap[key] = birimAdi.contains('box');
+          print('   ✅ Set _isBoxMap[$key] = ${_isBoxMap[key]} (birim: $birimAdi)');
+          print('   ✅ Set _selectedBirimMap[$key] = $birimAdi (fiyat7: ${selectedBirim.fiyat7})');
         } else {
           // Birim yoksa default Unit
           _isBoxMap[key] = false;
+          print('   ⚠️ No birim found, defaulting _isBoxMap[$key] = false');
         }
+      } else {
+        print('📋 _filterProducts: Skipping $key (_isBoxMap already set to ${_isBoxMap[key]})');
       }
     }
 
@@ -596,9 +596,17 @@ class _CartViewState extends State<CartView> {
         final selectedBirim = _selectedBirimMap[key];
         final selectedBirimKey = selectedBirim?.key;
 
-        // Birim tipini belirle
-        final isBox = _isBoxMap[key] ?? false;
-        final birimTipi = isBox ? 'Box' : 'Unit';
+        print('🔍 BARCODE SCAN - Product: ${product.urunAdi}');
+        print('   stokKodu: $key');
+        print('   selectedBirim: ${selectedBirim?.birimadi} (fiyat7: ${selectedBirim?.fiyat7})');
+        print('   _isBoxMap[$key]: ${_isBoxMap[key]}');
+
+        // ✅ Birim tipini seçili birimden al (yoksa default: UNIT)
+        final birimTipi = selectedBirim != null
+            ? (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase()
+            : 'UNIT';
+
+        print('   birimTipi: $birimTipi');
 
         // ✅ Birimler listesi kontrolü (artık birimKey yok)
         final hasBirimler = _productBirimlerMap[key]?.isNotEmpty ?? false;
@@ -614,11 +622,14 @@ class _CartViewState extends State<CartView> {
           if (selectedBirim != null) {
             // ✅ Birim fiyatını fiyat7 sütunundan al (dinamik fiyatlandırma)
             birimFiyat = selectedBirim.fiyat7 ?? 0;
+            print('   ✅ Using selectedBirim.fiyat7: $birimFiyat');
           } else {
             // Eski sistem: Box/Unit fiyatı (fallback - birim bulunamazsa)
+            final isBox = _isBoxMap[key] ?? false;
             birimFiyat = isBox
                 ? double.tryParse(product.kutuFiyati.toString()) ?? 0
                 : double.tryParse(product.adetFiyati.toString()) ?? 0;
+            print('   ⚠️ Using fallback (isBox=$isBox): $birimFiyat');
           }
 
           provider.addOrUpdateItem(
@@ -664,8 +675,9 @@ class _CartViewState extends State<CartView> {
   void _updateQuantityFromTextField(String key, String value, ProductModel product) {
     final provider = Provider.of<CartProvider>(context, listen: false);
     final newQuantity = int.tryParse(value) ?? 0;
-    final isBox = _isBoxMap[key] ?? false;
-    final birimTipi = isBox ? 'Box' : 'Unit';
+
+    // ⚠️ FIX: _isBoxMap yerine getBirimTipiFromProduct kullan (doğru birim tipini alır)
+    final birimTipi = getBirimTipiFromProduct(product) ?? 'UNIT';
 
     final currentQuantity = provider.getmiktar(key, birimTipi);
     final difference = newQuantity - currentQuantity;
@@ -677,9 +689,13 @@ class _CartViewState extends State<CartView> {
       // ✅ Ürün sepetten çıkarıldığında scan sayacını sıfırla
       _productScanCount.remove(key);
     } else {
-      final fiyat = isBox
-          ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-          : double.tryParse(product.adetFiyati.toString()) ?? 0;
+      // ⚠️ FIX: Seçili birimden fiyat al (_selectedBirimMap'ten)
+      final selectedBirim = _selectedBirimMap[key];
+      final fiyat = selectedBirim != null
+          ? (selectedBirim.fiyat7 ?? 0)
+          : (birimTipi == 'UNIT' || birimTipi == 'Unit')
+              ? double.tryParse(product.adetFiyati.toString()) ?? 0
+              : double.tryParse(product.kutuFiyati.toString()) ?? 0;
 
       final cartItem = provider.items[key];
       final iskonto = cartItem?.iskonto ?? provider.getIskonto(key);
@@ -717,11 +733,19 @@ class _CartViewState extends State<CartView> {
 
   String? getBirimTipiFromProduct(ProductModel product) {
     final key = product.stokKodu;
-    final isBox = _isBoxMap[key] ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0); // Default to box if available
-    if (isBox && (double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) return 'Box';
-    if (!isBox && (double.tryParse(product.adetFiyati.toString()) ?? 0) > 0) return 'Unit';
-    if ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) return 'Box';
-    if ((double.tryParse(product.adetFiyati.toString()) ?? 0) > 0) return 'Unit';
+
+    // ✅ Seçili birimden birimkod'u al (UPPERCASE)
+    final selectedBirim = _selectedBirimMap[key];
+    if (selectedBirim != null) {
+      return (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase();
+    }
+
+    // ⚠️ Fallback: Eski mantık (uyumluluk için) - UPPERCASE
+    final isBox = _isBoxMap[key] ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0);
+    if (isBox && (double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) return 'BOX';
+    if (!isBox && (double.tryParse(product.adetFiyati.toString()) ?? 0) > 0) return 'UNIT';
+    if ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) return 'BOX';
+    if ((double.tryParse(product.adetFiyati.toString()) ?? 0) > 0) return 'UNIT';
     return null;
   }
 
@@ -961,41 +985,58 @@ class _CartViewState extends State<CartView> {
           birimler: _productBirimlerMap[key] ?? [],
           selectedBirim: _selectedBirimMap[key],
           onBirimTipiChanged: (isNowBox) {
-            setState(() {
-              _isBoxMap[key] = isNowBox;
-              final newBirimTipi = isNowBox ? 'Box' : 'Unit';
-              final newMiktar = provider.getmiktar(key, newBirimTipi);
-              _quantityMap[key] = newMiktar;
-              _quantityControllers[key]?.text = newMiktar.toString();
-
-              final productFiyat = isNowBox
-                  ? (double.tryParse(product.kutuFiyati.toString()) ?? 0)
-                  : (double.tryParse(product.adetFiyati.toString()) ?? 0);
-              _priceControllers[key]?.text = productFiyat.toStringAsFixed(2);
-              _discountControllers[key]?.text = provider.getIskonto(key).toString();
-            });
+            // ⚠️ DEPRECATED: Bu callback artık kullanılmıyor
+            // onBirimChanged callback'i tüm işi yapıyor
           },
           onBirimChanged: (BirimModel? newBirim) {
             setState(() {
               _selectedBirimMap[key] = newBirim;
             });
 
+            print('🔄 onBirimChanged in cart_view.dart:');
+            print('   stokKodu: $key');
+            print('   newBirim: ${newBirim?.birimadi} (fiyat7: ${newBirim?.fiyat7})');
+
             // ✅ Seçili birimi CartProvider'a kaydet
             if (newBirim != null) {
-              final cartItem = provider.items[key];
-              if (cartItem != null) {
-                final birimAdi = newBirim.birimadi?.toLowerCase() ?? '';
-                final isBox = birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
-                final birimTipi = isBox ? 'Box' : 'Unit';
+              // ⚠️ FIX: ESKİ birim tipindeki item'ı bul (tüm sepet itemlarını tara)
+              CartItem? oldCartItem;
+              String? oldCartKey;
+
+              // Sepetteki bu stokKodu'na ait tüm itemları kontrol et
+              for (var entry in provider.items.entries) {
+                if (entry.key.startsWith('${product.stokKodu}_')) {
+                  oldCartItem = entry.value;
+                  oldCartKey = entry.key;
+                  break;
+                }
+              }
+
+              print('   oldCartKey: $oldCartKey');
+              print('   oldCartItem exists: ${oldCartItem != null}');
+
+              if (oldCartItem != null && oldCartKey != null) {
+                final birimTipi = (newBirim.birimkod ?? newBirim.birimadi ?? 'UNIT').toUpperCase();
                 final birimFiyat = newBirim.fiyat7 ?? 0; // ✅ fiyat7 kullan
+                final newCartKey = '${product.stokKodu}_$birimTipi';
+
+                print('   birimTipi: $birimTipi');
+                print('   newCartKey: $newCartKey');
+                print('   birimFiyat: $birimFiyat');
+
+                // ⚠️ KRITIK: Eski item'ı sil, yeni item ekle (birim tipi değiştiği için key değişir)
+                if (oldCartKey != newCartKey) {
+                  print('   🔄 Birim değişti, eski item siliniyor ve yeni item ekleniyor');
+                  provider.removeItem(oldCartKey);
+                }
 
                 provider.addOrUpdateItem(
                   stokKodu: product.stokKodu,
                   urunAdi: product.urunAdi,
                   birimFiyat: birimFiyat,
                   urunBarcode: product.barcode1,
-                  miktar: 0, // Miktar değişmeyecek
-                  iskonto: cartItem.iskonto,
+                  miktar: oldCartItem.miktar, // ⚠️ FIX: Eski miktarı koru (0 DEĞİL!)
+                  iskonto: oldCartItem.iskonto,
                   birimTipi: birimTipi,
                   vat: product.vat,
                   imsrc: product.imsrc,
@@ -1003,6 +1044,17 @@ class _CartViewState extends State<CartView> {
                   kutuFiyati: product.kutuFiyati,
                   selectedBirimKey: newBirim.key, // ✅ Seçili birimi kaydet
                 );
+
+                // ✅ KRITIK: Price controller'ı yeni birim fiyatıyla güncelle
+                final priceController = _priceControllers[key];
+                if (priceController != null) {
+                  priceController.text = birimFiyat.toStringAsFixed(2);
+                  print('   ✅ Price controller updated to: ${birimFiyat.toStringAsFixed(2)}');
+                } else {
+                  print('   ⚠️ Price controller not found for key: $key');
+                }
+              } else {
+                print('   ⚠️ Eski cart item bulunamadı - sepette item yok');
               }
             }
           },
@@ -1573,10 +1625,13 @@ class ProductDetails extends StatefulWidget {
 class _ProductDetailsState extends State<ProductDetails> {
   String _oldDiscountValue = '';
   String _oldPriceValue = '';
+  String? _initialBirimTipi; // ⚠️ Widget oluşturulduğundaki orijinal birim tipi
 
   @override
   void initState() {
     super.initState();
+    // Widget ilk oluşturulduğunda birim tipini kaydet
+    _initialBirimTipi = widget.getBirimTipi();
     widget.discountFocusNode.addListener(_onDiscountFocusChange);
     widget.priceFocusNode.addListener(_onPriceFocusChange);
   }
@@ -1609,16 +1664,23 @@ class _ProductDetailsState extends State<ProductDetails> {
       }
 
       final selectedType = widget.getBirimTipi() ?? 'Unit';
+
+      // ⚠️ FIX: selectedBirim'den fiyat al (product.adetFiyati/kutuFiyati DEĞİL!)
+      final originalPrice = widget.selectedBirim != null
+          ? (widget.selectedBirim!.fiyat7 ?? 0)
+          : (selectedType == 'Unit' || selectedType == 'UNIT')
+              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+
       final val = widget.discountController.text;
       if (val.isEmpty) {
-        final originalPrice = selectedType == 'Unit' ? widget.product.adetFiyati : widget.product.kutuFiyati;
         widget.provider.addOrUpdateItem(
           stokKodu: widget.product.stokKodu,
           miktar: 0,
           iskonto: 0.0,
           birimTipi: selectedType,
           urunAdi: widget.product.urunAdi,
-          birimFiyat: double.tryParse(originalPrice.toString()) ?? 0,
+          birimFiyat: originalPrice,
           vat: widget.product.vat,
           imsrc: widget.product.imsrc,
           adetFiyati: widget.product.adetFiyati,
@@ -1629,10 +1691,6 @@ class _ProductDetailsState extends State<ProductDetails> {
       } else {
         double discountPercent = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
         if (discountPercent > 100) discountPercent = 100;
-
-        final originalPrice = selectedType == 'Unit'
-            ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-            : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
 
         widget.provider.addOrUpdateItem(
             stokKodu: widget.product.stokKodu,
@@ -1672,9 +1730,38 @@ class _ProductDetailsState extends State<ProductDetails> {
         return;
       }
 
-      final selectedType = widget.getBirimTipi() ?? 'Unit';
+      // ⚠️ KRITIK FIX: Widget'ın ORIJINAL birim tipini kullan (global state değişebilir!)
+      // getBirimTipi() global state'ten okuyor, birim değiştiğinde herkeste değişiyor
+      // Bu widget BOX için oluşturulduysa, her zaman BOX olarak kalmalı
+      final originalBirimType = _initialBirimTipi ?? widget.getBirimTipi() ?? 'Unit';
+      final cartKey = '${widget.product.stokKodu}_$originalBirimType';
+
+      // Bu widget'ın orijinal birim tipiyle eşleşen item sepette YOK mu kontrol et
+      final itemForThisWidget = widget.provider.items[cartKey];
+
+      if (itemForThisWidget == null) {
+        // Bu widget için item sepette yok, demek ki birim değişmiş
+        // Bu widget artık geçersiz, fiyat güncellemesi yapma!
+        print('⚠️ _onPriceFocusChange ENGELLENDI:');
+        print('   Widget orijinal birim tipi: $originalBirimType');
+        print('   Sepette bu birim tipi YOK (cartKey: $cartKey)');
+        print('   Bu widget eski/stale, fiyat güncellemesi yapılmayacak!');
+        return;
+      }
+
+      // Şimdi de mevcut birim tipini kontrol et
+      final currentSelectedType = widget.getBirimTipi() ?? 'Unit';
+      if (currentSelectedType != originalBirimType) {
+        // Birim tipi değişmiş, bu widget artık güncel değil
+        print('⚠️ _onPriceFocusChange ENGELLENDI:');
+        print('   Widget orijinal birim: $originalBirimType');
+        print('   Şu anki seçili birim: $currentSelectedType');
+        print('   Birim değişmiş, fiyat güncellemesi yapılmayacak!');
+        return;
+      }
+
       final yeniFiyat = double.tryParse(widget.priceController.text.replaceAll(',', '.')) ?? 0;
-      var orjinalFiyat = selectedType == 'Unit'
+      var orjinalFiyat = originalBirimType == 'Unit' || originalBirimType == 'UNIT'
           ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
           : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
       if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
@@ -1690,7 +1777,7 @@ class _ProductDetailsState extends State<ProductDetails> {
         urunBarcode: widget.product.barcode1,
         miktar: 0,
         iskonto: indirimOrani,
-        birimTipi: selectedType,
+        birimTipi: originalBirimType,
         vat: widget.product.vat,
         imsrc: widget.product.imsrc,
         adetFiyati: widget.product.adetFiyati,
@@ -1855,10 +1942,9 @@ class _ProductDetailsState extends State<ProductDetails> {
         onChanged: (BirimModel? newBirim) {
           if (newBirim != null) {
             widget.onBirimChanged(newBirim);
-            // Also notify the old callback for compatibility
-            final birimAdi = newBirim.birimadi?.toLowerCase() ?? '';
-            final isBox = birimAdi.contains('box') || birimAdi.contains('koli') || birimAdi.contains('kutu');
-            widget.onBirimTipiChanged(isBox);
+            // ⚠️ Deprecated: onBirimTipiChanged artık kullanılmıyor (onBirimChanged yeterli)
+            // Geriye uyumluluk için varsayılan değer gönder
+            widget.onBirimTipiChanged(false);
           }
         },
       ),
@@ -2256,9 +2342,17 @@ class _ProductDetailsState extends State<ProductDetails> {
               ? () {
             final newQuantity = widget.quantity + (isIncrement ? 1 : -1);
 
-            final fiyat = selectedType == 'Box'
-                ? (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0)
-                : (double.tryParse(widget.product.adetFiyati.toString()) ?? 0);
+            // ⚠️ FIX: selectedBirim.fiyat7 kullan (kutuFiyati/adetFiyati DEĞİL!)
+            final fiyat = widget.selectedBirim != null
+                ? (widget.selectedBirim!.fiyat7 ?? 0)
+                : (selectedType == 'Box' || selectedType == 'BOX')
+                    ? (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0)
+                    : (double.tryParse(widget.product.adetFiyati.toString()) ?? 0);
+
+            print('➕ Increment/Decrement Button:');
+            print('   selectedBirim: ${widget.selectedBirim?.birimadi} (fiyat7: ${widget.selectedBirim?.fiyat7})');
+            print('   selectedType: $selectedType');
+            print('   fiyat: $fiyat');
 
             final cartItem = widget.provider.items[widget.product.stokKodu];
             final iskonto = cartItem?.iskonto ?? widget.provider.getIskonto(widget.product.stokKodu);

@@ -350,7 +350,7 @@ ScaffoldMessenger.of(context).showSnackBar(
                         final picked = await showDatePicker(
                           context: context,
                           initialDate: _chequeExpiryDate,
-                          firstDate: DateTime.now(),
+                          firstDate: DateTime(2000),
                           lastDate: DateTime(2100),
                         );
                         if (picked != null) {

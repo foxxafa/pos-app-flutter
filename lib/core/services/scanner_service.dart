@@ -15,20 +15,26 @@ class ScannerService {
     458881,       // Terminal 2 USB HID
     0x070053,     // Num Lock
     0x070054,     // Keypad /
+    73014444273,  // Grup 1 Physical/USB HID
+    73014444263,  // Grup 2 Physical/USB HID
+    73014444554,  // Grup 3 Physical
+    73014444552,  // Grup 4 Physical/USB HID
   };
 
   // LogicalKey ID kontrolü (Sunmi ve diğerleri)
   static const Set<int> _scannerLogicalKeys = {
     73014444321,  // KEYCODE_SCANNER_RIGHT
     73014444322,  // KEYCODE_SCANNER_BOTTOM
-    73014444552,  // Terminal 3 Logical ID
-    73014444553,  // Terminal 4 Logical ID (0x01100000209)
+    73014444552,  // Terminal 3 Logical ID / Grup 4 Logical ID
+    73014444553,  // Terminal 4 Logical ID (0x01100000209) / Grup 3 Logical ID
     4294967309,   // Alternatif scanner key
     4294969355,   // Terminal 1 Logical ID
     4294969871,   // Terminal 2 Logical ID
     73014444296,  // 0x01100000208
     4294967556,   // Eski scanner key
     73014445159,  // Eski scanner key
+    73014444384,  // Grup 1 Logical ID
+    73014444385,  // Grup 2 Logical ID
   };
 
   /// Scanner tuşu olup olmadığını kontrol eder

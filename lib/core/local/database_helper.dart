@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 9;  // Version artırıldı (cartrefund_items iskonto REAL için)
+  static const _databaseVersion = 10;  // Version artırıldı (Birimler tablosuna StokKodu index eklendi)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -51,10 +51,16 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     debugPrint('Upgrading database from version $oldVersion to $newVersion');
-    debugPrint('⚠️ Database schema changed. Please uninstall and reinstall the app to apply changes.');
 
-    // Migration kaldırıldı - Kullanıcılar uygulamayı yeniden yüklemelidir
-    // Tüm tablolar _createAllTables metodunda güncel şema ile oluşturulur
+    // Version 10: Birimler tablosuna StokKodu index'i ekle
+    if (oldVersion < 10) {
+      debugPrint('Adding index to Birimler.StokKodu...');
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_birimler_stokkodu
+        ON Birimler(StokKodu)
+      ''');
+      debugPrint('✅ Index idx_birimler_stokkodu created successfully');
+    }
   }
 
   Future<void> _createAllTables(Database db) async {
@@ -235,6 +241,12 @@ class DatabaseHelper {
         created_at TEXT,
         updated_at TEXT
       )
+    ''');
+
+    // Index ekle - performans için (StokKodu sık sık WHERE koşulunda kullanılıyor)
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_birimler_stokkodu
+      ON Birimler(StokKodu)
     ''');
 
     // Barkodlar (Barcodes) table - Ürün barkodları

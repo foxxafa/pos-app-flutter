@@ -213,9 +213,22 @@ class CartProvider extends ChangeNotifier {
     // Sepet anahtarı: stokKodu + birimTipi (aynı ürünün farklı birimleri ayrı item olacak)
     final cartKey = '${stokKodu}_$birimTipi';
 
+    print("  📦 CartProvider.addOrUpdateItem:");
+    print("     cartKey: $cartKey");
+    print("     birimFiyat: $birimFiyat");
+    print("     miktar: $miktar");
+    print("     Item exists: ${_items.containsKey(cartKey)}");
+
+    // ⚠️ Stack trace - hangi fonksiyondan çağrıldığını görmek için
+    if (birimFiyat == 43.75 && miktar == 0 && birimTipi == 'UNIT') {
+      print("     ❌❌❌ YANLIŞ FİYAT TESPİT EDİLDİ! Stack trace:");
+      print(StackTrace.current);
+    }
+
     if (_items.containsKey(cartKey)) {
       print("cartKey $cartKey");
       final current = _items[cartKey]!;
+      print("     Current birimFiyat BEFORE: ${current.birimFiyat}");
       current.miktar += miktar;
       if (current.miktar <= 0) {
         _items.remove(cartKey);
@@ -229,8 +242,10 @@ class CartProvider extends ChangeNotifier {
         current.adetFiyati = adetFiyati;
         current.kutuFiyati = kutuFiyati;
         current.selectedBirimKey = selectedBirimKey;
+        print("     Current birimFiyat AFTER: ${current.birimFiyat}");
       }
     } else {
+      print("     Creating NEW item with birimFiyat: $birimFiyat");
       _items[cartKey] = CartItem(
         stokKodu: stokKodu,
         urunAdi: urunAdi,
@@ -246,6 +261,7 @@ class CartProvider extends ChangeNotifier {
         kutuFiyati: kutuFiyati,
         selectedBirimKey: selectedBirimKey,
       );
+      print("     NEW item created, birimFiyat: ${_items[cartKey]!.birimFiyat}");
     }
 
     notifyListeners();
@@ -536,6 +552,9 @@ class CartProvider extends ChangeNotifier {
     }
 
     for (final item in cartData) {
+      // ✅ birimTipi'yi UPPERCASE'e çevir (eski "Box" → "BOX" uyumluluğu için)
+      final birimTipi = (item['birimTipi'] as String?)?.toUpperCase() ?? 'UNIT';
+
       final cartItem = CartItem(
         stokKodu: item['stokKodu'],
         urunAdi: item['urunAdi'],
@@ -543,7 +562,7 @@ class CartProvider extends ChangeNotifier {
         miktar: item['miktar'],
         urunBarcode: item['urunBarcode'],
         iskonto: item['iskonto'],
-        birimTipi: item['birimTipi'],
+        birimTipi: birimTipi, // ✅ UPPERCASE
         durum: item['durum'],
         imsrc: item['imsrc'],
         vat: item['vat'],
@@ -593,6 +612,9 @@ class CartProvider extends ChangeNotifier {
 
     // Load all items into cart
     for (final item in cartData) {
+      // ✅ birimTipi'yi UPPERCASE'e çevir (eski "Box" → "BOX" uyumluluğu için)
+      final birimTipi = (item['birimTipi']?.toString() ?? 'BOX').toUpperCase();
+
       final cartItem = CartItem(
         stokKodu: item['stokKodu']?.toString() ?? '',
         urunAdi: item['urunAdi']?.toString() ?? '',
@@ -606,7 +628,7 @@ class CartProvider extends ChangeNotifier {
         iskonto: (item['iskonto'] is num)
             ? (item['iskonto'] as num).toDouble()
             : double.tryParse(item['iskonto']?.toString() ?? '0') ?? 0.0,
-        birimTipi: item['birimTipi']?.toString() ?? 'Box',
+        birimTipi: birimTipi, // ✅ UPPERCASE
         durum: (item['durum'] is num)
             ? (item['durum'] as num).toInt()
             : int.tryParse(item['durum']?.toString() ?? '1') ?? 1,
