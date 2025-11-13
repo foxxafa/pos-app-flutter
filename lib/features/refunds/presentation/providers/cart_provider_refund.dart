@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
@@ -5,6 +6,7 @@ import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart'
 
 class RCartProvider extends ChangeNotifier {
   final Map<String, CartItem> _items = {};
+  Timer? _debounceTimer;
 
   Map<String, CartItem> get items => {..._items};
 
@@ -33,11 +35,12 @@ String get customerName => _customerName;
   }
   
   void updateMiktar(String key, int newMiktar) {
-  if (items.containsKey(key)) {
-    items[key]!.miktar = newMiktar;
-    notifyListeners();
+    // ⚠️ FIX: items getter değil, _items kullan (getter kopya döndürür!)
+    if (_items.containsKey(key)) {
+      _items[key]!.miktar = newMiktar;
+      notifyListeners();
+    }
   }
-}
 
 void updateAciklama(String stokKodu, String yeniAciklama) {
   if (_items.containsKey(stokKodu)) {
@@ -60,12 +63,24 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
     String adetFiyati = '', // yeni parametre
     String kutuFiyati = '', // yeni parametre
   }) {
+    print('📦 REFUND addOrUpdateItem:');
+    print('   stokKodu: $stokKodu');
+    print('   miktar param: $miktar');
+    print('   birimTipi: $birimTipi');
+    print('   birimFiyat: $birimFiyat');
+
     if (_items.containsKey(stokKodu)) {
-      print("stokkou $stokKodu");
+      print('   ✅ Item EXISTS');
       final current = _items[stokKodu]!;
+      print('   Current miktar BEFORE: ${current.miktar}');
+      print('   Current birimTipi: ${current.birimTipi}');
+
       current.miktar += miktar;
+      print('   Current miktar AFTER += $miktar: ${current.miktar}');
+
       if (current.miktar <= 0) {
         _items.remove(stokKodu);
+        print('   ❌ Item REMOVED (miktar <= 0)');
       } else {
         current.birimFiyat = birimFiyat;
         current.iskonto = iskonto;
@@ -75,28 +90,30 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
         current.durum = durum;
         current.adetFiyati = adetFiyati;
         current.kutuFiyati = kutuFiyati;
+        print('   ✅ Item UPDATED');
       }
     } else {
       // Don't create new item if quantity is 0 or negative
       if (miktar <= 0) {
+        print('   ⚠️ NOT creating item (miktar <= 0)');
         return;
       }
 
-        _items[stokKodu] = CartItem(
-          stokKodu: stokKodu,
-          urunAdi: urunAdi,
-          birimFiyat: birimFiyat,
-          miktar: miktar,
-          urunBarcode: urunBarcode,
-          iskonto: iskonto,
-          birimTipi: birimTipi,
-          durum: durum,
-          imsrc: imsrc,
-          vat: vat,
-          adetFiyati: adetFiyati,
-          kutuFiyati: kutuFiyati,
-        );
-
+      print('   🆕 Creating NEW item with miktar: $miktar');
+      _items[stokKodu] = CartItem(
+        stokKodu: stokKodu,
+        urunAdi: urunAdi,
+        birimFiyat: birimFiyat,
+        miktar: miktar,
+        urunBarcode: urunBarcode,
+        iskonto: iskonto,
+        birimTipi: birimTipi,
+        durum: durum,
+        imsrc: imsrc,
+        vat: vat,
+        adetFiyati: adetFiyati,
+        kutuFiyati: kutuFiyati,
+      );
     }
 
     notifyListeners();
@@ -109,27 +126,39 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
 
   Future<void> clearCart() async {
     _items.clear();
-    await _saveCartToDatabase();
+    _debounceTimer?.cancel(); // Cancel any pending save
+    await _saveCartToDatabase(); // Save immediately when clearing
     notifyListeners();
   }
 
   @override
 void notifyListeners() {
-  _saveCartToDatabase(); // buradan çağır
+  // ✅ Debounce: 300ms içinde birden fazla çağrı varsa son çağrıyı kullan
+  _debounceTimer?.cancel();
+  _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    _saveCartToDatabase();
+  });
   super.notifyListeners();
 }
 
+@override
+void dispose() {
+  _debounceTimer?.cancel();
+  super.dispose();
+}
+
 Future<void> _saveCartToDatabase() async {
+  print('💾 _saveCartToDatabase: Saving ${_items.length} items for customer: $_customerName');
   final dbHelper = DatabaseHelper();
   await dbHelper.clearRefundCartItemsByCustomer(_customerName); // önce temizle
   for (final item in _items.values) {
     await dbHelper.insertRefundCartItem(item, _customerName);
-    print("a1a2a3");
-    dbHelper.printAllCartItems(); print("a1a2a3");
   }
+  print('✅ Database save completed');
 }
 
 Future<void> loadCartRefundFromDatabase(String customerName) async {
+  print('📂 loadCartRefundFromDatabase: Loading cart for customer: $customerName');
   final dbHelper = DatabaseHelper();
   final cartData = await dbHelper.getRefundCartItemsByCustomer(customerName);
 
@@ -155,10 +184,8 @@ Future<void> loadCartRefundFromDatabase(String customerName) async {
     _items[cartItem.stokKodu] = cartItem;
   }
 
-      print("a1a2a3");
-    dbHelper.printAllCartItems(); print("a1a2a3");
-
- // notifyListeners();
+  print('✅ Loaded ${_items.length} items from database');
+ // notifyListeners(); - Don't notify here to avoid save loop
 }
 
   double get toplamTutar {

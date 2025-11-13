@@ -494,15 +494,26 @@ class _RefundCartViewState extends State<RefundCartView> {
   }
 
   void _updateQuantityFromTextField(String key, String value, ProductModel product) async {
+    print('🔢 _updateQuantityFromTextField:');
+    print('   key: $key');
+    print('   value: $value');
+
     final provider = Provider.of<RCartProvider>(context, listen: false);
     final newQuantity = int.tryParse(value) ?? 0;
-
     final currentQuantity = provider.getmiktar(key);
     final difference = newQuantity - currentQuantity;
 
-    if (difference == 0) return;
+    print('   newQuantity: $newQuantity');
+    print('   currentQuantity: $currentQuantity');
+    print('   difference: $difference');
+
+    if (difference == 0) {
+      print('   ⚠️ No change, returning');
+      return;
+    }
 
     if (newQuantity <= 0) {
+      print('   ❌ Removing item (newQuantity <= 0)');
       provider.removeItem(key);
     } else {
       // ✅ Birimler yükle
@@ -517,6 +528,8 @@ class _RefundCartViewState extends State<RefundCartView> {
       final originalPrice = selectedBirim?.fiyat7 ?? 0;
       final birimFiyat = latestRefund?.birimFiyat ?? (originalPrice * 0.7);
       final iskonto = latestRefund?.iskonto ?? 0;
+
+      print('   ➡️ Calling addOrUpdateItem with difference: $difference');
 
       provider.addOrUpdateItem(
         urunAdi: product.urunAdi,
@@ -879,6 +892,7 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
   final FocusNode _quantityFocusNode = FocusNode();
   String _oldQuantityValue = '';
   String _oldPriceValue = '';
+  bool _quantitySubmitted = false; // ⚠️ FIX: Flag to prevent double call
 
   @override
   void initState() {
@@ -898,6 +912,7 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
   void _onQuantityFocusChange() {
     if (_quantityFocusNode.hasFocus) {
       _oldQuantityValue = widget.quantityController.text;
+      _quantitySubmitted = false; // ⚠️ Reset flag when focused
       widget.quantityController.clear();
     } else {
       if (widget.quantityController.text.isEmpty) {
@@ -906,9 +921,23 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
             widget.quantityController.text = _oldQuantityValue;
           });
         }
+      } else if (widget.quantityController.text != _oldQuantityValue && !_quantitySubmitted) {
+        // ⚠️ FIX: Sadece onSubmitted çağrılmadıysa çağır
+        print('🔢 _onQuantityFocusChange: Calling updateQuantityFromTextField (focus lost)');
+        _handleQuantityUpdate(widget.quantityController.text);
       }
-      widget.updateQuantityFromTextField(widget.quantityController.text);
+      _quantitySubmitted = false; // ⚠️ Reset flag after focus lost
     }
+  }
+
+  void _handleQuantityUpdate(String value) {
+    widget.updateQuantityFromTextField(value);
+  }
+
+  void _handleQuantitySubmit(String value) {
+    print('🔢 onSubmitted: Setting _quantitySubmitted flag & calling updateQuantityFromTextField (Enter pressed)');
+    _quantitySubmitted = true; // ⚠️ Set flag to prevent double call
+    _handleQuantityUpdate(value);
   }
 
   void _onPriceFocusChange() {
@@ -984,6 +1013,7 @@ class _RefundProductListItemState extends State<RefundProductListItem> {
               onLoadBirimler: widget.onLoadBirimler,
               onQuantityChanged: widget.onQuantityChanged,
               updateQuantityFromTextField: widget.updateQuantityFromTextField,
+              onQuantitySubmit: _handleQuantitySubmit, // ⚠️ NEW: Wrapper callback
               getBirimTipi: widget.getBirimTipi,
               onBirimTipiChanged: widget.onBirimTipiChanged,
               onReturnReasonPressed: widget.onReturnReasonPressed,
@@ -1116,6 +1146,7 @@ class RefundProductDetails extends StatelessWidget {
   final Future<void> Function() onLoadBirimler;
   final ValueChanged<int> onQuantityChanged;
   final ValueChanged<String> updateQuantityFromTextField;
+  final ValueChanged<String> onQuantitySubmit; // ⚠️ NEW: For Enter key
   final String? Function() getBirimTipi;
   final BirimModel? Function(String) onBirimTipiChanged; // ✅ Yeni birimi döndürür
   final VoidCallback onReturnReasonPressed;
@@ -1135,6 +1166,7 @@ class RefundProductDetails extends StatelessWidget {
     required this.onLoadBirimler,
     required this.onQuantityChanged,
     required this.updateQuantityFromTextField,
+    required this.onQuantitySubmit, // ⚠️ NEW
     required this.getBirimTipi,
     required this.onBirimTipiChanged,
     required this.onReturnReasonPressed,
@@ -1380,7 +1412,7 @@ class RefundProductDetails extends StatelessWidget {
                     contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
                     isDense: true,
                   ),
-                  onSubmitted: (value) => updateQuantityFromTextField(value),
+                  onSubmitted: onQuantitySubmit, // ⚠️ FIX: Use wrapper callback
                 ),
               ),
             ),

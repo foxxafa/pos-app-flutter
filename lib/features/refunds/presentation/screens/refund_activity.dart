@@ -150,7 +150,7 @@ class _RefundActivityViewState extends State<RefundActivityView> {
                     ),
                     SizedBox(width: 2.w),
                     Text(
-                      'Refund #${parsed['No'] ?? 'N/A'}',
+                      '${parsed['No'] ?? 'N/A'}',
                       style: TextStyle(
                         fontSize: 16.sp,
                         fontWeight: FontWeight.bold,
