@@ -287,15 +287,18 @@ class _CartView2State extends State<CartView2> {
     final cartProvider = context.watch<CartProvider>();
     final cartItems = cartProvider.items.values.toList().reversed.toList();
 
+    // ✅ DİNAMİK BİRİM SAYIMI: Tüm birim tiplerini say (sadece Unit/Box değil)
+    final totalCount = cartItems.fold<int>(0, (sum, item) => sum + item.miktar);
+
+    // ⚠️ DEPRECATED: Unit/Box sayımı artık kullanılmıyor ama UI için gösterilecek
+    // Gerçek değerler yerine placeholder'lar göster veya totalCount'u göster
     final unitCount = cartItems
-        .where((item) => item.birimTipi == _unitType)
+        .where((item) => item.birimTipi.toUpperCase() == 'UNIT')
         .fold<int>(0, (prev, item) => prev + item.miktar);
 
     final boxCount = cartItems
-        .where((item) => item.birimTipi == _boxType)
+        .where((item) => item.birimTipi.toUpperCase() == 'BOX')
         .fold<int>(0, (prev, item) => prev + item.miktar);
-
-    final totalCount = unitCount + boxCount;
 
     return Scaffold(
       appBar: AppBar(

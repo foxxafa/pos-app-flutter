@@ -173,7 +173,8 @@ class _CartViewState extends State<CartView> {
           );
 
           // BOX bulunamadıysa ilk birimi seç
-          _selectedBirimMap[key] = defaultBirim ?? birimler.first;
+          final selectedBirim = defaultBirim ?? birimler.first;
+          _selectedBirimMap[key] = selectedBirim;
         }
       });
     }
@@ -756,8 +757,8 @@ class _CartViewState extends State<CartView> {
     final customer = Provider.of<SalesCustomerProvider>(context).selectedCustomer;
     String musteriId = customer?.kod ?? "";
     final cartItems = provider.items.values.toList();
-    final unitCount = cartItems.where((i) => i.birimTipi == 'Unit').fold<int>(0, (p, i) => p + i.miktar);
-    final boxCount = cartItems.where((i) => i.birimTipi == 'Box').fold<int>(0, (p, i) => p + i.miktar);
+    // ✅ Tüm birimleri topla (dinamik birim sistemi için)
+    final totalQuantity = cartItems.fold<int>(0, (sum, item) => sum + item.miktar);
 
     return Scaffold(
       appBar: AppBar(
@@ -813,7 +814,7 @@ class _CartViewState extends State<CartView> {
           ),
         ),
         actions: [
-          _buildShoppingCartIcon(cartItems.length, unitCount + boxCount),
+          _buildShoppingCartIcon(cartItems.length, totalQuantity),
         ],
       ),
       body: Column(
@@ -1283,14 +1284,17 @@ class _ProductImageState extends State<ProductImage> {
       if (_hasAnyDepostok == false) {
         // Depostok tamamen boş → Product.miktar kullan
         stock = widget.product.miktar ?? 0.0;
+        debugPrint('📦 [CART_VIEW] ${widget.product.stokKodu}: Depostok boş, product.miktar kullanılıyor: $stock');
       } else {
         // Depostok'ta veri var → Cache'ten bak
         if (_allDepostokStocks!.containsKey(widget.product.stokKodu.toString())) {
           // Bulundu → Depostok'tan al
           stock = _allDepostokStocks![widget.product.stokKodu.toString()]!;
+          debugPrint('📦 [CART_VIEW] ${widget.product.stokKodu}: Depostok\'ta BULUNDU: $stock');
         } else {
-          // Bulunamadı → 0 (Depostok'ta veri var ama bu ürün yok)
-          stock = 0.0;
+          // Bulunamadı → product.miktar kullan (fallback)
+          stock = widget.product.miktar ?? 0.0;
+          debugPrint('📦 [CART_VIEW] ${widget.product.stokKodu}: Depostok\'ta BULUNAMADI, product.miktar kullanılıyor: $stock');
         }
       }
 
@@ -1300,6 +1304,9 @@ class _ProductImageState extends State<ProductImage> {
         _availableStock = stock;
         _stockLoading = false;
       });
+
+      // 🐛 DEBUG - Stok yükleme sonucu
+      debugPrint('📦 [CART_VIEW] Stok yüklendi: ${widget.product.stokKodu} -> $_availableStock (Depostok: $_hasAnyDepostok)');
     } catch (e) {
       debugPrint('⚠️ Stok bilgisi yüklenemedi: $e');
       if (!mounted) return;
@@ -1398,6 +1405,11 @@ class _ProductImageState extends State<ProductImage> {
   Widget build(BuildContext context) {
     // ✅ Banner'ı Depostok stok bilgisine göre göster
     final showBanner = (_availableStock ?? widget.product.miktar ?? 0) <= 0;
+
+    // 🐛 DEBUG - SUSPENDED banner kontrolü
+    if (showBanner) {
+      debugPrint('🔴 [CART_VIEW] SUSPENDED: ${widget.product.stokKodu} - availableStock: $_availableStock, product.miktar: ${widget.product.miktar}');
+    }
 
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
@@ -1853,29 +1865,9 @@ class _ProductDetailsState extends State<ProductDetails> {
   }
 
   Widget _buildUnitSelector(BuildContext context) {
-    // Use actual birimler if available, otherwise fall back to old logic
+    // ⚠️ REMOVED OLD FALLBACK: All products now load birimler from database
+    // If birimler is empty, show a placeholder instead of trying to build a dropdown
     if (widget.birimler.isEmpty) {
-      final hasUnit = (double.tryParse(widget.product.adetFiyati.toString()) ?? 0) > 0;
-      final hasBox = (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0) > 0;
-      final availableUnits = (hasUnit ? 1 : 0) + (hasBox ? 1 : 0);
-
-      if (availableUnits <= 1) {
-        final unitText = hasUnit ? 'cart.unit'.tr() : (hasBox ? 'cart.box'.tr() : '-');
-        return Container(
-          height: 8.w,
-          alignment: Alignment.center,
-          padding: EdgeInsets.symmetric(horizontal: 2.w),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            unitText,
-            style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
-          ),
-        );
-      }
-
       return Container(
         height: 8.w,
         alignment: Alignment.center,
@@ -1884,20 +1876,9 @@ class _ProductDetailsState extends State<ProductDetails> {
           color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: DropdownButton<String>(
-          value: widget.getBirimTipi(),
-          isDense: true,
-          underline: Container(),
+        child: Text(
+          '-',
           style: TextStyle(fontSize: 14.sp, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600),
-          items: [
-            if (hasUnit) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
-            if (hasBox) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
-          ],
-          onChanged: (val) {
-            if (val != null) {
-              widget.onBirimTipiChanged(val == 'Box');
-            }
-          },
         ),
       );
     }
@@ -2066,14 +2047,14 @@ class _ProductDetailsState extends State<ProductDetails> {
             focusNode: widget.discountFocusNode,
             decoration: InputDecoration(
               prefixText: '%',
-              prefixStyle: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.error),
+              prefixStyle: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.error),
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
               filled: true,
               fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
             ),
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 15.sp, fontWeight: FontWeight.w500),
             onChanged: (val) {
               // ✅ MİMARİ DEĞİŞİKLİK: Sadece price controller'ı güncelle
               // Provider'a KAYDETME (focus kaybında kaydedilecek)

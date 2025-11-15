@@ -165,7 +165,7 @@ class ApimobilController extends Controller
         $username = $request->post('username');
         $password = $request->post('password');
 
-
+        //return [$username,$password];
         $sp=Satiscilar::find()->where(["kodu"=>$username])->andWhere(['password'=>$password])->one();
         if ($sp) {
             // Basit API key üretimi (şimdilik sadece username döndür)
@@ -180,7 +180,7 @@ class ApimobilController extends Controller
         } else {
             return [
                 'status' => 'error',
-                'message' => 'Invalid username or password'
+                'message' => 'Invalid username or password 01'
             ];
         }
     }
@@ -240,7 +240,7 @@ class ApimobilController extends Controller
 
     }
 
-   public function actionGetupdatedcustomer(){
+    public function actionGetupdatedcustomer(){
         $this->layout = false;
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         $apiKey = Yii::$app->request->headers->get('Authorization');
@@ -700,10 +700,12 @@ class ApimobilController extends Controller
                         $model->Aciklama=$data["aciklama"];
                         $model->CariId=strval($musteri->MusteriId);
                         $model->carikod=$musteri->Kod;
+                        $model->status=0;
                         $model->IslemYapan="1";//;$satisci;
 
-                        if($model->save())
-                            Dia::tahsilatgonder($model);
+                        if($model->save()){
+                            //Dia::tahsilatgonder($model);
+                        }
                         else
                             return json_encode($model->getErrors());
                     }
@@ -739,6 +741,9 @@ class ApimobilController extends Controller
                         $model->CariId=strval($musteri->MusteriId);
                         $model->carikod=$musteri->Kod;
                         $model->IslemYapan=$satisci;
+                        $model->HareketTarihi=date("Y-m-d");
+                        $model->status=1;
+
                         if($model->save())
                             Dia::tahsilatgonder($model);
                         else
@@ -782,11 +787,14 @@ class ApimobilController extends Controller
                         $model->FisId=$data["fisno"];
                         $model->Tutar=$data["tutar"];
                         $model->HareketTuru="Tahsilat";
+                        $model->HareketTarihi=date("Y-m-d");
                         $model->OdemeYontemi="Çekle Tahsilat";
                         $model->Aciklama=$data["aciklama"];
                         $model->CariId=$musteri->MusteriId;
                         $model->carikod=$musteri->Kod;
                         $model->IslemYapan=1;//$data["username"];
+                        $model->status=1;
+
                         if($model->save())
                             Dia::havalegonder($model);
                         else
@@ -812,8 +820,11 @@ class ApimobilController extends Controller
             //if ($this->request->isPost) {
                // ceknono, vade
                 $request = Yii::$app->request;
-                $data = json_decode($request->getRawBody(), true);
-                $logMessage .=$request->getRawBody()."\n";
+                $rawBody = $request->getRawBody();
+                $rawFilePath = \Yii::getAlias('@runtime/cektahsilat_raw_'.date("Ymd_His").'_'.uniqid().'.txt');
+                file_put_contents($rawFilePath, $rawBody, LOCK_EX);
+                $data = json_decode($rawBody, true);
+                $logMessage .=$rawBody."\n";
                 $hata=null;
                 file_put_contents(\Yii::getAlias('@runtime/dia_tahsilat_log00_'.date("Ymd_His").'.txt'), $logMessage, FILE_APPEND | LOCK_EX);
 
@@ -828,18 +839,20 @@ class ApimobilController extends Controller
                         $model->HareketTuru="Tahsilat";
                         $model->OdemeYontemi="Çekle Tahsilat";
                         $model->Aciklama=$data["aciklama"];
-                        $model->CariId=$musteri->MusteriId;
+                        $model->CariId=strval($musteri->MusteriId);
                         $model->carikod=$musteri->Kod;
                         $model->IslemYapan=$data["username"];
-                         if($model->save()){
-                            $logMessage .="Kayıt işlemi başarıl \n";
-                            //Dia::tahsilatgonder($model);
-                         }
+                        $model->status=0;
 
-                         else{
-                            $hata=json_encode($model->getErrors());
-                            $logMessage .="Kayıt işlemi başarısız :".$hata." \n";
-                         }
+                        if($model->save()){
+                        $logMessage .="Kayıt işlemi başarıl \n";
+                        //Dia::tahsilatgonder($model);
+                        }
+
+                        else{
+                        $hata=json_encode($model->getErrors());
+                        $logMessage .="Kayıt işlemi başarısız :".$hata." \n";
+                        }
 
                     }
                 }

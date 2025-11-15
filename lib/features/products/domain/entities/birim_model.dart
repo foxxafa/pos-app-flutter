@@ -142,6 +142,23 @@ class BirimModel {
   /// Birim adını gösterim için formatla
   String get displayName => birimadi ?? birimkod ?? 'Unknown';
 
+  /// Equality operator - İki BirimModel'in aynı olup olmadığını kontrol eder
+  /// DropdownButton ve diğer widget'ların doğru çalışması için gerekli
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    return other is BirimModel &&
+        other.key == key &&              // Unique ERP key (en önemli)
+        other.birimadi == birimadi &&    // Display name
+        other.stokKodu == stokKodu &&    // Product code
+        other.carpan == carpan;          // Çarpan (business logic için önemli)
+  }
+
+  /// Hash code - equality ile uyumlu olmalı
+  @override
+  int get hashCode => Object.hash(key, birimadi, stokKodu, carpan);
+
   @override
   String toString() {
     return 'BirimModel(id: $id, birimadi: $birimadi, carpan: $carpan, stokKodu: $stokKodu)';
