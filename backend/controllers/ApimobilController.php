@@ -168,6 +168,14 @@ class ApimobilController extends Controller
         //return [$username,$password];
         $sp=Satiscilar::find()->where(["kodu"=>$username])->andWhere(['password'=>$password])->one();
         if ($sp) {
+            // ✅ Depo kontrolü - Kullanıcının deposu yoksa giriş yapmasına izin verme
+            if(!$sp->_key_sis_depo || $sp->_key_sis_depo == 0){
+                return [
+                    'status' => 'error',
+                    'message' => 'User is not assigned to any warehouse. Please contact your administrator.'
+                ];
+            }
+
             // Basit API key üretimi (şimdilik sadece username döndür)
             $apiKey = $username; // Token sistemine geçene kadar username kullan
 
@@ -1197,12 +1205,12 @@ class ApimobilController extends Controller
         // ✅ Depo yoksa veya 0 ise boş liste dön (qty kullanılmaya devam edilsin)
         if(!$depo || !$depo->_key_sis_depo || $depo->_key_sis_depo == 0){
             return [
-                'status' => 1,
+                'status' => 0,
                 'page' => 1,
                 'limit' => 5000,
                 'depot_key' => null,
                 'depostok' => [],
-                'message' => 'Kullanıcıya depo atanmamış, qty kullanılıyor'
+                'message' => 'User is not assigned to any warehouse'
             ];
         }
 

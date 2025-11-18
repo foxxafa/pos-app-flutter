@@ -106,8 +106,10 @@ Future<Map<String, dynamic>?> getLastLogin() async {
             MaterialPageRoute(builder: (context) => const MenuView()),
           );
         } else if (mounted) {
+          final errorMsg = userProvider.errorMessage ?? "Login failed. Please check your credentials.";
+
           setState(() {
-            _errorMessage = userProvider.errorMessage ?? "Login failed. Please check your credentials.";
+            _errorMessage = errorMsg;
           });
         }
       } catch (e) {

@@ -55,6 +55,10 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   void initState() {
     super.initState();
     _loadProducts();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _syncWithProvider();
+    });
   }
 
   @override
@@ -126,6 +130,105 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           _selectedBirimMap[key] = selectedBirim;
         }
       });
+    }
+  }
+
+  // --- Provider Synchronization ---
+  Future<void> _syncWithProvider() async {
+    final provider = Provider.of<CartProvider>(context, listen: false);
+
+    // Sadece sepette olan ürünleri sync et
+    if (provider.items.isEmpty) return;
+
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+
+    for (var cartItem in provider.items.values) {
+      // ⚠️ CRITICAL: cartItem.stokKodu free item içinse suffix'i temizle
+      // Örnek: "PROD123_(FREEBOX)" -> "PROD123"
+      String rawStokKodu = cartItem.stokKodu;
+      if (rawStokKodu.contains('_(FREE')) {
+        rawStokKodu = rawStokKodu.split('_(FREE')[0];
+      }
+      final key = rawStokKodu;
+
+      // Bu ürün _allProducts'ta var mı?
+      ProductModel? product = _allProducts.cast<ProductModel?>().firstWhere(
+        (p) => p?.stokKodu == key,
+        orElse: () => null,
+      );
+
+      // Eğer yoksa veritabanından yükle
+      if (product == null) {
+        final result = await db.query(
+          'Product',
+          where: 'stokKodu = ?',
+          whereArgs: [key],
+          limit: 1,
+        );
+
+        if (result.isNotEmpty) {
+          product = ProductModel.fromMap(result.first);
+          // _allProducts listesine ekle
+          if (mounted) {
+            setState(() {
+              _allProducts.add(product!);
+              _filteredProducts.add(product);
+            });
+          }
+        } else {
+          continue;
+        }
+      }
+
+      // ✅ selectedBirimKey'i restore et
+      if (cartItem.selectedBirimKey != null) {
+        // Birimler listesini yükle (eğer yoksa)
+        await _loadBirimlerForProduct(product);
+
+        // selectedBirimKey ile eşleşen BirimModel'i bul
+        final birimler = _productBirimlerMap[key] ?? [];
+        final selectedBirim = birimler.cast<BirimModel?>().firstWhere(
+          (b) => b?.key == cartItem.selectedBirimKey,
+          orElse: () => null,
+        );
+
+        if (selectedBirim != null && mounted) {
+          setState(() {
+            _selectedBirimMap[key] = selectedBirim;
+          });
+        }
+      }
+
+      // ✅ CRITICAL: Controller'ları güncelle (cart_view.dart'taki mantık)
+      final cartBirimTipi = cartItem.birimTipi;
+      final controllerKey = '${key}_$cartBirimTipi';
+      final quantityControllerKey = '${key}_${cartBirimTipi}_quantity';
+
+      if (mounted) {
+        setState(() {
+          // Quantity controller'ı güncelle
+          if (_quantityControllers.containsKey(quantityControllerKey)) {
+            _quantityControllers[quantityControllerKey]!.text = cartItem.miktar.toString();
+          }
+
+          // Discount controller'ı güncelle
+          if (_discountControllers.containsKey(controllerKey)) {
+            _discountControllers[controllerKey]!.text =
+                cartItem.iskonto > 0 ? cartItem.iskonto.toString() : '';
+          }
+
+          // Price controller'ı güncelle
+          if (_priceControllers.containsKey(controllerKey)) {
+            if (cartItem.miktar > 0) {
+              // Sepette ürün varsa indirimli fiyatı göster
+              final discountAmount = (cartItem.birimFiyat * cartItem.iskonto) / 100;
+              final discountedPrice = cartItem.birimFiyat - discountAmount;
+              _priceControllers[controllerKey]!.text = discountedPrice.toStringAsFixed(2);
+            }
+          }
+        });
+      }
     }
   }
 
@@ -1703,6 +1806,56 @@ class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
         if (mounted) {
           widget.priceController.text = _oldPriceValue;
         }
+      }
+
+      // ✅ Focus kaybında provider'a kaydet
+      final cartProvider = Provider.of<CartProvider>(context, listen: false);
+      final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+      final cartKey = '${widget.product.stokKodu}_${widget.birimTipi}';
+      final cartItem = cartProvider.items[cartKey];
+
+      // ANCAK sadece ürün sepette varsa (quantity > 0)
+      if (cartItem == null || cartItem.miktar <= 0) {
+        return;
+      }
+
+      final yeniFiyat = double.tryParse(widget.priceController.text.replaceAll(',', '.')) ?? 0;
+
+      // ⚠️ FIX: selectedBirim'den original price al
+      final originalPrice = widget.selectedBirim?.fiyat7 ??
+          (widget.birimTipi == 'UNIT'
+              ? double.tryParse(widget.product.adetFiyati.toString()) ?? 0.0
+              : double.tryParse(widget.product.kutuFiyati.toString()) ?? 0.0);
+
+      var orjinalFiyat = originalPrice;
+      if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+
+      final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
+          ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+          : 0.0;
+
+      cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
+      cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
+
+      cartProvider.addOrUpdateItem(
+        stokKodu: widget.product.stokKodu,
+        urunAdi: widget.product.urunAdi,
+        birimFiyat: orjinalFiyat,
+        urunBarcode: widget.product.barcode1,
+        miktar: 0,
+        iskonto: indirimOrani,
+        birimTipi: widget.birimTipi,
+        vat: widget.product.vat,
+        imsrc: widget.product.imsrc,
+        adetFiyati: widget.product.adetFiyati,
+        kutuFiyati: widget.product.kutuFiyati,
+        selectedBirimKey: widget.selectedBirim?.key,
+      );
+
+      // Fiyatı formatla
+      final formattedValue = yeniFiyat.toStringAsFixed(2);
+      if (widget.priceController.text != formattedValue) {
+        widget.priceController.text = formattedValue;
       }
     }
   }

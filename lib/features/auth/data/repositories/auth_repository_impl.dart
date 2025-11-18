@@ -78,10 +78,13 @@ class AuthRepositoryImpl implements AuthRepository {
           print('🔑 ✅ Online login successful');
           return loginResponse;
         } else {
-          print('🔑 ❌ Login failed: ${responseData['message']}');
+          // ✅ Backend'den gelen error mesajlarını yakalayalım
+          final errorMessage = responseData['message'] ?? 'Login failed';
+          print('🔑 ❌ Login failed: $errorMessage');
+
           return LoginResponse(
             success: false,
-            message: responseData['message'] ?? 'Login failed',
+            message: errorMessage,
           );
         }
       } else {
