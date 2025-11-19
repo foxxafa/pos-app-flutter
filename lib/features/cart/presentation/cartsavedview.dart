@@ -3,6 +3,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:pos_app/core/theme/app_theme.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/services/pdf_service.dart';
 
 class CartListPage extends StatefulWidget {
   const CartListPage({super.key});
@@ -109,6 +110,86 @@ class _CartListPageState extends State<CartListPage> {
     return total;
   }
 
+  Future<void> _generatePdf(String customerName, List<Map<String, dynamic>> items, String fisNo) async {
+    try {
+      // Show loading indicator
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Container(
+            padding: EdgeInsets.all(5.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(
+                  color: AppTheme.lightPrimaryColor,
+                ),
+                SizedBox(height: 2.h),
+                Text(
+                  'Generating PDF...',
+                  style: TextStyle(fontSize: 14.sp),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      // Extract customer code from items (they all have the same customer)
+      final customerCode = items.isNotEmpty
+          ? items.first['customerKod']?.toString() ?? ''
+          : '';
+
+      // Remove fisNo from customerName (format: "fisNo - customerName")
+      String cleanCustomerName = customerName;
+      if (customerName.contains(' - ')) {
+        final parts = customerName.split(' - ');
+        if (parts.length > 1) {
+          // Remove first part (fisNo) and join the rest
+          cleanCustomerName = parts.sublist(1).join(' - ');
+        }
+      }
+
+      // Generate PDF
+      final pdfData = await PdfService.generateCartPdf(
+        customerName: cleanCustomerName,
+        items: items,
+        fisNo: fisNo,
+        customerCode: customerCode.isNotEmpty ? customerCode : null,
+      );
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      // Show PDF preview
+      if (mounted) {
+        await PdfService.previewPdf(
+          context,
+          pdfData,
+          'Order_${fisNo}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) Navigator.pop(context);
+
+      // Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error generating PDF: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildCustomerCard(String customerName, List<Map<String, dynamic>> items) {
     final theme = Theme.of(context);
     final totalAmount = _calculateCartTotal(items);
@@ -138,51 +219,66 @@ class _CartListPageState extends State<CartListPage> {
               size: 6.w,
             ),
           ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          title: Row(
             children: [
-              Text(
-                customerName,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16.sp,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customerName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16.sp,
+                      ),
+                    ),
+                    SizedBox(height: 0.5.h),
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '${itemCount} ${'saved_carts.items'.tr()}',
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              color: Colors.green,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 2.w),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '£${totalAmount.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 14.sp,
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              SizedBox(height: 0.5.h),
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '${itemCount} ${'saved_carts.items'.tr()}',
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        color: Colors.green,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 2.w),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      '£${totalAmount.toStringAsFixed(2)}',
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        color: Colors.blue,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+              IconButton(
+                icon: Icon(
+                  Icons.picture_as_pdf,
+                  color: Colors.red[700],
+                  size: 6.w,
+                ),
+                onPressed: () => _generatePdf(customerName, items, fisNo),
+                tooltip: 'Generate PDF',
               ),
             ],
           ),

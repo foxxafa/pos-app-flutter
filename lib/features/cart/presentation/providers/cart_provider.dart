@@ -429,7 +429,12 @@ class CartProvider extends ChangeNotifier {
         print("DEBUG _saveCartToDatabase: clearCartByCustomer completed for customerKod='$actualCustomerKod', fisNo='$actualFisNo'");
 
         // Insert all current cart items with fisNo and customerKod
+        // ✅ GÜVENLİK: Sadece miktar > 0 olan itemları kaydet
         for (final item in _items.values) {
+          if (item.miktar <= 0) {
+            print("⚠️ WARNING: Skipping item with miktar <= 0: ${item.stokKodu} (miktar=${item.miktar})");
+            continue;
+          }
           await _cartRepository.insertCartItemForCustomer({
             'fisNo': actualFisNo,
             'customerKod': actualCustomerKod,
@@ -462,8 +467,13 @@ class CartProvider extends ChangeNotifier {
         );
 
         // Insert with fisNo and customerKod
+        // ✅ GÜVENLİK: Sadece miktar > 0 olan itemları kaydet
         final db = await dbHelper.database;
         for (final item in _items.values) {
+          if (item.miktar <= 0) {
+            print("⚠️ WARNING (fallback): Skipping item with miktar <= 0: ${item.stokKodu} (miktar=${item.miktar})");
+            continue;
+          }
           await db.insert('cart_items', {
             'fisNo': actualFisNo,
             'customerKod': actualCustomerKod,
@@ -502,8 +512,33 @@ class CartProvider extends ChangeNotifier {
     await _saveCartToDatabase();
   }
 
+  /// Cleans up cart_items table by removing all items with miktar <= 0
+  /// This removes orphaned zero-quantity items from the database
+  Future<void> cleanupZeroQuantityItems() async {
+    print("DEBUG cleanupZeroQuantityItems: Removing items with miktar <= 0 from database");
+
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      // Delete all items where miktar <= 0 and isPlaced = 0 (not placed orders)
+      final deletedCount = await db.delete(
+        'cart_items',
+        where: 'miktar <= ? AND (isPlaced = ? OR isPlaced IS NULL)',
+        whereArgs: [0, 0],
+      );
+
+      print("DEBUG cleanupZeroQuantityItems: Deleted $deletedCount items with miktar <= 0");
+    } catch (e) {
+      print("ERROR cleanupZeroQuantityItems: Failed to cleanup: $e");
+    }
+  }
+
   Future<void> loadCartFromDatabase(String customerName) async {
     print("DEBUG loadCartFromDatabase: Loading cart for customer '$customerName'");
+
+    // ✅ İlk olarak miktar 0 olan eski itemları temizle
+    await cleanupZeroQuantityItems();
 
     List<Map<String, dynamic>> cartData;
 
@@ -552,6 +587,13 @@ class CartProvider extends ChangeNotifier {
     }
 
     for (final item in cartData) {
+      // ✅ GÜVENLİK: Miktar 0 veya negatif olan itemları yükleme
+      final miktar = item['miktar'] as int? ?? 0;
+      if (miktar <= 0) {
+        print("⚠️ WARNING: Skipping item with miktar <= 0 during load: ${item['stokKodu']} (miktar=$miktar)");
+        continue;
+      }
+
       // ✅ birimTipi'yi UPPERCASE'e çevir (eski "Box" → "BOX" uyumluluğu için)
       final birimTipi = (item['birimTipi'] as String?)?.toUpperCase() ?? 'UNIT';
 
@@ -559,7 +601,7 @@ class CartProvider extends ChangeNotifier {
         stokKodu: item['stokKodu'],
         urunAdi: item['urunAdi'],
         birimFiyat: item['birimFiyat'],
-        miktar: item['miktar'],
+        miktar: miktar,
         urunBarcode: item['urunBarcode'],
         iskonto: item['iskonto'],
         birimTipi: birimTipi, // ✅ UPPERCASE
@@ -612,6 +654,16 @@ class CartProvider extends ChangeNotifier {
 
     // Load all items into cart
     for (final item in cartData) {
+      // ✅ GÜVENLİK: Miktar 0 veya negatif olan itemları yükleme
+      final miktar = (item['miktar'] is num)
+          ? (item['miktar'] as num).toInt()
+          : int.tryParse(item['miktar']?.toString() ?? '0') ?? 0;
+
+      if (miktar <= 0) {
+        print("⚠️ WARNING: Skipping item with miktar <= 0 during loadCartByFisNo: ${item['stokKodu']} (miktar=$miktar)");
+        continue;
+      }
+
       // ✅ birimTipi'yi UPPERCASE'e çevir (eski "Box" → "BOX" uyumluluğu için)
       final birimTipi = (item['birimTipi']?.toString() ?? 'BOX').toUpperCase();
 
@@ -621,9 +673,7 @@ class CartProvider extends ChangeNotifier {
         birimFiyat: (item['birimFiyat'] is num)
             ? (item['birimFiyat'] as num).toDouble()
             : double.tryParse(item['birimFiyat']?.toString() ?? '0') ?? 0.0,
-        miktar: (item['miktar'] is num)
-            ? (item['miktar'] as num).toInt()
-            : int.tryParse(item['miktar']?.toString() ?? '0') ?? 0,
+        miktar: miktar,
         urunBarcode: item['urunBarcode']?.toString() ?? '',
         iskonto: (item['iskonto'] is num)
             ? (item['iskonto'] as num).toDouble()

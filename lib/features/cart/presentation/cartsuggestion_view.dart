@@ -515,14 +515,199 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         // Initialize controllers
         _priceControllers[controllerKey] ??= TextEditingController();
         _discountControllers[controllerKey] ??= TextEditingController();
-        _priceFocusNodes[controllerKey] ??= FocusNode();
-        _discountFocusNodes[controllerKey] ??= FocusNode();
+
+        // ✅ FocusNode ve listener'ı sadece bir kez oluştur - PRICE
+        if (!_priceFocusNodes.containsKey(controllerKey)) {
+          final newPriceFocusNode = FocusNode();
+          final capturedStokKodu = stokKodu; // Capture for closure
+          final capturedBirimTipi = birimTipi; // Capture for closure
+          String _oldPriceValue = '';
+
+          newPriceFocusNode.addListener(() {
+            if (newPriceFocusNode.hasFocus) {
+              // Focus kazanıldı - içeriği temizle
+              _oldPriceValue = _priceControllers[controllerKey]!.text;
+              _priceControllers[controllerKey]!.clear();
+            } else {
+              // Focus kaybedildi - geri yükle ve kaydet
+              if (_priceControllers[controllerKey]!.text.isEmpty && _oldPriceValue.isNotEmpty) {
+                _priceControllers[controllerKey]!.text = _oldPriceValue;
+              }
+
+              // ⚠️ GÜNCEL provider ve product bilgilerini al
+              final currentCartProvider = Provider.of<CartProvider>(context, listen: false);
+              final currentCustomerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+
+              // Güncel product'ı bul
+              final currentProduct = _allProducts.cast<ProductModel?>().firstWhere(
+                (p) => p?.stokKodu == capturedStokKodu,
+                orElse: () => null,
+              );
+
+              if (currentProduct == null) return;
+
+              // ✅ Provider'a kaydet (ürün sepette varsa)
+              final cartKey = '${capturedStokKodu}_$capturedBirimTipi';
+              final cartItem = currentCartProvider.items[cartKey];
+
+              if (cartItem == null || cartItem.miktar <= 0) {
+                return;
+              }
+
+              final yeniFiyat = double.tryParse(_priceControllers[controllerKey]!.text.replaceAll(',', '.')) ?? 0;
+              final selectedBirim = _selectedBirimMap[capturedStokKodu];
+
+              // ⚠️ FIX: selectedBirim'den original price al
+              final originalPrice = selectedBirim?.fiyat7 ??
+                  (capturedBirimTipi == 'UNIT'
+                      ? double.tryParse(currentProduct.adetFiyati.toString()) ?? 0.0
+                      : double.tryParse(currentProduct.kutuFiyati.toString()) ?? 0.0);
+
+              var orjinalFiyat = originalPrice;
+              if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
+
+              // ✅ FİYAT OVERRIDE MANTĞI
+              double gonderilecekBirimFiyat;
+              double hesaplananIskonto;
+
+              if (yeniFiyat >= orjinalFiyat && orjinalFiyat > 0) {
+                // Price increase = Price Override
+                gonderilecekBirimFiyat = yeniFiyat;
+                hesaplananIskonto = 0.0;
+              } else {
+                // Price decrease = Discount
+                gonderilecekBirimFiyat = orjinalFiyat;
+                hesaplananIskonto = (orjinalFiyat > 0)
+                    ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
+                    : 0.0;
+              }
+
+              currentCartProvider.customerKod = currentCustomerProvider.selectedCustomer!.kod!;
+              currentCartProvider.customerName = currentCustomerProvider.selectedCustomer!.unvan ?? currentCustomerProvider.selectedCustomer!.kod!;
+
+              currentCartProvider.addOrUpdateItem(
+                stokKodu: currentProduct.stokKodu,
+                urunAdi: currentProduct.urunAdi,
+                birimFiyat: gonderilecekBirimFiyat,
+                urunBarcode: currentProduct.barcode1,
+                miktar: 0,
+                iskonto: hesaplananIskonto,
+                birimTipi: capturedBirimTipi,
+                vat: currentProduct.vat,
+                imsrc: currentProduct.imsrc,
+                adetFiyati: currentProduct.adetFiyati,
+                kutuFiyati: currentProduct.kutuFiyati,
+                selectedBirimKey: selectedBirim?.key,
+              );
+
+              // Fiyatı formatla
+              final formattedValue = yeniFiyat.toStringAsFixed(2);
+              if (_priceControllers[controllerKey]!.text != formattedValue) {
+                _priceControllers[controllerKey]!.text = formattedValue;
+              }
+            }
+          });
+          _priceFocusNodes[controllerKey] = newPriceFocusNode;
+        }
+
+        // ✅ FocusNode ve listener'ı sadece bir kez oluştur - DISCOUNT
+        if (!_discountFocusNodes.containsKey(controllerKey)) {
+          final newDiscountFocusNode = FocusNode();
+          final capturedStokKodu = stokKodu; // Capture for closure
+          final capturedBirimTipi = birimTipi; // Capture for closure
+          String _oldDiscountValue = '';
+
+          newDiscountFocusNode.addListener(() {
+            if (newDiscountFocusNode.hasFocus) {
+              // Focus kazanıldı - içeriği temizle
+              _oldDiscountValue = _discountControllers[controllerKey]!.text;
+              _discountControllers[controllerKey]!.clear();
+            } else {
+              // Focus kaybedildi - geri yükle ve kaydet
+              if (_discountControllers[controllerKey]!.text.isEmpty && _oldDiscountValue.isNotEmpty) {
+                _discountControllers[controllerKey]!.text = _oldDiscountValue;
+              }
+
+              // ⚠️ GÜNCEL provider ve product bilgilerini al
+              final currentCartProvider = Provider.of<CartProvider>(context, listen: false);
+              final currentCustomerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
+
+              // Güncel product'ı bul
+              final currentProduct = _allProducts.cast<ProductModel?>().firstWhere(
+                (p) => p?.stokKodu == capturedStokKodu,
+                orElse: () => null,
+              );
+
+              if (currentProduct == null) return;
+
+              // ✅ Provider'a kaydet (ürün sepette varsa)
+              final cartKey = '${capturedStokKodu}_$capturedBirimTipi';
+              final cartItem = currentCartProvider.items[cartKey];
+
+              if (cartItem == null || cartItem.miktar <= 0) {
+                return;
+              }
+
+              final value = _discountControllers[controllerKey]!.text;
+
+              // ⚠️ KRITIK: CartProvider'dan mevcut birimFiyat'ı al (price override'ı koru)
+              final currentBirimFiyat = cartItem.birimFiyat;
+
+              if (value.isEmpty) {
+                // İndirim kaldırıldı - fiyat alanını güncelle
+                _priceControllers[controllerKey]!.text = currentBirimFiyat.toStringAsFixed(2);
+
+                currentCartProvider.customerKod = currentCustomerProvider.selectedCustomer!.kod!;
+                currentCartProvider.customerName = currentCustomerProvider.selectedCustomer!.unvan ?? currentCustomerProvider.selectedCustomer!.kod!;
+                currentCartProvider.addOrUpdateItem(
+                  stokKodu: currentProduct.stokKodu,
+                  miktar: 0,
+                  iskonto: 0,
+                  birimTipi: capturedBirimTipi,
+                  urunAdi: currentProduct.urunAdi,
+                  birimFiyat: currentBirimFiyat, // Mevcut birimFiyat'ı koru
+                  vat: currentProduct.vat,
+                  imsrc: currentProduct.imsrc,
+                  adetFiyati: currentProduct.adetFiyati,
+                  kutuFiyati: currentProduct.kutuFiyati,
+                  urunBarcode: currentProduct.barcode1,
+                );
+                return;
+              }
+
+              double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
+              discountPercent = discountPercent.clamp(0.0, 100.0);
+
+              // İndirimli fiyatı hesapla (mevcut birimFiyat'tan)
+              final discountAmount = (currentBirimFiyat * discountPercent) / 100;
+              final discountedPrice = currentBirimFiyat - discountAmount;
+              _priceControllers[controllerKey]!.text = discountedPrice.toStringAsFixed(2);
+
+              currentCartProvider.customerKod = currentCustomerProvider.selectedCustomer!.kod!;
+              currentCartProvider.customerName = currentCustomerProvider.selectedCustomer!.unvan ?? currentCustomerProvider.selectedCustomer!.kod!;
+              currentCartProvider.addOrUpdateItem(
+                stokKodu: currentProduct.stokKodu,
+                miktar: 0,
+                iskonto: discountPercent,
+                birimTipi: capturedBirimTipi,
+                urunAdi: currentProduct.urunAdi,
+                birimFiyat: currentBirimFiyat, // Mevcut birimFiyat'ı koru
+                vat: currentProduct.vat,
+                imsrc: currentProduct.imsrc,
+                adetFiyati: currentProduct.adetFiyati,
+                kutuFiyati: currentProduct.kutuFiyati,
+                urunBarcode: currentProduct.barcode1,
+              );
+            }
+          });
+          _discountFocusNodes[controllerKey] = newDiscountFocusNode;
+        }
 
         // Miktar controller'ı için de ekle
         final quantityControllerKey = '${stokKodu}_${birimTipi}_quantity';
         _quantityControllers[quantityControllerKey] ??= TextEditingController();
 
-        // ✅ FocusNode ve listener'ı sadece bir kez oluştur
+        // ✅ FocusNode ve listener'ı sadece bir kez oluştur - QUANTITY
         if (!_quantityFocusNodes.containsKey(quantityControllerKey)) {
           final newFocusNode = FocusNode();
           String _oldQuantityValue = '';
@@ -534,52 +719,66 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               if (_quantityControllers[quantityControllerKey]!.text.isEmpty) {
                 _quantityControllers[quantityControllerKey]!.text = _oldQuantityValue;
               }
-              // Trigger update when focus is lost
-              _handleQuantityUpdate(product, cartItem, cartProvider, customerProvider, _quantityControllers[quantityControllerKey]!.text);
             }
           });
           _quantityFocusNodes[quantityControllerKey] = newFocusNode;
         }
 
         final priceController = _priceControllers[controllerKey]!;
+        final priceFocusNode = _priceFocusNodes[controllerKey]!;
         final discountController = _discountControllers[controllerKey]!;
         final discountFocusNode = _discountFocusNodes[controllerKey]!;
         final quantityController = _quantityControllers[quantityControllerKey]!;
         final quantityFocusNode = _quantityFocusNodes[quantityControllerKey]!;
 
-        // ✅ BirimModel sistemi: Controller'ları selectedBirim'e göre doldur
-        if (priceController.text.isEmpty) {
+        // ✅ BirimModel sistemi: Controller'ları CartProvider'dan güncel değerlerle senkronize et
+        // ⚠️ KRITIK: Focus varsa (kullanıcı yazmaya başlamış) otomatik doldurma yapma!
+        if (!priceFocusNode.hasFocus) {
           final selectedBirim = _selectedBirimMap[stokKodu];
 
+          // CartProvider'dan güncel fiyatı al
+          String expectedPrice = '';
           if (cartItem != null) {
             final discountAmount = (cartItem.birimFiyat * cartItem.iskonto) / 100;
             final discountedPrice = cartItem.birimFiyat - discountAmount;
-            priceController.text = discountedPrice.toStringAsFixed(2);
+            expectedPrice = discountedPrice.toStringAsFixed(2);
           } else if (selectedBirim != null) {
             // BirimModel'den fiyat al (fiyat7)
             final orjinalFiyat = selectedBirim.fiyat7 ?? 0.0;
-            priceController.text = orjinalFiyat.toStringAsFixed(2);
+            expectedPrice = orjinalFiyat.toStringAsFixed(2);
           } else {
             // Fallback: Eski sistem
             final orjinalFiyat = birimTipi == 'UNIT'
                 ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
                 : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
-            priceController.text = orjinalFiyat.toStringAsFixed(2);
+            expectedPrice = orjinalFiyat.toStringAsFixed(2);
+          }
+
+          // Sadece değer farklıysa güncelle (gereksiz rebuild'i önle)
+          if (priceController.text != expectedPrice) {
+            priceController.text = expectedPrice;
           }
         }
 
-        // İndirim controller'ını sadece ilk kez doldur, sonra kullanıcıya bırak
-        if (discountController.text.isEmpty && !discountFocusNode.hasFocus) {
-          discountController.text = cartItem?.iskonto != null && cartItem!.iskonto > 0
+        // İndirim controller'ını CartProvider'dan güncel değerlerle senkronize et
+        if (!discountFocusNode.hasFocus) {
+          final expectedDiscount = cartItem?.iskonto != null && cartItem!.iskonto > 0
               ? cartItem.iskonto.toString()
               : '';
+
+          // Sadece değer farklıysa güncelle (gereksiz rebuild'i önle)
+          if (discountController.text != expectedDiscount) {
+            discountController.text = expectedDiscount;
+          }
         }
 
         // ✅ Quantity controller'ı otomatik güncelle (cart_view.dart mantığı)
+        // ⚠️ KRITIK: Focus varsa (kullanıcı yazmaya başlamış) otomatik doldurma yapma!
         final currentQuantity = cartItem?.miktar ?? 0;
         if (!quantityFocusNode.hasFocus && quantityController.text != currentQuantity.toString()) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && quantityController.text != currentQuantity.toString()) {
+            // Callback içinde tekrar kontrol et: Focus hala yoksa güncelle
+            if (mounted && !quantityFocusNode.hasFocus && quantityController.text != currentQuantity.toString()) {
               quantityController.text = currentQuantity.toString();
             }
           });
@@ -589,8 +788,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         if (!_productBirimlerMap.containsKey(stokKodu)) {
           _loadBirimlerForProduct(product);
         }
-
-        final priceFocusNode = _priceFocusNodes[controllerKey]!;
 
         return ProductListItemSuggestion(
           key: ValueKey(product.stokKodu),
@@ -856,31 +1053,20 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
             ),
             onChanged: (value) {
-              final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit');
+              // ✅ Sadece fiyat alanını güncelle (kaydetme YAPMA!)
+              final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'BOX' : 'UNIT');
+              final cartKey = '${product.stokKodu}_$birimTipi';
+              final currentCartItem = cartProvider.items[cartKey];
 
-              // cart_view2.dart mantığı: orjinal fiyat her zaman ürünün birim fiyatı
-              final originalPrice = birimTipi == 'Unit'
-                  ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                  : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
+              // Mevcut birimFiyat'ı al (price override'ı koru)
+              final currentBirimFiyat = currentCartItem?.birimFiyat ??
+                  (birimTipi == 'UNIT'
+                      ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
+                      : double.tryParse(product.kutuFiyati.toString()) ?? 0.0);
 
               if (value.isEmpty) {
-                priceController.text = originalPrice.toStringAsFixed(2);
-                cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-                cartProvider.addOrUpdateItem(
-                  stokKodu: product.stokKodu,
-                  miktar: 0,
-                  iskonto: 0,
-                  birimTipi: birimTipi,
-                  urunAdi: product.urunAdi,
-                  birimFiyat: originalPrice,
-                  vat: product.vat,
-                  imsrc: product.imsrc,
-                  adetFiyati: product.adetFiyati,
-                  kutuFiyati: product.kutuFiyati,
-                  urunBarcode: product.barcode1,
-                  
-                );
+                // İndirim yok - orijinal fiyatı göster
+                priceController.text = currentBirimFiyat.toStringAsFixed(2);
                 return;
               }
 
@@ -888,35 +1074,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               discountPercent = discountPercent.clamp(0.0, 100.0);
 
               // İndirimli fiyatı hesapla
-              final discountAmount = (originalPrice * discountPercent) / 100;
-              final discountedPrice = originalPrice - discountAmount;
+              final discountAmount = (currentBirimFiyat * discountPercent) / 100;
+              final discountedPrice = currentBirimFiyat - discountAmount;
               priceController.text = discountedPrice.toStringAsFixed(2);
-
-              cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-              cartProvider.addOrUpdateItem(
-                stokKodu: product.stokKodu,
-                miktar: 0,
-                iskonto: discountPercent,
-                birimTipi: birimTipi,
-                urunAdi: product.urunAdi,
-                birimFiyat: originalPrice, // Her zaman orijinal fiyatı gönder
-                vat: product.vat,
-                imsrc: product.imsrc,
-                adetFiyati: product.adetFiyati,
-                kutuFiyati: product.kutuFiyati,
-                urunBarcode: product.barcode1,
-                
-                
-              );
-
-              // İmleç pozisyonunu koru
-              final cursorPos = discountController.selection.baseOffset;
-              if (cursorPos >= 0 && cursorPos <= discountController.text.length) {
-                discountController.selection = TextSelection.fromPosition(
-                  TextPosition(offset: cursorPos),
-                );
-              }
             },
           ),
         ),
@@ -1758,120 +1918,9 @@ class ProductListItemSuggestion extends StatefulWidget {
 }
 
 class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
-  final FocusNode _quantityFocusNode = FocusNode();
-  String _oldQuantityValue = '';
-  String _oldPriceValue = '';
-  String _oldDiscountValue = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _quantityFocusNode.addListener(_onQuantityFocusChange);
-    widget.priceFocusNode.addListener(_onPriceFocusChange);
-    widget.discountFocusNode.addListener(_onDiscountFocusChange);
-  }
-
-  @override
-  void dispose() {
-    _quantityFocusNode.removeListener(_onQuantityFocusChange);
-    _quantityFocusNode.dispose();
-    widget.priceFocusNode.removeListener(_onPriceFocusChange);
-    widget.discountFocusNode.removeListener(_onDiscountFocusChange);
-    super.dispose();
-  }
-
-  void _onQuantityFocusChange() {
-    if (_quantityFocusNode.hasFocus) {
-      _oldQuantityValue = widget.quantityController.text;
-      widget.quantityController.clear();
-    } else {
-      if (widget.quantityController.text.isEmpty) {
-        if (mounted) {
-          setState(() {
-            widget.quantityController.text = _oldQuantityValue;
-          });
-        }
-      }
-      // Trigger update when focus is lost
-      widget.onHandleQuantityUpdate(widget.quantityController.text);
-    }
-  }
-
-  void _onPriceFocusChange() {
-    if (widget.priceFocusNode.hasFocus) {
-      _oldPriceValue = widget.priceController.text;
-      widget.priceController.clear();
-    } else {
-      if (widget.priceController.text.isEmpty && _oldPriceValue.isNotEmpty) {
-        if (mounted) {
-          widget.priceController.text = _oldPriceValue;
-        }
-      }
-
-      // ✅ Focus kaybında provider'a kaydet
-      final cartProvider = Provider.of<CartProvider>(context, listen: false);
-      final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
-      final cartKey = '${widget.product.stokKodu}_${widget.birimTipi}';
-      final cartItem = cartProvider.items[cartKey];
-
-      // ANCAK sadece ürün sepette varsa (quantity > 0)
-      if (cartItem == null || cartItem.miktar <= 0) {
-        return;
-      }
-
-      final yeniFiyat = double.tryParse(widget.priceController.text.replaceAll(',', '.')) ?? 0;
-
-      // ⚠️ FIX: selectedBirim'den original price al
-      final originalPrice = widget.selectedBirim?.fiyat7 ??
-          (widget.birimTipi == 'UNIT'
-              ? double.tryParse(widget.product.adetFiyati.toString()) ?? 0.0
-              : double.tryParse(widget.product.kutuFiyati.toString()) ?? 0.0);
-
-      var orjinalFiyat = originalPrice;
-      if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
-
-      final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
-          ? double.parse((((orjinalFiyat - yeniFiyat) / orjinalFiyat * 100)).toStringAsFixed(2))
-          : 0.0;
-
-      cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-      cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-
-      cartProvider.addOrUpdateItem(
-        stokKodu: widget.product.stokKodu,
-        urunAdi: widget.product.urunAdi,
-        birimFiyat: orjinalFiyat,
-        urunBarcode: widget.product.barcode1,
-        miktar: 0,
-        iskonto: indirimOrani,
-        birimTipi: widget.birimTipi,
-        vat: widget.product.vat,
-        imsrc: widget.product.imsrc,
-        adetFiyati: widget.product.adetFiyati,
-        kutuFiyati: widget.product.kutuFiyati,
-        selectedBirimKey: widget.selectedBirim?.key,
-      );
-
-      // Fiyatı formatla
-      final formattedValue = yeniFiyat.toStringAsFixed(2);
-      if (widget.priceController.text != formattedValue) {
-        widget.priceController.text = formattedValue;
-      }
-    }
-  }
-
-  void _onDiscountFocusChange() {
-    if (widget.discountFocusNode.hasFocus) {
-      _oldDiscountValue = widget.discountController.text;
-      widget.discountController.clear();
-    } else {
-      if (widget.discountController.text.isEmpty && _oldDiscountValue.isNotEmpty) {
-        if (mounted) {
-          widget.discountController.text = _oldDiscountValue;
-        }
-      }
-    }
-  }
+  // ⚠️ Quantity için internal FocusNode KALDIRILDI - parent'tan gelen widget.quantityFocusNode kullanılıyor
+  // ⚠️ Quantity listener'ı da parent'ta (inline) ekleniyor
+  // ⚠️ Price ve discount listener'lar da parent'ta (inline) ekleniyor
 
   @override
   Widget build(BuildContext context) {
@@ -1882,9 +1931,11 @@ class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
     final anlikMiktar = cartItem?.miktar ?? 0;
 
     // ✅ Build içinde controller değiştirme - build bittikten SONRA yap
-    if (widget.quantityController.text != anlikMiktar.toString()) {
+    // ⚠️ KRITIK: Focus varsa (kullanıcı yazmaya başlamış) otomatik doldurma yapma!
+    if (!widget.quantityFocusNode.hasFocus && widget.quantityController.text != anlikMiktar.toString()) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && widget.quantityController.text != anlikMiktar.toString()) {
+        // Callback içinde tekrar kontrol et: Focus hala yoksa güncelle
+        if (mounted && !widget.quantityFocusNode.hasFocus && widget.quantityController.text != anlikMiktar.toString()) {
           widget.quantityController.text = anlikMiktar.toString();
         }
       });
@@ -2014,7 +2065,7 @@ class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
                 child: TextField(
                   key: ValueKey('quantity_${widget.product.stokKodu}'),
                   controller: widget.quantityController,
-                  focusNode: _quantityFocusNode,
+                  focusNode: widget.quantityFocusNode, // ✅ Parent'tan gelen FocusNode kullan
                   keyboardType: TextInputType.number,
                   textInputAction: TextInputAction.done,
                   textAlign: TextAlign.center,

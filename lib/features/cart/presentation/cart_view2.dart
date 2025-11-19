@@ -285,7 +285,12 @@ class _CartView2State extends State<CartView2> {
     // ✅ MİMARİ DÜZELTME: Provider'ı aktif olarak dinle
     // clearCart() çağrıldığında widget yeniden build edilsin
     final cartProvider = context.watch<CartProvider>();
-    final cartItems = cartProvider.items.values.toList().reversed.toList();
+    // ✅ FİLTRELEME: Miktar 0 olan itemları gösterme
+    final cartItems = cartProvider.items.values
+        .where((item) => item.miktar > 0)
+        .toList()
+        .reversed
+        .toList();
 
     // ✅ DİNAMİK BİRİM SAYIMI: Tüm birim tiplerini say (sadece Unit/Box değil)
     final totalCount = cartItems.fold<int>(0, (sum, item) => sum + item.miktar);
@@ -746,9 +751,11 @@ class _CartItemCardState extends State<_CartItemCard> {
       _oldDiscountValue = _discountController.text;
       _discountController.clear();
     } else {
-      if (_discountController.text.isEmpty && _oldDiscountValue.isNotEmpty) {
-        _discountController.text = _oldDiscountValue;
-      }
+      // ✅ FIX: İndirim alanında eski değere dönme - _onDiscountChanged zaten doğru değeri ayarlıyor
+      // Eğer kullanıcı alanı boşaltmak istiyorsa (Enter veya focus kaybı), 0 indirim olarak kabul et
+      // Eski değere DÖNME çünkü bu kullanıcının kasıtlı olarak silme işlemini bozuyor
+
+      // NOT: Bu metod sadece focus kontrolü için - değer değişimi _onDiscountChanged'de yapılıyor
     }
   }
 
@@ -821,12 +828,19 @@ class _CartItemCardState extends State<_CartItemCard> {
 
   /// İndirim alanı manuel olarak değiştirildiğinde tetiklenir.
   void _onDiscountChanged(String value) {
+    // ✅ SEÇENEK 2: İndirim güncel/custom fiyat üzerinden hesaplansın
+    // Price controller'daki güncel fiyatı al (kullanıcı manuel değiştirmiş olabilir)
+    final currentPriceText = _priceController.text.replaceAll(',', '.');
+    final currentPrice = double.tryParse(currentPriceText) ?? widget.item.birimFiyat;
+
     // Eğer kullanıcı alanı boşaltmak istiyorsa, indirimi sıfırla
     if (value.isEmpty) {
-      // Fiyatı orjinal fiyata döndür
-      _priceController.text = widget.item.birimFiyat.toStringAsFixed(2);
-      // Provider'ı 0 indirim ile güncelle
-      _updateProviderItem(iskonto: 0.0);
+      // İndirim kaldırıldı - mevcut fiyatı koru (artık orijinale dönme!)
+      // Provider'ı 0 indirim ile güncelle, ama mevcut birimFiyat'ı koru
+      _updateProviderItem(birimFiyat: currentPrice, iskonto: 0.0);
+
+      // ✅ FIX: Fiyat controller'ını orijinal fiyata geri döndür
+      _priceController.text = currentPrice.toStringAsFixed(2);
       return;
     }
 
@@ -834,20 +848,34 @@ class _CartItemCardState extends State<_CartItemCard> {
     double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
     discountPercent = discountPercent.clamp(0.0, 100.0);
 
-    // Orjinal fiyat HER ZAMAN item'ın kendi birim fiyatıdır.
-    final originalPrice = widget.item.birimFiyat;
-
-    // İndirim miktarını hesapla
-    final discountAmount = (originalPrice * discountPercent) / 100;
+    // İndirim miktarını hesapla - güncel fiyat üzerinden!
+    final discountAmount = (currentPrice * discountPercent) / 100;
 
     // İndirimli fiyatı hesapla
-    final discountedPrice = originalPrice - discountAmount;
+    final discountedPrice = currentPrice - discountAmount;
 
-    // Fiyat controller'ını güncelle
-    _priceController.text = discountedPrice.toStringAsFixed(2);
+    // ✅ FIX: Controller'ları PostFrameCallback ile güncelle (TextField internal state conflict'i önle)
+    final formattedDiscount = discountPercent.toString();
+    final formattedPrice = discountedPrice.toStringAsFixed(2);
 
-    // Provider'ı güncelle
-    _updateProviderItem(iskonto: discountPercent);
+    // Provider'ı güncelle - güncel fiyat üzerinden indirim uygulandı
+    _updateProviderItem(birimFiyat: currentPrice, iskonto: discountPercent);
+
+    // ✅ FIX: Controller güncellemesini provider update'inden SONRA yap
+    // Focus kontrolü KALDIRILDI - Enter basıldığında da güncelleme yapılmalı
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        if (_discountController.text != formattedDiscount) {
+          _discountController.text = formattedDiscount;
+          _oldDiscountValue = formattedDiscount;
+        }
+
+        if (_priceController.text != formattedPrice) {
+          _priceController.text = formattedPrice;
+          _oldPriceValue = formattedPrice;
+        }
+      }
+    });
   }
 
   /// Miktar alanı manuel olarak submit edildiğinde tetiklenir.
@@ -1190,6 +1218,11 @@ class _CartItemCardState extends State<_CartItemCard> {
                   focusNode: _discountFocusNode,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: _onDiscountChanged,
+                  onSubmitted: (value) {
+                    // ✅ FIX: Enter basıldığında indirimi uygula ve focus'u kapat
+                    _onDiscountChanged(value);
+                    _discountFocusNode.unfocus();
+                  },
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Theme.of(context)
