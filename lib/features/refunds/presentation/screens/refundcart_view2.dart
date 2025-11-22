@@ -627,11 +627,20 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
       return; // Item was removed, don't update
     }
 
+    // ✅ Orijinal %70'lik fiyatı hesapla (refund kuralı)
+    // Kullanıcı fiyatı değiştirdiyse yeni fiyat kullanılır
+    // Ama default olarak %70'lik fiyat korunmalı
+    final originalPrice70 = (widget.item.birimFiyat / 0.7); // %70'lik fiyattan orijinali hesapla
+    final expectedPrice70 = originalPrice70 * 0.7;
+
+    // Eğer kullanıcı default %70'lik fiyattan farklı bir fiyat girdiyse güncelle
+    final finalPrice = (newPrice != expectedPrice70) ? newPrice : expectedPrice70;
+
     cartProvider.customerName = customerProvider.selectedCustomer?.kod ?? '';
     cartProvider.addOrUpdateItem(
       urunAdi: widget.item.urunAdi,
       stokKodu: widget.item.stokKodu,
-      birimFiyat: newPrice,
+      birimFiyat: finalPrice,
       urunBarcode: widget.item.urunBarcode,
       adetFiyati: widget.item.adetFiyati,
       kutuFiyati: widget.item.kutuFiyati,
@@ -653,20 +662,19 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
     final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
 
     // ✅ Yeni birimin fiyatını fiyat7'den al
-    final fiyat = newBirim.fiyat7 ?? 0.0;
+    final originalFiyat = newBirim.fiyat7 ?? 0.0;
 
     print('🔄 REFUND BIRIM DEĞİŞİMİ:');
     print('  Eski birim: ${item.birimTipi}');
     print('  Eski fiyat: ${item.birimFiyat}');
     print('  Yeni birim: ${newBirim.birimkod}');
-    print('  Yeni fiyat: $fiyat');
-    print('  BirimModel.fiyat7: ${newBirim.fiyat7}');
+    print('  Orijinal fiyat (fiyat7): $originalFiyat');
 
     // Fiyat kontrolü - eğer 0 veya null ise hata göster
-    if (fiyat <= 0) {
+    if (originalFiyat <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('⚠️ ${newBirim.birimadi} fiyatı bulunamadı ($fiyat).'),
+          content: Text('⚠️ ${newBirim.birimadi} fiyatı bulunamadı ($originalFiyat).'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.orange.shade700,
           duration: const Duration(seconds: 3),
@@ -674,6 +682,10 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
       );
       return;
     }
+
+    // ✅ REFUND KURALI: %70 indirimli fiyat kullan
+    final discountedFiyat = originalFiyat * 0.7;
+    print('  %70 indirimli fiyat: $discountedFiyat');
 
     // ✅ Seçili birimi güncelle
     setState(() {
@@ -690,7 +702,7 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
     cartProvider.addOrUpdateItem(
       urunAdi: item.urunAdi,
       stokKodu: item.stokKodu,
-      birimFiyat: fiyat,
+      birimFiyat: discountedFiyat, // ✅ %70 indirimli fiyat
       urunBarcode: item.urunBarcode,
       adetFiyati: item.adetFiyati,
       kutuFiyati: item.kutuFiyati,
@@ -702,10 +714,10 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
       imsrc: item.imsrc,
     );
 
-    // ✅ Fiyat controller'ını güncelle
-    _priceController.text = fiyat.toStringAsFixed(2);
+    // ✅ Fiyat controller'ını güncelle (%70 indirimli fiyatla)
+    _priceController.text = discountedFiyat.toStringAsFixed(2);
 
-    print('  ✅ Item güncellendi: ${item.stokKodu}, birim=$newBirimTipi, fiyat=$fiyat');
+    print('  ✅ Item güncellendi: ${item.stokKodu}, birim=$newBirimTipi, fiyat=$discountedFiyat');
   }
 
   @override
@@ -938,8 +950,8 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
       );
     }
 
-    // ✅ Birim bulunamadıysa eski sisteme fallback (adetFiyati/kutuFiyati)
-    if (_birimler.isEmpty) {
+    // ✅ Birim bulunamadıysa veya tek birim varsa statik Text göster
+    if (_birimler.isEmpty || _birimler.length == 1) {
       return Container(
         height: 8.w,
         padding: EdgeInsets.symmetric(horizontal: 2.w),
@@ -952,9 +964,9 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
         ),
         child: Center(
           child: Text(
-            widget.item.birimTipi,
+            _selectedBirim?.birimadi ?? widget.item.birimTipi,
             style: TextStyle(
-              fontSize: 13.sp,
+              fontSize: 14.sp,
               color: Theme.of(context).colorScheme.primary,
               fontWeight: FontWeight.w600,
             ),
@@ -963,62 +975,36 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
       );
     }
 
-    // ✅ Dropdown ile dinamik birimleri göster
-    return Container(
+    // ✅ Birden fazla birim varsa Dropdown göster (DropdownButton kullan - daha temiz görünüm)
+    return SizedBox(
       height: 8.w,
-      alignment: Alignment.center,
-      child: DropdownButtonFormField<BirimModel>(
-        value: _selectedBirim,
-        isDense: false, // ✅ isDense=false yükseklik için daha iyi
-        isExpanded: true, // ✅ Yazının genişliğe yayılmasını sağla
-        icon: Icon(Icons.arrow_drop_down, size: 4.w),
-        decoration: InputDecoration(
-          filled: true,
-          fillColor: Theme.of(context)
+      child: Container(
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: 2.w),
+        decoration: BoxDecoration(
+          color: Theme.of(context)
               .colorScheme
               .surfaceContainerHighest
               .withValues(alpha: 0.7),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: DropdownButton<BirimModel>(
+          value: _selectedBirim,
+          isDense: true,
+          underline: Container(), // Alt çizgiyi kaldır
+          style: TextStyle(
+            fontSize: 13.sp, // ✅ Font boyutunu küçült
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.w600,
           ),
-          contentPadding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 1.2.h),
-        ),
-        style: TextStyle(
-          fontSize: 13.sp,
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w600,
-        ),
-        items: _birimler.map((birim) {
-          return DropdownMenuItem<BirimModel>(
-            value: birim,
-            alignment: Alignment.center, // ✅ Dropdown menüsünde ortalama
-            child: Text(
-              birim.birimadi ?? '',
-              style: TextStyle(fontSize: 12.sp),
-              textAlign: TextAlign.center, // ✅ Metin ortala
-              overflow: TextOverflow.ellipsis,
-            ),
-          );
-        }).toList(),
-        onChanged: _birimler.length > 1 ? _onBirimChanged : null,
-        selectedItemBuilder: (BuildContext context) {
-          // ✅ Seçili item'ı ortala
-          return _birimler.map((birim) {
-            return Center(
-              child: Text(
-                birim.birimadi ?? '',
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-              ),
+          items: _birimler.map((birim) {
+            return DropdownMenuItem<BirimModel>(
+              value: birim,
+              child: Text(birim.birimadi ?? ''),
             );
-          }).toList();
-        },
+          }).toList(),
+          onChanged: _onBirimChanged,
+        ),
       ),
     );
   }

@@ -751,11 +751,12 @@ class _CartItemCardState extends State<_CartItemCard> {
       _oldDiscountValue = _discountController.text;
       _discountController.clear();
     } else {
-      // ✅ FIX: İndirim alanında eski değere dönme - _onDiscountChanged zaten doğru değeri ayarlıyor
-      // Eğer kullanıcı alanı boşaltmak istiyorsa (Enter veya focus kaybı), 0 indirim olarak kabul et
-      // Eski değere DÖNME çünkü bu kullanıcının kasıtlı olarak silme işlemini bozuyor
-
-      // NOT: Bu metod sadece focus kontrolü için - değer değişimi _onDiscountChanged'de yapılıyor
+      // On focus loss, if the field is empty, restore the old value.
+      // Then, apply the discount logic. This is consistent with other fields.
+      if (_discountController.text.isEmpty && _oldDiscountValue.isNotEmpty) {
+        _discountController.text = _oldDiscountValue;
+      }
+      _onDiscountChanged(_discountController.text);
     }
   }
 
@@ -1217,7 +1218,6 @@ class _CartItemCardState extends State<_CartItemCard> {
                   controller: _discountController,
                   focusNode: _discountFocusNode,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  onChanged: _onDiscountChanged,
                   onSubmitted: (value) {
                     // ✅ FIX: Enter basıldığında indirimi uygula ve focus'u kapat
                     _onDiscountChanged(value);

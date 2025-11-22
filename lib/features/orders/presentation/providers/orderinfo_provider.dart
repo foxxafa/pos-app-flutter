@@ -48,12 +48,16 @@ class OrderInfoProvider extends ChangeNotifier {
       // Generate fisNo using FisNoGenerator (16 characters)
       orderNo = FisNoGenerator.generate(userId: userId);
 
+      // Clear comment when generating new order number
+      comment = '';
+
       print('✅ FisNo generated: $orderNo (UserID: $userId)');
       notifyListeners();
     } catch (e) {
       print('⚠️ Error generating fisNo: $e');
       // Fallback: Use timestamp-based generation
       orderNo = 'MO${DateTime.now().millisecondsSinceEpoch.toString().substring(3, 17)}';
+      comment = '';
       notifyListeners();
     }
   }

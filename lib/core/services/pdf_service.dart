@@ -461,6 +461,17 @@ class PdfService {
     );
   }
 
+  /// Shares PDF via system share sheet (WhatsApp, Email, etc.)
+  static Future<void> sharePdf(
+    Uint8List pdfData,
+    String fileName,
+  ) async {
+    await Printing.sharePdf(
+      bytes: pdfData,
+      filename: fileName,
+    );
+  }
+
   /// Saves PDF to device and shares it
   static Future<void> savePdf(
     Uint8List pdfData,

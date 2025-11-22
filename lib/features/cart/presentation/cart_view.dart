@@ -949,33 +949,32 @@ class _CartViewState extends State<CartView> {
         final product = _filteredProducts[index];
         final key = product.stokKodu;
 
+        final selectedType = getBirimTipiFromProduct(product);
+        final cartKey = '${key}_${selectedType ?? 'UNIT'}';
+        final cartItem = provider.items[cartKey];
+
         // ✅ Controller'ları oluştur (sadece bir kez)
         if (!_priceControllers.containsKey(key)) {
-          final cartItem = provider.items[key];
-          final selectedType = getBirimTipiFromProduct(product);
-          // ✅ Price controller indirimli fiyatı göstermeli (KDV'siz)
           final initialPrice = cartItem != null
               ? (cartItem.birimFiyat * (1 - cartItem.iskonto / 100)).toStringAsFixed(2)
-              : selectedType == 'Unit'
+              : (selectedType ?? 'UNIT').toUpperCase() == 'UNIT'
               ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
               : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
           _priceControllers[key] = TextEditingController(text: initialPrice);
         }
         if (!_discountControllers.containsKey(key)) {
-          final iskonto = provider.getIskonto(key);
+          final iskonto = cartItem?.iskonto ?? 0;
           _discountControllers[key] = TextEditingController(text: iskonto > 0 ? iskonto.toString() : '');
         }
 
         // ✅ Controller'lar oluşturulduktan SONRA: CartProvider'dan güncel değerlerle senkronize et
         // ⚠️ KRITIK: Focus varsa (kullanıcı yazmaya başlamış) otomatik doldurma yapma!
-        final cartItem = provider.items[key];
-        final selectedType = getBirimTipiFromProduct(product);
 
         // Price controller senkronizasyonu
         if (!(_priceFocusNodes[key]?.hasFocus ?? false)) {
           final expectedPrice = cartItem != null
               ? (cartItem.birimFiyat * (1 - cartItem.iskonto / 100)).toStringAsFixed(2)
-              : selectedType == 'Unit'
+              : (selectedType ?? 'UNIT').toUpperCase() == 'UNIT'
               ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
               : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
 
@@ -986,7 +985,7 @@ class _CartViewState extends State<CartView> {
 
         // Discount controller senkronizasyonu
         if (!(_discountFocusNodes[key]?.hasFocus ?? false)) {
-          final iskonto = provider.getIskonto(key);
+          final iskonto = cartItem?.iskonto ?? 0;
           final expectedDiscount = iskonto > 0 ? iskonto.toString() : '';
 
           if (_discountControllers[key]!.text != expectedDiscount) {
@@ -1000,8 +999,7 @@ class _CartViewState extends State<CartView> {
           _discountFocusNodes[key] = FocusNode();
         }
         if (!_quantityControllers.containsKey(key)) {
-          final isBox = _isBoxMap[key] ?? false;
-          final birimTipi = isBox ? 'Box' : 'Unit';
+          final birimTipi = selectedType ?? (_isBoxMap[key] ?? false ? 'Box' : 'Unit');
           _quantityControllers[key] = TextEditingController(text: provider.getmiktar(key, birimTipi).toString());
         }
 

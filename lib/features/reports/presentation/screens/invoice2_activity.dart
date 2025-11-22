@@ -31,6 +31,9 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
   // ✅ Double-click protection for Select Products button
   bool _isNavigatingToProducts = false;
 
+  // ✅ TextField controller for comment
+  final TextEditingController _commentController = TextEditingController();
+
 
   final List<String> paymentMethods = [
     "Cash on Delivery",
@@ -51,12 +54,26 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
     });
   }
 
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
   /// Sipariş başlatma - Mevcut siparişi kontrol et veya yeni sipariş oluştur
   Future<void> _initializeOrder() async {
     try {
       final cartProvider = Provider.of<CartProvider>(context, listen: false);
       final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
       final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+
+      // ✅ Provider'daki comment'i local state'e ve controller'a yükle (kullanıcı geri döndüğünde güncel olsun)
+      if (mounted) {
+        setState(() {
+          comment = orderInfoProvider.comment;
+          _commentController.text = comment;
+        });
+      }
 
       final currentCustomerKod = customerProvider.selectedCustomer?.kod ?? '';
 
@@ -414,6 +431,7 @@ print("bunlarrr $_refundProductNames");
             _buildInfoCard(
               title: 'order.comment'.tr(),
               content: TextField(
+                controller: _commentController,
                 maxLines: 5,
                 onChanged: (val) => comment = val,
                 onSubmitted: (value) {
@@ -475,6 +493,10 @@ print("bunlarrr $_refundProductNames");
                     setState(() => _isNavigatingToProducts = true);
 
                     try {
+                      // ✅ Comment'i OrderInfoProvider'a kaydet
+                      final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
+                      orderInfoProvider.comment = comment;
+
                       // Hemen sayfaya geç, refunds arka planda yüklenecek
                       await Navigator.push(
                         context,

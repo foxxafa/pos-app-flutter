@@ -110,7 +110,120 @@ class _CartListPageState extends State<CartListPage> {
     return total;
   }
 
-  Future<void> _generatePdf(String customerName, List<Map<String, dynamic>> items, String fisNo) async {
+  void _showPdfOptions(String customerName, List<Map<String, dynamic>> items, String fisNo) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      builder: (BuildContext context) {
+        return Container(
+          padding: EdgeInsets.all(5.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Title
+              Padding(
+                padding: EdgeInsets.only(bottom: 3.h),
+                child: Text(
+                  'PDF Options',
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+
+              // Options in a Row
+              Row(
+                children: [
+                  // View PDF Option
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _generatePdf(customerName, items, fisNo, share: false);
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 3.h),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.picture_as_pdf,
+                              color: Colors.grey[700],
+                              size: 8.w,
+                            ),
+                            SizedBox(height: 1.h),
+                            Text(
+                              'View PDF',
+                              style: TextStyle(
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(width: 4.w),
+
+                  // Share PDF Option
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.pop(context);
+                        _generatePdf(customerName, items, fisNo, share: true);
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(vertical: 3.h),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.share,
+                              color: Colors.grey[700],
+                              size: 8.w,
+                            ),
+                            SizedBox(height: 1.h),
+                            Text(
+                              'Share PDF',
+                              style: TextStyle(
+                                fontSize: 14.sp,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              SizedBox(height: 3.h),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _generatePdf(String customerName, List<Map<String, dynamic>> items, String fisNo, {bool share = false}) async {
     try {
       // Show loading indicator
       showDialog(
@@ -131,7 +244,7 @@ class _CartListPageState extends State<CartListPage> {
                 ),
                 SizedBox(height: 2.h),
                 Text(
-                  'Generating PDF...',
+                  share ? 'Preparing to share...' : 'Generating PDF...',
                   style: TextStyle(fontSize: 14.sp),
                 ),
               ],
@@ -166,13 +279,23 @@ class _CartListPageState extends State<CartListPage> {
       // Close loading dialog
       if (mounted) Navigator.pop(context);
 
-      // Show PDF preview
-      if (mounted) {
-        await PdfService.previewPdf(
-          context,
-          pdfData,
-          'Order_${fisNo}_${DateTime.now().millisecondsSinceEpoch}.pdf',
-        );
+      if (share) {
+        // Share PDF
+        if (mounted) {
+          await PdfService.sharePdf(
+            pdfData,
+            'Order_${fisNo}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+          );
+        }
+      } else {
+        // Show PDF preview
+        if (mounted) {
+          await PdfService.previewPdf(
+            context,
+            pdfData,
+            'Order_${fisNo}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+          );
+        }
       }
     } catch (e) {
       // Close loading dialog if still open
@@ -277,8 +400,8 @@ class _CartListPageState extends State<CartListPage> {
                   color: Colors.red[700],
                   size: 6.w,
                 ),
-                onPressed: () => _generatePdf(customerName, items, fisNo),
-                tooltip: 'Generate PDF',
+                onPressed: () => _showPdfOptions(customerName, items, fisNo),
+                tooltip: 'PDF Options',
               ),
             ],
           ),

@@ -1021,12 +1021,14 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               );
             }
           }
+          priceFocusNode.unfocus();
         },
         onSubmitted: (value) {
           final parsed = double.tryParse(value.replaceAll(',', '.'));
           if (parsed != null) {
             priceController.text = parsed.toStringAsFixed(2);
           }
+          priceFocusNode.unfocus();
         },
       ),
     );
@@ -1052,31 +1054,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
             ),
-            onChanged: (value) {
-              // ✅ Sadece fiyat alanını güncelle (kaydetme YAPMA!)
-              final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'BOX' : 'UNIT');
-              final cartKey = '${product.stokKodu}_$birimTipi';
-              final currentCartItem = cartProvider.items[cartKey];
-
-              // Mevcut birimFiyat'ı al (price override'ı koru)
-              final currentBirimFiyat = currentCartItem?.birimFiyat ??
-                  (birimTipi == 'UNIT'
-                      ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                      : double.tryParse(product.kutuFiyati.toString()) ?? 0.0);
-
-              if (value.isEmpty) {
-                // İndirim yok - orijinal fiyatı göster
-                priceController.text = currentBirimFiyat.toStringAsFixed(2);
-                return;
-              }
-
-              double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
-              discountPercent = discountPercent.clamp(0.0, 100.0);
-
-              // İndirimli fiyatı hesapla
-              final discountAmount = (currentBirimFiyat * discountPercent) / 100;
-              final discountedPrice = currentBirimFiyat - discountAmount;
-              priceController.text = discountedPrice.toStringAsFixed(2);
+            onSubmitted: (value) {
+              // On submit, just unfocus. The focus listener will handle the update.
+              discountFocusNode.unfocus();
             },
           ),
         ),
