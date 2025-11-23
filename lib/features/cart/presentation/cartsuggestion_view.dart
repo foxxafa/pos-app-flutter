@@ -44,6 +44,12 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   final Map<String, List<BirimModel>> _productBirimlerMap = {};
   final Map<String, BirimModel?> _selectedBirimMap = {};
 
+  // ✅ Suggestions verilerini Map'te sakla (StokKodu -> formatted string)
+  final Map<String, String> _suggestionsInfoMap = {};
+
+  // ✅ Stok bilgilerini Map'te sakla (StokKodu -> miktar)
+  final Map<String, double> _stockInfoMap = {};
+
   // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
   bool _isUpdatingFromScanner = false;
 
@@ -78,58 +84,176 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
     final dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
 
-    final refundRows = await db.query('Refunds');
-    final refundStokKodlari = refundRows
-        .map((row) => row['stokKodu'] as String?)
-        .where((e) => e != null && e.isNotEmpty)
-        .toSet()
-        .toList();
+    // ✅ Suggestions tablosunu Product tablosu ile JOIN et
+    // Suggestions'da sadece minimal veri var (StokKodu, Miktar, vb.)
+    // Product'tan tüm detayları (barkod, fiyat, resim vb.) çekiyoruz
+    final rawProducts = await db.rawQuery('''
+      SELECT
+        s.MusteriId,
+        s.StokKodu,
+        s.Miktar as SuggestedMiktar,
+        s.BirimTipi as SuggestedBirimTipi,
+        s.ToplamTutar,
+        s.Iskonto,
+        s.SonSatisTarihi,
+        p.urunAdi,
+        p.barcode1,
+        p.barcode2,
+        p.barcode3,
+        p.barcode4,
+        p.adetFiyati,
+        p.kutuFiyati,
+        p.vat,
+        p.imsrc,
+        p.aktif,
+        p.pm1,
+        p.pm2,
+        p.pm3,
+        p.birim1,
+        p.birimKey1,
+        p.birim2,
+        p.birimKey2,
+        p.miktar
+      FROM Suggestions s
+      INNER JOIN Product p ON s.StokKodu = p.stokKodu
+      WHERE s.MusteriId = ? AND p.aktif = 1
+      ORDER BY s.UrunAdi ASC
+    ''', [widget.musteriId]);
 
-    final rawProducts = await db.query('Product');
-    final allProducts = rawProducts.map((e) => ProductModel.fromMap(e)).toList();
-    final suggestedProducts = allProducts.where((p) => refundStokKodlari.contains(p.stokKodu) && p.aktif == 1).toList();
+    // JOIN sonucunu ProductModel'e map et ve suggestions bilgilerini Map'e doldur
+    final suggestedProducts = rawProducts.map((row) {
+      final stokKodu = row['StokKodu'].toString();
 
-    suggestedProducts.sort((a, b) => a.urunAdi.compareTo(b.urunAdi));
+      // ✅ Suggestions bilgisini formatla ve Map'e kaydet
+      final miktar = (row['SuggestedMiktar'] as num?)?.toDouble() ?? 0.0;
+      final birimTipi = row['SuggestedBirimTipi'] as String? ?? 'Unit';
+      final toplamTutar = (row['ToplamTutar'] as num?)?.toDouble() ?? 0.0;
+      final iskonto = (row['Iskonto'] as num?)?.toInt() ?? 0;
+      final sonSatisTarihi = row['SonSatisTarihi'] as String?;
+
+      if (sonSatisTarihi != null) {
+        final tarih = DateTime.tryParse(sonSatisTarihi);
+        if (tarih != null) {
+          final formattedDate = "${tarih.day.toString().padLeft(2, '0')}/${tarih.month.toString().padLeft(2, '0')}/${tarih.year}";
+          final birimFiyat = miktar > 0 ? toplamTutar / miktar : toplamTutar;
+          _suggestionsInfoMap[stokKodu] = "[Qty:${miktar}x$birimTipi] [Price:${birimFiyat.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
+        }
+      }
+
+      return ProductModel.fromMap({
+        'stokKodu': stokKodu,
+        'urunAdi': row['urunAdi'],
+        'barcode1': row['barcode1'] ?? '',
+        'barcode2': row['barcode2'] ?? '',
+        'barcode3': row['barcode3'] ?? '',
+        'barcode4': row['barcode4'] ?? '',
+        'adetFiyati': row['adetFiyati'],
+        'kutuFiyati': row['kutuFiyati'],
+        'vat': row['vat'],
+        'imsrc': row['imsrc'],
+        'aktif': row['aktif'],
+        'miktar': row['miktar'] ?? 0.0,
+        'pm1': row['pm1'] ?? '',
+        'pm2': row['pm2'] ?? '',
+        'pm3': row['pm3'] ?? '',
+        'birim1': row['birim1'] ?? '',
+        'birimKey1': row['birimKey1'] ?? 0,
+        'birim2': row['birim2'] ?? '',
+        'birimKey2': row['birimKey2'] ?? 0,
+      });
+    }).toList();
+
+    // ✅ Stok bilgilerini tek seferde yükle
+    await _loadAllStockInfo(suggestedProducts);
 
     setState(() {
       _allProducts = suggestedProducts;
       _filteredProducts = suggestedProducts;
       _isLoading = false;
       _generateImageFutures(suggestedProducts);
-      _downloadMissingImages(suggestedProducts); // Resimleri indir
+      _downloadMissingImages(suggestedProducts);
     });
 
-    // ✅ Her ürün için birimleri yükle
-    for (final product in suggestedProducts) {
-      _loadBirimlerForProduct(product);
+    // ✅ Birimleri background'da yükle (UI'ı bloklamadan)
+    Future.microtask(() => _loadAllBirimler(suggestedProducts));
+  }
+
+  /// Tüm ürünler için birimleri background'da yükle
+  Future<void> _loadAllBirimler(List<ProductModel> products) async {
+    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+
+    for (final product in products) {
+      if (!mounted) break;
+
+      final key = product.stokKodu;
+      if (_productBirimlerMap.containsKey(key)) continue; // Zaten yüklü
+
+      try {
+        final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+
+        if (mounted) {
+          setState(() {
+            _productBirimlerMap[key] = birimler;
+            if (birimler.isNotEmpty) {
+              BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+                (b) {
+                  final birimAdi = b?.birimadi?.toLowerCase() ?? '';
+                  return birimAdi.contains('box');
+                },
+                orElse: () => null,
+              );
+              final selectedBirim = defaultBirim ?? birimler.first;
+              _selectedBirimMap[key] = selectedBirim;
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('⚠️ Birim yüklenemedi ($key): $e');
+      }
     }
   }
 
-  // ✅ Ürün için birimleri yükle (cart_view.dart'tan)
-  Future<void> _loadBirimlerForProduct(ProductModel product) async {
-    final key = product.stokKodu;
+  /// Tüm ürünler için stok bilgilerini tek sorguda yükle
+  Future<void> _loadAllStockInfo(List<ProductModel> products) async {
+    try {
+      final db = await DatabaseHelper().database;
 
-    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
-    final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
-
-    if (mounted) {
-      setState(() {
-        _productBirimlerMap[key] = birimler;
-        if (birimler.isNotEmpty) {
-          // VARSAYILAN olarak BOX içeren birimi ara
-          BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
-            (b) {
-              final birimAdi = b?.birimadi?.toLowerCase() ?? '';
-              return birimAdi.contains('box');
-            },
-            orElse: () => null,
-          );
-
-          // BOX bulunamadıysa ilk birimi seç
-          final selectedBirim = defaultBirim ?? birimler.first;
-          _selectedBirimMap[key] = selectedBirim;
+      // Depostok'ta veri var mı kontrol et
+      final anyResult = await db.rawQuery('SELECT 1 FROM Depostok LIMIT 1');
+      if (anyResult.isEmpty) {
+        // Depostok boş - tüm stoklar 0
+        for (final product in products) {
+          _stockInfoMap[product.stokKodu] = 0.0;
         }
-      });
+        return;
+      }
+
+      // TÜM stokları TEK SORGUDA çek
+      final allStocks = await db.query(
+        'Depostok',
+        columns: ['StokKodu', 'miktar'],
+        where: 'UPPER(birim) = ?',
+        whereArgs: ['UNIT'],
+      );
+
+      // Map'e dönüştür
+      final stockMap = Map<String, double>.fromEntries(
+        allStocks.map((row) => MapEntry(
+          row['StokKodu'].toString(),
+          (row['miktar'] as num?)?.toDouble() ?? 0.0,
+        ))
+      );
+
+      // Her ürün için stok bilgisini Map'e kaydet
+      for (final product in products) {
+        _stockInfoMap[product.stokKodu] = stockMap[product.stokKodu] ?? 0.0;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Stok bilgileri yüklenemedi: $e');
+      // Hata durumunda tüm stoklar 0
+      for (final product in products) {
+        _stockInfoMap[product.stokKodu] = 0.0;
+      }
     }
   }
 
@@ -183,10 +307,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
       // ✅ selectedBirimKey'i restore et
       if (cartItem.selectedBirimKey != null) {
-        // Birimler listesini yükle (eğer yoksa)
-        await _loadBirimlerForProduct(product);
-
-        // selectedBirimKey ile eşleşen BirimModel'i bul
+        // selectedBirimKey ile eşleşen BirimModel'i bul (birimler background'da yükleniyor)
         final birimler = _productBirimlerMap[key] ?? [];
         final selectedBirim = birimler.cast<BirimModel?>().firstWhere(
           (b) => b?.key == cartItem.selectedBirimKey,
@@ -347,14 +468,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
     // ✅ DİNAMİK BİRİM SAYIMI: Tüm birim tiplerini say (UPPERCASE kontrol)
     final totalQuantity = cartItems.fold<int>(0, (sum, item) => sum + item.miktar);
-
-    // ⚠️ DEPRECATED: Eski Unit/Box sayımı (UPPERCASE ile)
-    final unitCount = cartItems
-        .where((i) => i.birimTipi.toUpperCase() == 'UNIT')
-        .fold<int>(0, (p, i) => p + i.miktar);
-    final boxCount = cartItems
-        .where((i) => i.birimTipi.toUpperCase() == 'BOX')
-        .fold<int>(0, (p, i) => p + i.miktar);
 
     return Scaffold(
       appBar: AppBar(
@@ -784,10 +897,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           });
         }
 
-        // Load birimler if not loaded
-        if (!_productBirimlerMap.containsKey(stokKodu)) {
-          _loadBirimlerForProduct(product);
-        }
+        // Birimler background'da yükleniyor, burada lazy check yok
 
         return ProductListItemSuggestion(
           key: ValueKey(product.stokKodu),
@@ -806,6 +916,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           buildPriceField: () => _buildPriceField(product, cartItem, priceController, priceFocusNode, discountController, discountFocusNode, cartProvider, customerProvider),
           buildDiscountField: () => _buildDiscountField(product, cartItem, priceController, discountController, discountFocusNode, cartProvider, customerProvider),
           buildFreeItemControl: () => _buildFreeItemControl(context, product, cartProvider, customerProvider),
+          getSuggestionInfo: _getSuggestionInfo,
+          availableStock: _stockInfoMap[stokKodu],
         );
       },
       separatorBuilder: (context, index) => Divider(
@@ -964,8 +1076,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   }
 
   Widget _buildPriceField(ProductModel product, CartItem? cartItem, TextEditingController priceController, FocusNode priceFocusNode, TextEditingController discountController, FocusNode discountFocusNode, CartProvider cartProvider, SalesCustomerProvider customerProvider) {
-    final key = product.stokKodu;
-    final selectedBirim = _selectedBirimMap[key];
     final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'BOX' : 'UNIT');
 
     return Container(
@@ -1061,174 +1171,6 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           ),
         ),
       ],
-    );
-  }
-
-  /// Vertical quantity control (matches cart_view.dart)
-  Widget _buildVerticalQuantityControl(
-    BuildContext context,
-    ProductModel product,
-    CartItem? cartItem,
-    CartProvider cartProvider,
-    SalesCustomerProvider customerProvider,
-    TextEditingController quantityController,
-    FocusNode quantityFocusNode,
-  ) {
-    final key = product.stokKodu;
-    final selectedBirim = _selectedBirimMap[key];
-    final birimTipi = selectedBirim != null
-        ? (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase()
-        : (cartItem?.birimTipi ?? 'UNIT').toUpperCase();
-
-    final quantity = cartItem?.miktar ?? 0;
-
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.12,
-        minHeight: 60,
-      ),
-      width: 22.w,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // + Button
-          Flexible(
-            flex: 4,
-            child: _buildQuantityButton(
-              context: context,
-              isIncrement: true,
-              product: product,
-              cartItem: cartItem,
-              cartProvider: cartProvider,
-              customerProvider: customerProvider,
-              birimTipi: birimTipi,
-              selectedBirim: selectedBirim,
-            ),
-          ),
-          SizedBox(height: 2),
-          // TextField (Quantity Display)
-          Flexible(
-            flex: 4,
-            child: Container(
-              width: double.infinity,
-              margin: EdgeInsets.zero,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Center(
-                child: TextField(
-                  key: ValueKey('quantity_${product.stokKodu}'),
-                  controller: quantityController,
-                  focusNode: quantityFocusNode,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  textAlign: TextAlign.center,
-                  textAlignVertical: TextAlignVertical.center,
-                  maxLines: 1,
-                  style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                    isDense: true,
-                  ),
-                  onSubmitted: (value) => _handleQuantityUpdate(product, cartItem, cartProvider, customerProvider, value),
-                ),
-              ),
-            ),
-          ),
-          SizedBox(height: 2),
-          // - Button
-          Flexible(
-            flex: 4,
-            child: _buildQuantityButton(
-              context: context,
-              isIncrement: false,
-              product: product,
-              cartItem: cartItem,
-              cartProvider: cartProvider,
-              customerProvider: customerProvider,
-              birimTipi: birimTipi,
-              selectedBirim: selectedBirim,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuantityButton({
-    required BuildContext context,
-    required bool isIncrement,
-    required ProductModel product,
-    required CartItem? cartItem,
-    required CartProvider cartProvider,
-    required SalesCustomerProvider customerProvider,
-    required String birimTipi,
-    required BirimModel? selectedBirim,
-  }) {
-    final quantity = cartItem?.miktar ?? 0;
-    final bool isEnabled = isIncrement || quantity > 0;
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: isEnabled
-            ? (isIncrement
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.1)
-                : Theme.of(context).colorScheme.error.withValues(alpha: 0.1))
-            : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isEnabled
-              ? () {
-                  final fiyat = selectedBirim?.fiyat7 ??
-                      (birimTipi == 'UNIT'
-                          ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                          : double.tryParse(product.kutuFiyati.toString()) ?? 0.0);
-
-                  final iskonto = cartItem?.iskonto ?? 0.0;
-
-                  cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-                  cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-
-                  cartProvider.addOrUpdateItem(
-                    urunAdi: product.urunAdi,
-                    stokKodu: product.stokKodu,
-                    birimFiyat: fiyat,
-                    adetFiyati: product.adetFiyati,
-                    kutuFiyati: product.kutuFiyati,
-                    vat: product.vat,
-                    urunBarcode: product.barcode1,
-                    miktar: isIncrement ? 1 : -1,
-                    iskonto: iskonto,
-                    birimTipi: birimTipi,
-                    imsrc: product.imsrc,
-                    selectedBirimKey: selectedBirim?.key,
-                  );
-                }
-              : null,
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            child: Icon(
-              isIncrement ? Icons.add : Icons.remove,
-              size: 5.w,
-              color: isEnabled
-                  ? (isIncrement
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.error)
-                  : Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
-            ),
-          ),
-        ),
-      ),
     );
   }
 
@@ -1365,140 +1307,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
     );
   }
 
-  Widget _buildQuantityControls(ProductModel product, CartItem? cartItem, CartProvider cartProvider, SalesCustomerProvider customerProvider, TextEditingController quantityController, FocusNode quantityFocusNode) {
-    // ✅ BirimModel sisteminden birim tipini al
-    final key = product.stokKodu;
-    final selectedBirim = _selectedBirimMap[key];
-    final birimTipi = selectedBirim != null
-        ? (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase()
-        : (cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'BOX' : 'UNIT'));
-
-    // Provider'dan güncel miktarı al (context.watch kullanarak dinamik güncelleme)
-    final currentMiktar = context.watch<CartProvider>().getmiktar(product.stokKodu, birimTipi);
-
-    // Controller'ın değerini güncelle (focus yoksa)
-    if (!quantityFocusNode.hasFocus && quantityController.text != currentMiktar.toString()) {
-      quantityController.text = currentMiktar.toString();
-    }
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Decrease Button
-        _quantityButton(
-          icon: Icons.remove,
-          color: Theme.of(context).colorScheme.error,
-          onPressed: currentMiktar > 0 ? () {
-            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-            cartProvider.addOrUpdateItem(
-                urunAdi: product.urunAdi, stokKodu: product.stokKodu, birimFiyat: 0, miktar: -1,
-                iskonto: cartItem?.iskonto ?? 0, birimTipi: birimTipi, urunBarcode: product.barcode1,
-                adetFiyati: product.adetFiyati, kutuFiyati: product.kutuFiyati, vat: product.vat,
-            );
-          } : null,
-        ),
-        SizedBox(width: 1.w),
-        // Quantity TextField - artık manuel giriş yapılabilir
-        Container(
-          width: 12.w,
-          height: 8.w,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: TextField(
-            controller: quantityController,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              contentPadding: EdgeInsets.zero,
-              border: InputBorder.none,
-            ),
-            keyboardType: TextInputType.number,
-            onSubmitted: (value) {
-              final newMiktar = int.tryParse(value) ?? 0;
-              if (newMiktar <= 0) {
-                cartProvider.removeItem(product.stokKodu, birimTipi);
-              } else {
-                final difference = newMiktar - currentMiktar;
-                if (difference != 0) {
-                  final fiyat = birimTipi == 'Unit'
-                      ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                      : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
-
-                  cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-        cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-                  cartProvider.addOrUpdateItem(
-                    urunAdi: product.urunAdi,
-                    stokKodu: product.stokKodu,
-                    birimFiyat: fiyat,
-                    miktar: difference, // Farkı gönder
-                    iskonto: cartItem?.iskonto ?? 0,
-                    birimTipi: birimTipi,
-                    urunBarcode: product.barcode1,
-                    adetFiyati: product.adetFiyati,
-                    kutuFiyati: product.kutuFiyati,
-                    vat: product.vat,
-                    imsrc: product.imsrc,
-                    
-                    
-                  );
-                }
-              }
-            },
-          ),
-        ),
-        SizedBox(width: 1.w),
-        // Increase Button
-        _quantityButton(
-          icon: Icons.add,
-          color: Theme.of(context).colorScheme.primary,
-          onPressed: () {
-            // ✅ BirimModel'den fiyat al (fiyat7), yoksa fallback
-            final fiyat = selectedBirim?.fiyat7 ??
-                (birimTipi == 'UNIT'
-                    ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                    : double.tryParse(product.kutuFiyati.toString()) ?? 0.0);
-
-            cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
-            cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
-            cartProvider.addOrUpdateItem(
-                urunAdi: product.urunAdi,
-                stokKodu: product.stokKodu,
-                birimFiyat: fiyat,
-                miktar: 1,
-                iskonto: cartItem?.iskonto ?? 0,
-                birimTipi: birimTipi,
-                urunBarcode: product.barcode1,
-                adetFiyati: product.adetFiyati,
-                kutuFiyati: product.kutuFiyati,
-                vat: product.vat,
-                selectedBirimKey: selectedBirim?.key,
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _quantityButton({required IconData icon, required Color color, required VoidCallback? onPressed}) {
-    return Container(
-      width: 12.w,
-      height: 8.w,
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Center(
-        child: IconButton(
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: onPressed,
-          icon: Icon(icon, size: 6.w, color: onPressed != null ? color : Colors.grey),
-        ),
-      ),
-    );
+  /// Suggestions bilgisini Map'ten getir (sayfa açılırken tek sorguda yüklendi)
+  Future<String> _getSuggestionInfo(String stokKodu) async {
+    return _suggestionsInfoMap[stokKodu] ?? "";
   }
 }
 
@@ -1507,12 +1318,14 @@ class ProductImageSuggestion extends StatefulWidget {
   final Future<String?>? imageFuture;
   final ProductModel product;
   final BirimModel? selectedBirim;
+  final double? availableStock; // ✅ Parent'tan geçilecek
 
   const ProductImageSuggestion({
     super.key,
     this.imageFuture,
     required this.product,
     this.selectedBirim,
+    this.availableStock,
   });
 
   @override
@@ -1520,85 +1333,13 @@ class ProductImageSuggestion extends StatefulWidget {
 }
 
 class _ProductImageSuggestionState extends State<ProductImageSuggestion> {
-  double? _availableStock;
-  bool _stockLoading = true;
-
-  // STATIC CACHE: Depostok tablosu boş mu kontrolü ve tüm stok verileri
-  static bool? _hasAnyDepostok;
-  static Map<String, double>? _allDepostokStocks; // StokKodu -> miktar
-
   @override
   void initState() {
     super.initState();
-    _loadAvailableStock();
-  }
-
-  /// Depostok fallback mantığı ile stok miktarını yükler
-  Future<void> _loadAvailableStock() async {
-    try {
-      // 1. İlk widget için 1 kere kontrol et: Depostok'ta hiç veri var mı?
-      if (_hasAnyDepostok == null) {
-        final db = await DatabaseHelper().database;
-        final anyResult = await db.rawQuery('SELECT 1 FROM Depostok LIMIT 1');
-        _hasAnyDepostok = anyResult.isNotEmpty;
-
-        // Eğer Depostok'ta veri varsa, TÜM stokları TEK SORGUDA çek
-        if (_hasAnyDepostok == true) {
-          final allStocks = await db.query(
-            'Depostok',
-            columns: ['StokKodu', 'miktar'],
-            where: 'UPPER(birim) = ?',
-            whereArgs: ['UNIT'],
-          );
-
-          _allDepostokStocks = {};
-          for (var row in allStocks) {
-            final stokKodu = row['StokKodu'].toString();
-            final miktar = (row['miktar'] as num?)?.toDouble() ?? 0.0;
-            _allDepostokStocks![stokKodu] = miktar;
-          }
-        }
-      }
-
-      double stock;
-
-      if (_hasAnyDepostok == false) {
-        // Depostok tamamen boş → Product.miktar kullan
-        stock = widget.product.miktar ?? 0.0;
-        debugPrint('📦 [SUGGESTION] ${widget.product.stokKodu}: Depostok boş, product.miktar kullanılıyor: $stock');
-      } else {
-        // Depostok'ta veri var → Cache'ten bak
-        if (_allDepostokStocks!.containsKey(widget.product.stokKodu.toString())) {
-          // Bulundu → Depostok'tan al
-          stock = _allDepostokStocks![widget.product.stokKodu.toString()]!;
-          debugPrint('📦 [SUGGESTION] ${widget.product.stokKodu}: Depostok\'ta BULUNDU: $stock');
-        } else {
-          // Bulunamadı → product.miktar kullan (fallback)
-          stock = widget.product.miktar ?? 0.0;
-          debugPrint('📦 [SUGGESTION] ${widget.product.stokKodu}: Depostok\'ta BULUNAMADI, product.miktar kullanılıyor: $stock');
-        }
-      }
-
-      if (!mounted) return;
-      setState(() {
-        _availableStock = stock;
-        _stockLoading = false;
-      });
-
-      // 🐛 DEBUG - Stok yükleme sonucu
-      debugPrint('📦 [SUGGESTION] Stok yüklendi: ${widget.product.stokKodu} -> $_availableStock (Depostok: $_hasAnyDepostok)');
-    } catch (e) {
-      debugPrint('⚠️ Stok bilgisi yüklenemedi: $e');
-      if (!mounted) return;
-      setState(() {
-        _availableStock = widget.product.miktar ?? 0.0;
-        _stockLoading = false;
-      });
-    }
   }
 
   void _showProductInfoDialog(BuildContext context) {
-    final qty = (_availableStock ?? 0).toInt();
+    final qty = (widget.availableStock ?? 0).toInt();
 
     showDialog(
       context: context,
@@ -1682,13 +1423,8 @@ class _ProductImageSuggestionState extends State<ProductImageSuggestion> {
 
   @override
   Widget build(BuildContext context) {
-    // Banner'ı Depostok stok bilgisine göre göster
-    final showBanner = (_availableStock ?? widget.product.miktar ?? 0) <= 0;
-
-    // 🐛 DEBUG - SUSPENDED banner kontrolü
-    if (showBanner) {
-      debugPrint('🔴 [SUGGESTION] SUSPENDED: ${widget.product.stokKodu} - availableStock: $_availableStock, product.miktar: ${widget.product.miktar}');
-    }
+    // Banner'ı stok bilgisine göre göster (parent'tan geçildi)
+    final showBanner = (widget.availableStock ?? 0) <= 0;
 
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
@@ -1743,13 +1479,8 @@ class _ProductImageSuggestionState extends State<ProductImageSuggestion> {
   }
 
   String _getQuantityText() {
-    // Loading durumunda boş döndür (yanlış veri gösterme)
-    if (_stockLoading) {
-      return "Qty: ...";
-    }
-
-    // Depostok fallback mantığından gelen stok bilgisini kullan (UNIT cinsinden)
-    final unitStock = _availableStock ?? widget.product.miktar ?? 0.0;
+    // Stok bilgisi parent'tan geçildi (UNIT cinsinden)
+    final unitStock = widget.availableStock ?? 0.0;
 
     // Seçili birime göre stoğu hesapla (carpan ile böl)
     double displayStock = unitStock;
@@ -1873,6 +1604,8 @@ class ProductListItemSuggestion extends StatefulWidget {
   final Widget Function() buildPriceField;
   final Widget Function() buildDiscountField;
   final Widget Function() buildFreeItemControl;
+  final Future<String> Function(String) getSuggestionInfo;
+  final double? availableStock; // ✅ Stok bilgisi
 
   const ProductListItemSuggestion({
     super.key,
@@ -1891,6 +1624,8 @@ class ProductListItemSuggestion extends StatefulWidget {
     required this.buildPriceField,
     required this.buildDiscountField,
     required this.buildFreeItemControl,
+    required this.getSuggestionInfo,
+    this.availableStock,
   });
 
   @override
@@ -1933,6 +1668,7 @@ class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
                 imageFuture: widget.imageFuture,
                 product: widget.product,
                 selectedBirim: widget.selectedBirim,
+                availableStock: widget.availableStock,
               ),
               SizedBox(width: 5.w),
               // Right: Details and Controls
@@ -1990,6 +1726,24 @@ class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
                         // Right: Vertical Quantity Control
                         _buildVerticalQuantityControl(cartItem, anlikMiktar),
                       ],
+                    ),
+                    // ✅ Yeşil bilgi satırı (Suggestions'tan)
+                    FutureBuilder<String>(
+                      future: widget.getSuggestionInfo(widget.product.stokKodu),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                          return Column(
+                            children: [
+                              SizedBox(height: 0.5.h),
+                              Text(
+                                snapshot.data!,
+                                style: TextStyle(color: Color.fromARGB(255, 1, 71, 4), fontSize: 12.sp),
+                              ),
+                            ],
+                          );
+                        }
+                        return SizedBox.shrink();
+                      },
                     ),
                   ],
                 ),

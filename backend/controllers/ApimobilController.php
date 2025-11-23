@@ -79,7 +79,8 @@ namespace app\controllers;
                     $action->id == 'getnewcustomer' ||
                     $action->id == 'getupdatedcustomer' ||
                     $action->id == 'getnewbirimler' ||
-                    $action->id == 'getdepostok' ) {
+                    $action->id == 'getdepostok' ||
+                    $action->id == 'getallcustomerrecentproducts' ) {
                 $this->enableCsrfValidation = false;
             }
             return parent::beforeAction($action);
@@ -1257,6 +1258,86 @@ namespace app\controllers;
                     'IsSuccessStatusCode' => false,
                     'status' => 'error',
                     'message' => 'Depo stok bilgileri alınamadı: ' . $e->getMessage()
+                ];
+            }
+        }
+
+        /**
+         * TÜM müşterilerin son 2 ay içindeki satışlarını döner
+         * Her müşteri + ürün kombinasyonu için EN SON satışı getirir
+         * GET: /apimobil/getallcustomerrecentproducts?page=1&limit=5000
+         */
+        public function actionGetallcustomerrecentproducts() {
+            $this->layout = false;
+            Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+            $apiKey = Yii::$app->request->headers->get('Authorization');
+
+            if(!$this->getApikey($apiKey)) {
+                return [
+                    'IsSuccessStatusCode' => false,
+                    'status' => 'error',
+                    'message' => 'Eksik veya Hatalı Apikey'
+                ];
+            }
+
+            // Pagination (çok fazla veri olabilir)
+            $page = (int)Yii::$app->request->get('page', 1);
+            $limit = (int)Yii::$app->request->get('limit', 5000);
+            $offset = ($page - 1) * $limit;
+
+            try {
+                // Her müşteri + ürün kombinasyonu için EN SON satışı getir
+                // Minimal data: StokKodu ile Product tablosuna JOIN yapılacak
+                $query = "
+                    SELECT
+                        sf.MusteriId,
+                        ss.StokKodu,
+                        u.UrunAdi,
+                        ss.Miktar,
+                        ss.BirimTipi,
+                        ss.ToplamTutar,
+                        ss.Iskonto,
+                        sf.FisTarihi as SonSatisTarihi
+                    FROM satissatirlari ss
+                    INNER JOIN satisfisleri sf ON ss.FisNo = sf.FisNo
+                    LEFT JOIN urunler u ON u.StokKodu = ss.StokKodu
+                    INNER JOIN (
+                        -- Her müşteri + ürün için EN SON satış tarihini bul
+                        SELECT
+                            sf2.MusteriId,
+                            ss2.StokKodu,
+                            MAX(sf2.FisTarihi) as MaxTarih
+                        FROM satissatirlari ss2
+                        INNER JOIN satisfisleri sf2 ON ss2.FisNo = sf2.FisNo
+                        WHERE sf2.FisTarihi >= DATE_SUB(CURDATE(), INTERVAL 2 MONTH)
+                        GROUP BY sf2.MusteriId, ss2.StokKodu
+                    ) as EnSonSatis
+                        ON sf.MusteriId = EnSonSatis.MusteriId
+                        AND ss.StokKodu = EnSonSatis.StokKodu
+                        AND sf.FisTarihi = EnSonSatis.MaxTarih
+                    WHERE u.aktif = 1
+                    ORDER BY sf.MusteriId ASC, sf.FisTarihi DESC
+                    LIMIT :limit OFFSET :offset
+                ";
+
+                $products = Yii::$app->db->createCommand($query, [
+                    ':limit' => $limit,
+                    ':offset' => $offset
+                ])->queryAll();
+
+                return [
+                    'status' => 1,
+                    'page' => $page,
+                    'limit' => $limit,
+                    'products' => $products,
+                    'count' => count($products)
+                ];
+
+            } catch (\Exception $e) {
+                return [
+                    'IsSuccessStatusCode' => false,
+                    'status' => 'error',
+                    'message' => 'Veri alınamadı: ' . $e->getMessage()
                 ];
             }
         }

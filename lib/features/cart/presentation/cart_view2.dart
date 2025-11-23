@@ -18,10 +18,6 @@ import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/local/database_helper.dart';
 
-// --- CONSTANTS ---
-const String _unitType = 'Unit';
-const String _boxType = 'Box';
-
 class CartView2 extends StatefulWidget {
   const CartView2({super.key});
 

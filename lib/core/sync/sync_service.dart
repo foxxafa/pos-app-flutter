@@ -94,6 +94,23 @@ class SyncService {
       }
     }
 
+    // ✅ Suggestions senkronizasyonu (müşteri önerileri)
+    try {
+      print('💡 Müşteri önerileri senkronizasyonu başlatılıyor...');
+      DatabaseHelper dbHelper = DatabaseHelper();
+      Database db = await dbHelper.database;
+      List<Map> result = await db.rawQuery('SELECT apikey FROM Login LIMIT 1');
+      if (result.isNotEmpty) {
+        String apiKey = result.first['apikey'];
+        await syncAllCustomerSuggestions(apiKey);
+        print('✅ Müşteri önerileri senkronizasyonu tamamlandı');
+      } else {
+        print('⚠️ API key bulunamadı, öneriler sync edilemedi');
+      }
+    } catch (e) {
+      print('❌ Müşteri önerileri senkronizasyonu hatası: $e');
+    }
+
     print('⏰ Son güncelleme zamanı kaydediliyor...');
     //update sonu son update saati güncelleme
     await saveLastUpdateTime(DateTime.now());
@@ -331,71 +348,20 @@ class SyncService {
       final productList = products;
       print('📦 ${productList.length} ürün veritabanına yazılıyor...');
 
-      // 🔧 GEÇİCİ: Depostok'tan UNIT miktarlarını çek (BOX'lar henüz sunucuda yok)
-      // Önce Depostok tablosunda kayıt var mı kontrol et
-      final depostokCount = await db.rawQuery('SELECT COUNT(*) as count FROM Depostok');
-      final hasDepostok = (depostokCount.first['count'] as int) > 0;
+      // Product tablosuna kayıt ekle (miktar bilgisi artık Product tablosunda saklanmıyor)
+      await db.transaction((txn) async {
+        final batch = txn.batch();
 
-      if (hasDepostok) {
-        print('🔄 Depo stok miktarları Product tablosuna aktarılıyor (UNIT bazlı)...');
-        int depoUpdatedCount = 0;
-        int depoNotFoundCount = 0;
+        for (int i = 0; i < productList.length; i++) {
+          final productMap = productList[i].toMap();
+          productMap['sortOrder'] = i; // Sıra numarası ekle
+          // miktar alanını Product tablosuna kaydetme - Depostok kullanılacak
+          productMap.remove('miktar');
+          batch.insert('Product', productMap);
+        }
 
-        await db.transaction((txn) async {
-          final batch = txn.batch();
-
-          for (int i = 0; i < productList.length; i++) {
-            final productMap = productList[i].toMap();
-            productMap['sortOrder'] = i; // Sıra numarası ekle
-
-            // 🔧 GEÇİCİ: Depostok'tan UNIT miktarını al
-            // (Şuanlık qty kullanıyormuş gibi davran, ama depostok'tan çek)
-            final depoResult = await txn.rawQuery(
-              'SELECT miktar FROM Depostok WHERE StokKodu = ? AND birim = ?',
-              [productList[i].stokKodu, 'UNIT']
-            );
-
-            if (depoResult.isNotEmpty) {
-              final depoMiktar = depoResult.first['miktar'];
-              productMap['miktar'] = depoMiktar;
-              depoUpdatedCount++;
-
-              // İlk 5 ürün için log
-              if (i < 5) {
-                print('  📦 ${productList[i].stokKodu}: qty=${productList[i].miktar} -> depo UNIT=$depoMiktar');
-              }
-            } else {
-              depoNotFoundCount++;
-              // Eğer depostok'ta UNIT yoksa, qty'yi kullan (fallback)
-              if (i < 5 && depoNotFoundCount <= 3) {
-                print('  ⚠️ ${productList[i].stokKodu}: Depo UNIT bulunamadı, qty kullanılıyor (${productList[i].miktar})');
-              }
-            }
-
-            batch.insert('Product', productMap);
-          }
-
-          await batch.commit(noResult: true);
-        });
-
-        print('✅ Depo stok entegrasyonu: $depoUpdatedCount ürün güncellendi, $depoNotFoundCount ürün qty kullandı');
-      } else {
-        // ✅ Depostok tablosu boş - Kullanıcıya depo atanmamış
-        print('⚠️ Depostok tablosu boş - Kullanıcıya depo atanmamış, qty kullanılmaya devam edilecek');
-
-        await db.transaction((txn) async {
-          final batch = txn.batch();
-
-          for (int i = 0; i < productList.length; i++) {
-            final productMap = productList[i].toMap();
-            productMap['sortOrder'] = i;
-            // miktar zaten qty ile geldi, olduğu gibi kullan
-            batch.insert('Product', productMap);
-          }
-
-          await batch.commit(noResult: true);
-        });
-      }
+        await batch.commit(noResult: true);
+      });
 
       print('✅ Ürün veritabanı yazma tamamlandı');
     }
@@ -966,6 +932,123 @@ static Future<void> downloadCartItemImages(List<dynamic> cartItems, {Function? o
       print('✅ Toplam $totalSynced depo stok kaydı senkronize edildi');
     } catch (e) {
       print('❌ Depo stok senkronizasyonu genel hatası: $e');
+    }
+  }
+
+  /// Tüm müşterilerin son 2 ay içindeki satışlarını senkronize eder
+  /// Her müşteri + ürün kombinasyonu için EN SON satışı getirir
+  static Future<void> syncAllCustomerSuggestions(String apiKey) async {
+    try {
+      print('🔄 [SUGGESTIONS] Sync başlatılıyor...');
+      print('🔑 [SUGGESTIONS] API Key: ${apiKey.length > 10 ? apiKey.substring(0, 10) : apiKey}...');
+
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      // ✅ Tablo var mı kontrol et
+      final tables = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='Suggestions'"
+      );
+      if (tables.isEmpty) {
+        print('❌ [SUGGESTIONS] Tablo bulunamadı! Oluşturuluyor...');
+        // Tablo yoksa oluştur (safety net)
+        // Minimal data: StokKodu ile Product tablosuna JOIN yapılacak
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS Suggestions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            MusteriId TEXT NOT NULL,
+            StokKodu TEXT NOT NULL,
+            UrunAdi TEXT,
+            Miktar REAL,
+            BirimTipi TEXT,
+            ToplamTutar REAL,
+            Iskonto INTEGER,
+            SonSatisTarihi TEXT,
+            UNIQUE(MusteriId, StokKodu)
+          )
+        ''');
+        print('✅ [SUGGESTIONS] Tablo oluşturuldu');
+      } else {
+        print('✅ [SUGGESTIONS] Tablo mevcut');
+      }
+
+      // ✅ Tablo temizle (sync başlamadan önce)
+      final deleteCount = await db.delete('Suggestions');
+      print('🗑️ [SUGGESTIONS] $deleteCount kayıt silindi');
+
+      int page = 1;
+      int totalSynced = 0;
+      bool hasMore = true;
+
+      while (hasMore) {
+        try {
+          final url = Uri.parse('${ApiConfig.baseUrl}/index.php?r=apimobil/getallcustomerrecentproducts&page=$page&limit=5000');
+          print('📡 [SUGGESTIONS] İstek: $url');
+
+          final response = await http.get(
+            url,
+            headers: {'Authorization': 'Bearer $apiKey'},
+          );
+
+          print('📥 [SUGGESTIONS] Response Status: ${response.statusCode}');
+
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            print('📦 [SUGGESTIONS] Response Data Keys: ${data.keys.toList()}');
+
+            if (data['status'] == 1) {
+              final products = data['products'] as List;
+              print('📦 [SUGGESTIONS] Sayfa $page: ${products.length} ürün geldi');
+
+              if (products.isEmpty) {
+                print('⚠️ [SUGGESTIONS] Boş sayfa, durduruluyor');
+                hasMore = false;
+                break;
+              }
+
+              // İlk ürünü göster (debug)
+              if (products.isNotEmpty) {
+                print('🔍 [SUGGESTIONS] İlk ürün örneği: ${products.first}');
+              }
+
+              // Batch insert (daha hızlı)
+              final batch = db.batch();
+              for (var product in products) {
+                batch.insert('Suggestions', product,
+                    conflictAlgorithm: ConflictAlgorithm.replace);
+              }
+              await batch.commit(noResult: true);
+
+              totalSynced += products.length;
+              print('✅ [SUGGESTIONS] Sayfa $page: ${products.length} öneri eklendi (Toplam: $totalSynced)');
+
+              page++;
+
+              // ✅ Son sayfa kontrolü
+              if (products.length < 5000) {
+                print('📄 [SUGGESTIONS] Son sayfa (${products.length} < 5000)');
+                hasMore = false;
+              }
+            } else {
+              print('⚠️ [SUGGESTIONS] API hatası: ${data['message'] ?? 'Bilinmeyen hata'}');
+              print('⚠️ [SUGGESTIONS] Tam response: $data');
+              hasMore = false;
+            }
+          } else {
+            print('❌ [SUGGESTIONS] HTTP hatası: ${response.statusCode}');
+            print('❌ [SUGGESTIONS] Response body: ${response.body}');
+            hasMore = false;
+          }
+        } catch (e) {
+          print('❌ Suggestions sync hatası (Sayfa $page): $e');
+          break;
+        }
+      }
+
+      print('✅ Toplam $totalSynced öneri kaydı senkronize edildi');
+    } catch (e) {
+      print('❌ Suggestions senkronizasyonu genel hatası: $e');
+      rethrow;
     }
   }
 

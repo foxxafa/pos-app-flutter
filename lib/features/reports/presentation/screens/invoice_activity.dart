@@ -215,7 +215,6 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
 
     final provider = Provider.of<CartProvider>(context, listen: false);
     final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
-    final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
 
     // ✅ KRITIK: Load Order yaparken fisNo'yu SET ETME - Yeni fisNo oluşturulacak
     final customerKod = fis['MusteriId']?.toString() ?? '';

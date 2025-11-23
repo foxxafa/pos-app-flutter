@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/cart/presentation/providers/cart_provider.dart';
 import 'package:pos_app/features/cart/presentation/cart_view2.dart';
 import 'package:pos_app/features/cart/presentation/cartsuggestion_view.dart';
@@ -21,12 +20,8 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class CartView extends StatefulWidget {
-  final List<String> refundProductNames;
-  final List<Refund> refunds;
   const CartView({
     super.key,
-    required this.refundProductNames,
-    required this.refunds,
   });
 
   @override
@@ -56,11 +51,11 @@ class _CartViewState extends State<CartView> {
   final Map<String, TextEditingController> _quantityControllers = {};
   final Map<String, int> _productScanCount = {}; // Her ürünün kaç kez okutulduğunu takip eder
 
-  // 🛡️ Duplicate barcode scan prevention
-  String? _lastScannedBarcode;
-  DateTime? _lastScanTime;
   final Map<String, List<BirimModel>> _productBirimlerMap = {}; // Her ürün için birimler
   final Map<String, BirimModel?> _selectedBirimMap = {}; // Her ürün için seçili birim
+
+  // ✅ Stok bilgilerini Map'te sakla (StokKodu -> miktar)
+  final Map<String, double> _stockInfoMap = {};
 
   // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
   bool _isUpdatingFromScanner = false;
@@ -180,6 +175,89 @@ class _CartViewState extends State<CartView> {
     }
   }
 
+  /// Tüm ürünler için birimleri background'da yükle
+  Future<void> _loadAllBirimler(List<ProductModel> products) async {
+    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+
+    for (final product in products) {
+      if (!mounted) break;
+
+      final key = product.stokKodu;
+      if (_productBirimlerMap.containsKey(key)) continue;
+
+      try {
+        final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+
+        if (mounted) {
+          setState(() {
+            _productBirimlerMap[key] = birimler;
+            if (birimler.isNotEmpty) {
+              BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+                (b) {
+                  final birimAdi = b?.birimadi?.toLowerCase() ?? '';
+                  return birimAdi.contains('box');
+                },
+                orElse: () => null,
+              );
+              final selectedBirim = defaultBirim ?? birimler.first;
+              _selectedBirimMap[key] = selectedBirim;
+
+              // ✅ _isBoxMap'i güncelle
+              final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
+              _isBoxMap[key] = birimAdi.contains('box');
+            }
+          });
+        }
+      } catch (e) {
+        debugPrint('⚠️ Birim yüklenemedi ($key): $e');
+      }
+    }
+  }
+
+  /// Tüm ürünler için stok bilgilerini TEK SORGUDA yükle
+  Future<void> _loadAllStockInfo(List<ProductModel> products) async {
+    try {
+      final db = await DatabaseHelper().database;
+
+      // Depostok tablosu boş mu kontrol et
+      final anyResult = await db.rawQuery('SELECT 1 FROM Depostok LIMIT 1');
+      if (anyResult.isEmpty) {
+        // Depostok boş → Tüm ürünlere 0 ata
+        for (final product in products) {
+          _stockInfoMap[product.stokKodu] = 0.0;
+        }
+        return;
+      }
+
+      // TÜM stokları TEK SORGUDA çek
+      final allStocks = await db.query(
+        'Depostok',
+        columns: ['StokKodu', 'miktar'],
+        where: 'UPPER(birim) = ?',
+        whereArgs: ['UNIT'],
+      );
+
+      // Map oluştur
+      final stockMap = Map<String, double>.fromEntries(
+        allStocks.map((row) => MapEntry(
+          row['StokKodu'].toString(),
+          (row['miktar'] as num?)?.toDouble() ?? 0.0,
+        ))
+      );
+
+      // Her ürün için stock bilgisini Map'e kaydet
+      for (final product in products) {
+        _stockInfoMap[product.stokKodu] = stockMap[product.stokKodu] ?? 0.0;
+      }
+    } catch (e) {
+      debugPrint('⚠️ Stok bilgileri yüklenemedi: $e');
+      // Hata durumunda tüm ürünlere 0 ata
+      for (final product in products) {
+        _stockInfoMap[product.stokKodu] = 0.0;
+      }
+    }
+  }
+
   Future<void> _loadProducts() async {
     // ⚡ İlk yüklemede sadece ID ve stokKodu'nu al (hafif veri)
     final dbHelper = DatabaseHelper();
@@ -209,27 +287,17 @@ class _CartViewState extends State<CartView> {
       _generateImageFutures(_filteredProducts);
     });
 
-    // ✅ İlk 50 ürün için birimler listesini yükle ve default değerleri ata
-    // Listeyi kopyala (concurrent modification hatası önlemek için)
-    final productsCopy = List<ProductModel>.from(_filteredProducts);
+    // ✅ Stok bilgilerini TEK SORGUDA yükle
+    await _loadAllStockInfo(products);
 
-    for (var product in productsCopy) {
+    // ✅ Birimleri background'da yükle (UI'ı bloklamadan)
+    Future.microtask(() => _loadAllBirimler(products));
+
+    // ✅ Default değerleri ata (birimler yüklenirken bile UI gösterebilmek için)
+    for (var product in products) {
       final key = product.stokKodu;
-
-      // Sadece daha önce set edilmemişse default değer ata
       if (!_isBoxMap.containsKey(key)) {
-        // Birimler listesini yükle (içinde _selectedBirimMap set ediliyor)
-        await _loadBirimlerForProduct(product);
-
-        // Seçilen birime göre _isBoxMap'i set et
-        final selectedBirim = _selectedBirimMap[key];
-        if (selectedBirim != null) {
-          final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
-          _isBoxMap[key] = birimAdi.contains('box');
-        } else {
-          // Birim yoksa default Unit
-          _isBoxMap[key] = false;
-        }
+        _isBoxMap[key] = false; // Default Unit
       }
       _quantityMap[key] = 0;
     }
@@ -1013,7 +1081,6 @@ class _CartViewState extends State<CartView> {
           product: product,
           provider: provider,
           imageFuture: _imageFutures[key],
-          refundProductNames: widget.refundProductNames,
           priceController: _priceControllers[key]!,
           priceFocusNode: _priceFocusNodes[key]!,
           discountController: _discountControllers[key]!,
@@ -1109,6 +1176,7 @@ class _CartViewState extends State<CartView> {
           updateQuantityFromTextField: (value) => _updateQuantityFromTextField(key, value, product),
           formatPriceField: () => _formatPriceField(_priceControllers[key]!),
           getBirimTipi: () => getBirimTipiFromProduct(product),
+          availableStock: _stockInfoMap[product.stokKodu],
         );
       },
       separatorBuilder: (context, index) => Divider(
@@ -1127,7 +1195,6 @@ class ProductListItem extends StatefulWidget {
   final ProductModel product;
   final CartProvider provider;
   final Future<String?>? imageFuture;
-  final List<String> refundProductNames;
   final TextEditingController priceController;
   final FocusNode priceFocusNode;
   final TextEditingController discountController;
@@ -1143,13 +1210,13 @@ class ProductListItem extends StatefulWidget {
   final ValueChanged<String> updateQuantityFromTextField;
   final VoidCallback formatPriceField;
   final String? Function() getBirimTipi;
+  final double? availableStock; // ✅ Stok bilgisi
 
   const ProductListItem({
     super.key,
     required this.product,
     required this.provider,
     this.imageFuture,
-    required this.refundProductNames,
     required this.priceController,
     required this.priceFocusNode,
     required this.discountController,
@@ -1165,6 +1232,7 @@ class ProductListItem extends StatefulWidget {
     required this.updateQuantityFromTextField,
     required this.formatPriceField,
     required this.getBirimTipi,
+    this.availableStock,
   });
 
   @override
@@ -1247,13 +1315,13 @@ class _ProductListItemState extends State<ProductListItem> {
             imageFuture: widget.imageFuture,
             product: widget.product,
             selectedBirim: widget.selectedBirim,
+            availableStock: widget.availableStock,
           ),
           SizedBox(width: 5.w),
           Expanded(
             child: ProductDetails(
               product: widget.product,
               provider: widget.provider,
-              refundProductNames: widget.refundProductNames,
               priceController: widget.priceController,
               priceFocusNode: widget.priceFocusNode,
               discountController: widget.discountController,
@@ -1282,12 +1350,14 @@ class ProductImage extends StatefulWidget {
   final Future<String?>? imageFuture;
   final ProductModel product;
   final BirimModel? selectedBirim;
+  final double? availableStock; // ✅ Parent'tan geçilecek
 
   const ProductImage({
     super.key,
     this.imageFuture,
     required this.product,
     this.selectedBirim,
+    this.availableStock,
   });
 
   @override
@@ -1295,86 +1365,15 @@ class ProductImage extends StatefulWidget {
 }
 
 class _ProductImageState extends State<ProductImage> {
-  double? _availableStock;
-  bool _stockLoading = true;
-
-  // ✅ STATIC CACHE: Depostok tablosu boş mu kontrolü ve tüm stok verileri
-  static bool? _hasAnyDepostok;
-  static Map<String, double>? _allDepostokStocks; // StokKodu -> miktar
+  // ✅ Stok bilgisi artık parent'tan gelecek, initState'te yükleme yok
 
   @override
   void initState() {
     super.initState();
-    _loadAvailableStock();
-  }
-
-  /// Depostok fallback mantığı ile stok miktarını yükler
-  Future<void> _loadAvailableStock() async {
-    try {
-      // 1. İlk widget için 1 kere kontrol et: Depostok'ta hiç veri var mı?
-      if (_hasAnyDepostok == null) {
-        final db = await DatabaseHelper().database;
-        final anyResult = await db.rawQuery('SELECT 1 FROM Depostok LIMIT 1');
-        _hasAnyDepostok = anyResult.isNotEmpty;
-
-        // ✅ Eğer Depostok'ta veri varsa, TÜM stokları TEK SORGUDA çek
-        if (_hasAnyDepostok == true) {
-          final allStocks = await db.query(
-            'Depostok',
-            columns: ['StokKodu', 'miktar'],
-            where: 'UPPER(birim) = ?',
-            whereArgs: ['UNIT'],
-          );
-
-          _allDepostokStocks = {};
-          for (var row in allStocks) {
-            final stokKodu = row['StokKodu'].toString();
-            final miktar = (row['miktar'] as num?)?.toDouble() ?? 0.0;
-            _allDepostokStocks![stokKodu] = miktar;
-          }
-        }
-      }
-
-      double stock;
-
-      if (_hasAnyDepostok == false) {
-        // Depostok tamamen boş → Product.miktar kullan
-        stock = widget.product.miktar ?? 0.0;
-        debugPrint('📦 [CART_VIEW] ${widget.product.stokKodu}: Depostok boş, product.miktar kullanılıyor: $stock');
-      } else {
-        // Depostok'ta veri var → Cache'ten bak
-        if (_allDepostokStocks!.containsKey(widget.product.stokKodu.toString())) {
-          // Bulundu → Depostok'tan al
-          stock = _allDepostokStocks![widget.product.stokKodu.toString()]!;
-          debugPrint('📦 [CART_VIEW] ${widget.product.stokKodu}: Depostok\'ta BULUNDU: $stock');
-        } else {
-          // Bulunamadı → product.miktar kullan (fallback)
-          stock = widget.product.miktar ?? 0.0;
-          debugPrint('📦 [CART_VIEW] ${widget.product.stokKodu}: Depostok\'ta BULUNAMADI, product.miktar kullanılıyor: $stock');
-        }
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        _availableStock = stock;
-        _stockLoading = false;
-      });
-
-      // 🐛 DEBUG - Stok yükleme sonucu
-      debugPrint('📦 [CART_VIEW] Stok yüklendi: ${widget.product.stokKodu} -> $_availableStock (Depostok: $_hasAnyDepostok)');
-    } catch (e) {
-      debugPrint('⚠️ Stok bilgisi yüklenemedi: $e');
-      if (!mounted) return;
-      setState(() {
-        _availableStock = widget.product.miktar ?? 0.0;
-        _stockLoading = false;
-      });
-    }
   }
 
   void _showProductInfoDialog(BuildContext context) {
-    final qty = (_availableStock ?? 0).toInt();
+    final qty = (widget.availableStock ?? 0).toInt();
 
     showDialog(
       context: context,
@@ -1460,12 +1459,7 @@ class _ProductImageState extends State<ProductImage> {
   @override
   Widget build(BuildContext context) {
     // ✅ Banner'ı Depostok stok bilgisine göre göster
-    final showBanner = (_availableStock ?? widget.product.miktar ?? 0) <= 0;
-
-    // 🐛 DEBUG - SUSPENDED banner kontrolü
-    if (showBanner) {
-      debugPrint('🔴 [CART_VIEW] SUSPENDED: ${widget.product.stokKodu} - availableStock: $_availableStock, product.miktar: ${widget.product.miktar}');
-    }
+    final showBanner = (widget.availableStock ?? widget.product.miktar ?? 0) <= 0;
 
     return GestureDetector(
       onDoubleTap: () => _showProductInfoDialog(context),
@@ -1520,13 +1514,10 @@ class _ProductImageState extends State<ProductImage> {
   }
 
   String _getQuantityText() {
-    // ✅ Loading durumunda boş döndür (yanlış veri gösterme)
-    if (_stockLoading) {
-      return "Qty: ...";
-    }
+    // ✅ Stok bilgisi artık parent'tan geldiği için loading yok
 
     // ✅ Depostok fallback mantığından gelen stok bilgisini kullan (UNIT cinsinden)
-    final unitStock = _availableStock ?? widget.product.miktar ?? 0.0;
+    final unitStock = widget.availableStock ?? widget.product.miktar ?? 0.0;
 
     // ✅ Seçili birime göre stoğu hesapla (carpan ile böl)
     double displayStock = unitStock;
@@ -1645,7 +1636,6 @@ class _SuspendedBannerPainter extends CustomPainter {
 class ProductDetails extends StatefulWidget {
   final ProductModel product;
   final CartProvider provider;
-  final List<String> refundProductNames;
   final TextEditingController priceController;
   final FocusNode priceFocusNode;
   final TextEditingController discountController;
@@ -1667,7 +1657,6 @@ class ProductDetails extends StatefulWidget {
     super.key,
     required this.product,
     required this.provider,
-    required this.refundProductNames,
     required this.priceController,
     required this.priceFocusNode,
     required this.discountController,
@@ -1691,7 +1680,6 @@ class ProductDetails extends StatefulWidget {
 }
 
 class _ProductDetailsState extends State<ProductDetails> {
-  String _oldDiscountValue = '';
   String _oldPriceValue = '';
 
   @override
@@ -1710,8 +1698,7 @@ class _ProductDetailsState extends State<ProductDetails> {
 
   void _onDiscountFocusChange() {
     if (widget.discountFocusNode.hasFocus) {
-      // Focus kazanıldığında eski değeri sakla ve alanı temizle
-      _oldDiscountValue = widget.discountController.text;
+      // Focus kazanıldığında alanı temizle
       widget.discountController.clear();
     } else {
       // Odak kaybedildiğinde provider'ı güncelle. Bu, hem Enter tuşuna basıldığında
@@ -1731,9 +1718,17 @@ class _ProductDetailsState extends State<ProductDetails> {
     // Eğer item henüz sepette değilse, sadece preview için controller'ları güncelle
     if (cartItem == null || cartItem.miktar <= 0) {
       // Item sepette değil - sadece preview için controller'ları güncelle
-      final previewPrice = (selectedType == 'Unit'
-          ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-          : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0));
+      // ✅ FIX: selectedBirim.fiyat7'den fiyat al (product.adetFiyati/kutuFiyati DEĞİL!)
+      double previewPrice;
+      if (widget.selectedBirim != null) {
+        // Seçili birim varsa fiyat7'den al
+        previewPrice = widget.selectedBirim!.fiyat7 ?? 0;
+      } else {
+        // Yoksa eski mantık (fallback)
+        previewPrice = (selectedType.toUpperCase() == 'UNIT')
+            ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+            : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+      }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -1946,6 +1941,24 @@ class _ProductDetailsState extends State<ProductDetails> {
             _buildQuantityControl(context, selectedType),
           ],
         ),
+        // ✅ Yeşil bilgi satırı (Suggestions'tan)
+        FutureBuilder<String>(
+          future: _getSuggestionInfo(customer?.kod),
+          builder: (context, snapshot) {
+            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+              return Column(
+                children: [
+                  SizedBox(height: 0.5.h),
+                  Text(
+                    snapshot.data!,
+                    style: TextStyle(color: Color.fromARGB(255, 1, 71, 4), fontSize: 12.sp),
+                  ),
+                ],
+              );
+            }
+            return SizedBox.shrink();
+          },
+        ),
       ],
     );
   }
@@ -2146,11 +2159,20 @@ class _ProductDetailsState extends State<ProductDetails> {
               final cartKey = '${widget.product.stokKodu}_${selectedType == 'Unit' ? 'UNIT' : 'BOX'}';
               final cartItem = widget.provider.items[cartKey];
 
-              // Mevcut birimFiyat'ı al (kullanıcı price override yapmış olabilir)
-              final currentPrice = cartItem?.birimFiyat ??
-                  (selectedType == 'Unit'
-                      ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-                      : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0));
+              // ✅ FIX: Mevcut birimFiyat'ı al (selectedBirim.fiyat7'den!)
+              double currentPrice;
+              if (cartItem != null) {
+                // Sepette varsa sepetteki fiyatı kullan (price override olabilir)
+                currentPrice = cartItem.birimFiyat;
+              } else if (widget.selectedBirim != null) {
+                // Sepette yoksa selectedBirim.fiyat7'den al
+                currentPrice = widget.selectedBirim!.fiyat7 ?? 0;
+              } else {
+                // Yoksa fallback: eski mantık
+                currentPrice = (selectedType.toUpperCase() == 'UNIT')
+                    ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+                    : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+              }
 
               if (val.isEmpty) {
                 // İskonto kaldırıldı - SADECE eğer item sepette varsa provider'ı güncelle
@@ -2479,12 +2501,51 @@ class _ProductDetailsState extends State<ProductDetails> {
   }
 
   Color _getProductNameColor(BuildContext context) {
-    final isInRefundList = widget.refundProductNames.any((e) => e.toLowerCase() == widget.product.urunAdi.toLowerCase());
     final isPassive = widget.product.aktif == 0;
-    if (isPassive && isInRefundList) return Colors.blue;
-    if (isInRefundList) return Colors.green;
     if (isPassive) return Colors.red;
     return Theme.of(context).colorScheme.onSurface;
+  }
+
+  /// Suggestions tablosundan müşterinin bu ürünü son satın alış bilgisini getirir
+  Future<String> _getSuggestionInfo(String? musteriId) async {
+    if (musteriId == null || musteriId.isEmpty) return "";
+
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      final result = await db.query(
+        'Suggestions',
+        where: 'MusteriId = ? AND StokKodu = ?',
+        whereArgs: [musteriId, widget.product.stokKodu],
+        limit: 1,
+      );
+
+      if (result.isEmpty) return "";
+
+      final suggestion = result.first;
+      final miktar = (suggestion['Miktar'] as num?)?.toDouble() ?? 0.0;
+      final birimTipi = suggestion['BirimTipi'] as String? ?? 'Unit';
+      final toplamTutar = (suggestion['ToplamTutar'] as num?)?.toDouble() ?? 0.0;
+      final iskonto = (suggestion['Iskonto'] as num?)?.toInt() ?? 0;
+      final sonSatisTarihi = suggestion['SonSatisTarihi'] as String?;
+
+      if (sonSatisTarihi == null) return "";
+
+      // Tarihi parse et
+      final tarih = DateTime.tryParse(sonSatisTarihi);
+      if (tarih == null) return "";
+
+      final formattedDate = "${tarih.day.toString().padLeft(2, '0')}/${tarih.month.toString().padLeft(2, '0')}/${tarih.year}";
+
+      // Birim fiyat hesapla (ToplamTutar / Miktar)
+      final birimFiyat = miktar > 0 ? toplamTutar / miktar : toplamTutar;
+
+      return "[Qty:${miktar}x$birimTipi] [Price:${birimFiyat.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
+    } catch (e) {
+      print('❌ Suggestions bilgisi alınamadı: $e');
+      return "";
+    }
   }
 }
 

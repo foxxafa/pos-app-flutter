@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 10;  // Version artırıldı (Birimler tablosuna StokKodu index eklendi)
+  static const _databaseVersion = 11;  // Version artırıldı (Suggestions tablosuna ToplamTutar ve Iskonto sütunları eklendi)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -60,6 +60,26 @@ class DatabaseHelper {
         ON Birimler(StokKodu)
       ''');
       debugPrint('✅ Index idx_birimler_stokkodu created successfully');
+    }
+
+    // Version 11: Suggestions tablosuna ToplamTutar ve Iskonto sütunları ekle
+    if (oldVersion < 11) {
+      debugPrint('Adding ToplamTutar and Iskonto columns to Suggestions table...');
+      try {
+        // ToplamTutar sütunu ekle
+        await db.execute('ALTER TABLE Suggestions ADD COLUMN ToplamTutar REAL');
+        debugPrint('✅ ToplamTutar column added to Suggestions');
+      } catch (e) {
+        debugPrint('ℹ️ ToplamTutar column already exists: $e');
+      }
+
+      try {
+        // Iskonto sütunu ekle
+        await db.execute('ALTER TABLE Suggestions ADD COLUMN Iskonto INTEGER');
+        debugPrint('✅ Iskonto column added to Suggestions');
+      } catch (e) {
+        debugPrint('ℹ️ Iskonto column already exists: $e');
+      }
     }
   }
 
@@ -163,6 +183,26 @@ class DatabaseHelper {
         birimFiyat REAL
       )
     ''');
+
+    // Suggestions table - customer recent purchases (last 2 months, latest per product)
+    // Minimal data: StokKodu ile Product tablosuna JOIN yapılacak
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS Suggestions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        MusteriId TEXT NOT NULL,
+        StokKodu TEXT NOT NULL,
+        UrunAdi TEXT,
+        Miktar REAL,
+        BirimTipi TEXT,
+        ToplamTutar REAL,
+        Iskonto INTEGER,
+        SonSatisTarihi TEXT,
+        UNIQUE(MusteriId, StokKodu)
+      )
+    ''');
+
+    // Index for fast customer filtering
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_suggestions_musteri ON Suggestions(MusteriId)');
 
     // Refund cart items table
     await db.execute('''

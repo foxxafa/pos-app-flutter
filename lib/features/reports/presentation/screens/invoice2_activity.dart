@@ -497,14 +497,11 @@ print("bunlarrr $_refundProductNames");
                       final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
                       orderInfoProvider.comment = comment;
 
-                      // Hemen sayfaya geç, refunds arka planda yüklenecek
+                      // Hemen sayfaya geç
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => CartView(
-                            refundProductNames: _refundProductNames,
-                            refunds: refunds,
-                          ),
+                          builder: (context) => CartView(),
                         ),
                       );
                       // Arka planda refunds yükle (gelecekte kullanmak için)
