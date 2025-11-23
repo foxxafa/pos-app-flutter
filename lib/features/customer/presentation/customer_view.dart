@@ -194,7 +194,7 @@ Future<Map<String, dynamic>?> loadCustomerBalanceByName(String customerName, Bui
                   onTap: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => RefundActivityView()),
+                      MaterialPageRoute(builder: (_) => const RefundActivityView()),
                     );
                   },
                 ),

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 12;  // Version artırıldı (Refunds tablosuna toplamTutar sütunu eklendi)
+  static const _databaseVersion = 13;  // Version artırıldı (cartrefund_items tablosuna fisNo ve customerKod eklendi)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -90,6 +90,24 @@ class DatabaseHelper {
         debugPrint('✅ toplamTutar column added to Refunds');
       } catch (e) {
         debugPrint('ℹ️ toplamTutar column already exists: $e');
+      }
+    }
+
+    // Version 13: cartrefund_items tablosuna fisNo ve customerKod sütunları ekle (Load Refund support)
+    if (oldVersion < 13) {
+      debugPrint('Adding fisNo and customerKod columns to cartrefund_items table...');
+      try {
+        await db.execute('ALTER TABLE cartrefund_items ADD COLUMN fisNo TEXT');
+        debugPrint('✅ fisNo column added to cartrefund_items');
+      } catch (e) {
+        debugPrint('ℹ️ fisNo column already exists: $e');
+      }
+
+      try {
+        await db.execute('ALTER TABLE cartrefund_items ADD COLUMN customerKod TEXT');
+        debugPrint('✅ customerKod column added to cartrefund_items');
+      } catch (e) {
+        debugPrint('ℹ️ customerKod column already exists: $e');
       }
     }
   }
@@ -221,6 +239,8 @@ class DatabaseHelper {
       CREATE TABLE IF NOT EXISTS cartrefund_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         customerName TEXT,
+        customerKod TEXT,
+        fisNo TEXT,
         stokKodu TEXT,
         urunAdi TEXT,
         birimFiyat REAL,
@@ -577,10 +597,12 @@ class DatabaseHelper {
     }
   }
 
-  Future<void> insertRefundCartItem(dynamic item, String customerName) async {
+  Future<void> insertRefundCartItem(dynamic item, String customerName, {String? fisNo, String? customerKod}) async {
     final db = await database;
     await db.insert('cartrefund_items', {
       'customerName': customerName,
+      'customerKod': customerKod,  // ✅ NEW: Customer code for better filtering
+      'fisNo': fisNo,  // ✅ NEW: FisNo for Load Refund support
       'stokKodu': item.stokKodu,
       'urunAdi': item.urunAdi,
       'birimFiyat': item.birimFiyat,

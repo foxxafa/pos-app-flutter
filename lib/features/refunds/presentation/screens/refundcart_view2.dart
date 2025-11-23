@@ -167,8 +167,22 @@ class _RefundCartView2State extends State<RefundCartView2> {
       final refundItems = _convertCartToRefundItems(cartProvider);
       final totalAmount = _calculateTotalAmount(refundItems);
 
-      RefundFisModel fisModelCopy = widget.fisModel;
-      fisModelCopy.toplamtutar = totalAmount;
+      // ✅ CRITICAL FIX: Use fisNo from provider, not from widget.fisModel
+      // Provider has the latest fisNo, widget.fisModel may have old/empty fisNo
+      final actualFisNo = cartProvider.fisNo.isNotEmpty ? cartProvider.fisNo : widget.fisModel.fisNo;
+
+      // ✅ Create NEW instance (fisNo is final, cannot mutate)
+      RefundFisModel fisModelCopy = RefundFisModel(
+        fisNo: actualFisNo,
+        fistarihi: widget.fisModel.fistarihi,
+        musteriId: widget.fisModel.musteriId,
+        toplamtutar: totalAmount,
+        aciklama: widget.fisModel.aciklama,
+        status: widget.fisModel.status,
+        iadeNedeni: widget.fisModel.iadeNedeni,
+      );
+
+      debugPrint('📦 Submitting refund with fisNo: $actualFisNo (from provider: ${cartProvider.fisNo})');
 
       RefundSendModel refundSendModel = RefundSendModel(
         fis: fisModelCopy,

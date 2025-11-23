@@ -17,6 +17,38 @@ set customerName(String value) {
 
 String get customerName => _customerName;
 
+// ✅ NEW: fisNo property for Load Refund support
+String _fisNo = '';
+set fisNo(String value) {
+  _fisNo = value;
+}
+
+String get fisNo => _fisNo;
+
+// ✅ NEW: customerKod property for better customer identification
+String _customerKod = '';
+set customerKod(String value) {
+  _customerKod = value;
+}
+
+String get customerKod => _customerKod;
+
+// ✅ NEW: eskiFisNo for temporary storage during Load Refund
+String _eskiFisNo = '';
+set eskiFisNo(String value) {
+  _eskiFisNo = value;
+}
+
+String get eskiFisNo => _eskiFisNo;
+
+// ✅ NEW: refundQueueId to track which queue record to delete after load
+int? _refundQueueId;
+set refundQueueId(int? value) {
+  _refundQueueId = value;
+}
+
+int? get refundQueueId => _refundQueueId;
+
   double getIskonto(String stokKodu) {
     return _items[stokKodu]?.iskonto ?? 0.0;
   }
@@ -151,13 +183,36 @@ void dispose() {
   super.dispose();
 }
 
+/// ✅ NEW: Force immediate save to database, bypassing debounce timer
+/// Use this when you need to ensure data is saved immediately (e.g., after Load Refund)
+Future<void> forceSaveToDatabase() async {
+  print("🚀 forceSaveToDatabase: Canceling debounce timer and forcing immediate save");
+
+  // Cancel any pending debounced save
+  _debounceTimer?.cancel();
+
+  // Force immediate save
+  await _saveCartToDatabase();
+}
+
 Future<void> _saveCartToDatabase() async {
-  print('💾 _saveCartToDatabase: Saving ${_items.length} items for customer: $_customerName');
+  print('💾 _saveCartToDatabase: Saving ${_items.length} items');
+  print('   customerName: $_customerName');
+  print('   customerKod: $_customerKod');
+  print('   fisNo: $_fisNo');
+
   final dbHelper = DatabaseHelper();
   await dbHelper.clearRefundCartItemsByCustomer(_customerName); // önce temizle
+
   for (final item in _items.values) {
-    await dbHelper.insertRefundCartItem(item, _customerName);
+    await dbHelper.insertRefundCartItem(
+      item,
+      _customerName,
+      fisNo: _fisNo.isEmpty ? null : _fisNo,  // ✅ Save fisNo if exists
+      customerKod: _customerKod.isEmpty ? null : _customerKod,  // ✅ Save customerKod if exists
+    );
   }
+
   print('✅ Database save completed');
 }
 

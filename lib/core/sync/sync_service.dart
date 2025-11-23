@@ -45,7 +45,9 @@ class SyncService {
     if (customerRepository != null) {
       await customerRepository!.fetchAndStoreCustomers();
     }
-    await syncPendingRefunds();
+    // ❌ REMOVED: Auto-sync pending refunds on clean sync
+    // User must manually click sync button to send pending refunds
+    // await syncPendingRefunds();
     //open database
     DatabaseHelper dbHelper = DatabaseHelper();
     Database db = await dbHelper.database;
@@ -127,7 +129,9 @@ class SyncService {
     if (customerRepository != null) {
       await customerRepository!.fetchAndStoreCustomers();
     }
-    await syncPendingRefunds();
+    // ❌ REMOVED: Auto-sync pending refunds on update sync
+    // User must manually click sync button to send pending refunds
+    // await syncPendingRefunds();
 
     DateTime? lastUpdate = await getLastUpdateTime();
     print("last update $lastUpdate");

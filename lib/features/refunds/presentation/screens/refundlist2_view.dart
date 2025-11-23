@@ -6,6 +6,7 @@ import 'package:pos_app/features/refunds/domain/entities/refundlist_model.dart';
 import 'package:pos_app/features/refunds/domain/entities/refundsend_model.dart';
 import 'package:pos_app/features/customer/presentation/providers/cartcustomer_provider.dart';
 import 'package:pos_app/features/refunds/presentation/screens/refundcart_view.dart';
+import 'package:pos_app/features/refunds/presentation/providers/cart_provider_refund.dart';
 import 'package:provider/provider.dart';
 import 'package:sizer/sizer.dart';
 import 'package:pos_app/core/local/database_helper.dart';
@@ -50,13 +51,99 @@ class _RefundList2ViewState extends State<RefundList2View> {
 
   // ✅ FisNo generated in initState
   String _currentFisNo = '';
+  bool _isInitializing = true; // ✅ Track initialization state
 
   @override
   void initState() {
     super.initState();
-    _generateFisNo(); // Generate FisNo on init
-    fetchData();
-    loadProducts();
+    // ✅ Check for Load Refund scenario FIRST (before generating new fisNo)
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _initializeRefund();
+      if (mounted) {
+        setState(() {
+          _isInitializing = false; // ✅ Initialization complete
+        });
+      }
+    });
+    // ❌ REMOVED: fetchData() - API isteği gereksiz ve 10s database lock'a sebep oluyor
+    // Veriler zaten SyncAllRefunds() ile veritabanında var
+    // fetchData();
+
+    // ❌ REMOVED: loadProducts() - Ürünler RefundCartView açıldığında yüklenecek
+    // RefundList2View sadece fisNo oluşturuyor, ürün seçimi henüz başlamadı
+    // loadProducts();
+  }
+
+  /// ✅ NEW: Initialize refund - Handle both Load Refund and New Refund scenarios
+  Future<void> _initializeRefund() async {
+    try {
+      final cartProvider = Provider.of<RCartProvider>(context, listen: false);
+
+      // ✅ CRITICAL: Detect Load Refund scenario
+      // If cart has items but fisNo is empty, this is a Load Refund case
+      if (cartProvider.items.isNotEmpty && cartProvider.fisNo.isEmpty) {
+        debugPrint('✅ Load Refund detected! Items: ${cartProvider.items.length}, fisNo: empty');
+
+        // Save old fisNo for cleanup
+        final eskiFisNo = cartProvider.eskiFisNo;
+        debugPrint('   eskiFisNo: $eskiFisNo');
+
+        // Generate NEW fisNo (CRITICAL: Always generate new fisNo on load)
+        await _generateFisNo();
+
+        // Set new fisNo to provider
+        cartProvider.fisNo = _currentFisNo;
+        debugPrint('   New fisNo generated: $_currentFisNo');
+
+        // ❌ REMOVED: No need to save to database here - cart will save when items are added
+        // Database save is expensive (10s lock) and cart is empty at this point anyway
+        // await cartProvider.forceSaveToDatabase();
+        // debugPrint('   ✅ Cart saved to database with new fisNo');
+
+        // ✅ Delete old refund from queue by ID (more reliable than fisNo which can be empty)
+        if (cartProvider.refundQueueId != null) {
+          final dbHelper = DatabaseHelper();
+          final db = await dbHelper.database;
+          await db.delete('refund_queue', where: 'id = ?', whereArgs: [cartProvider.refundQueueId]);
+          debugPrint('   ✅ Old refund deleted from queue (ID: ${cartProvider.refundQueueId})');
+
+          // Clear temporary variables
+          cartProvider.refundQueueId = null;
+          cartProvider.eskiFisNo = '';
+        }
+
+        if (mounted) {
+          setState(() {});
+        }
+        return;
+      }
+
+      // ✅ Normal case: Generate new fisNo for new refund
+      await _generateFisNo();
+
+      // ✅ CRITICAL: Set fisNo to provider (same as Order system)
+      cartProvider.fisNo = _currentFisNo;
+      debugPrint('✅ New refund initialized with fisNo: $_currentFisNo');
+
+      // ❌ REMOVED: No need to save empty cart to database
+      // Cart will auto-save when items are added (debounced)
+      // await cartProvider.forceSaveToDatabase();
+      // debugPrint('   ✅ Cart saved to database with fisNo');
+    } catch (e) {
+      debugPrint('⚠️ Error in _initializeRefund: $e');
+      // Fallback: Generate fisNo anyway
+      await _generateFisNo();
+
+      // Set to provider even in error case
+      try {
+        final cartProvider = Provider.of<RCartProvider>(context, listen: false);
+        if (cartProvider.fisNo.isEmpty) {
+          cartProvider.fisNo = _currentFisNo;
+        }
+      } catch (providerError) {
+        debugPrint('⚠️ Could not access provider: $providerError');
+      }
+    }
   }
 
   /// Generate unique fisNo for refund using FisNoGenerator
@@ -69,7 +156,7 @@ class _RefundList2ViewState extends State<RefundList2View> {
 
       // Generate fisNo (15 characters: MO + 13 digits)
       final fisNo = FisNoGenerator.generate(userId: userId);
-      print('✅ Refund FisNo generated: $fisNo (UserID: $userId)');
+      debugPrint('✅ Refund FisNo generated: $fisNo (UserID: $userId)');
 
       if (mounted) {
         setState(() {
@@ -77,7 +164,7 @@ class _RefundList2ViewState extends State<RefundList2View> {
         });
       }
     } catch (e) {
-      print('⚠️ Error generating refund fisNo: $e');
+      debugPrint('⚠️ Error generating refund fisNo: $e');
       // Fallback
       if (mounted) {
         setState(() {
@@ -420,7 +507,12 @@ void updateTotal() {
                     ],
                   ),
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: _isInitializing ? null : () {
+                      // ✅ CRITICAL: Set fisNo to provider before navigation (same as Order system)
+                      final cartProvider = Provider.of<RCartProvider>(context, listen: false);
+                      cartProvider.fisNo = _currentFisNo;
+                      cartProvider.customerKod = musteri!.kod!;
+
                       RefundFisModel fisModel = RefundFisModel(
                         fisNo: _currentFisNo,
                         aciklama: _aciklama,

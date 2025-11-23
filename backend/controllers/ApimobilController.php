@@ -462,8 +462,11 @@ namespace app\controllers;
 
                 // Send to DIA after response is prepared (non-blocking)
                 try {
+                    ob_start(); // ✅ Output buffering başlat - Dia'nın echo/print çıktılarını yakala
                     Dia::fisgonder($fis,7);
+                    ob_end_clean(); // ✅ Buffer'ı temizle (echo çıktılarını at, JSON response'u korur)
                 } catch (\Exception $e) {
+                    ob_end_clean(); // ✅ Hata olsa bile buffer'ı temizle
                     // Log error but don't fail the response
                     Yii::error("DIA gönderim hatası (Refund {$fis->FisNo}): " . $e->getMessage());
                 }

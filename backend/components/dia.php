@@ -23,7 +23,7 @@ class Dia extends Component{
         $baseUrl = Yii::$app->params['dia_base_url'];
         $endpoints = Yii::$app->params['dia_endpoints'];
         $url = $baseUrl . $endpoints[$endpoint];
-
+        
         // Log ekle
         $logMessage = "=== getDiaUrl ===\n";
         $logMessage .= "Tarih: " . date('Y-m-d H:i:s') . "\n";
@@ -31,7 +31,7 @@ class Dia extends Component{
         $logMessage .= "Base URL: " . $baseUrl . "\n";
         $logMessage .= "Final URL: " . $url . "\n\n";
         //file_put_contents(\Yii::getAlias('@runtime/dia_url_log.txt'), $logMessage, FILE_APPEND | LOCK_EX);
-
+        
         return $url;
     }
 
@@ -41,10 +41,10 @@ class Dia extends Component{
         }
         $logMessage = "=== getsessionid BAŞLADI ===\n";
         $logMessage .= "Tarih: " . date('Y-m-d H:i:s') . "\n";
-
+        
         $url =  self::getDiaUrl('sis');
         $logMessage .= "Login URL: " . $url . "\n";
-
+    
         // SESSION ID MANUEL GİRİLMELİ
         $session_id = "";
         $firma_kodu = 1;
@@ -52,24 +52,24 @@ class Dia extends Component{
         $username = Yii::$app->params['dia_user'];
         $password = Yii::$app->params['dia_pass'];
         $apikey = Yii::$app->params['dia_key'];
-
+        
         $logMessage .= "Username: " . $username . "\n";
         $logMessage .= "API Key: " . $apikey . "\n";
-
+        
         $data = <<<EOT
         {"login" :
             {"username": "$username",
              "password": "$password",
              "disconnect_same_user": "true",
-             "lang": "tr",
+             "lang": "uk", 
              "params": {"apikey": "$apikey"}
             }
         }
-
+        
         EOT;
-
+        
         $logMessage .= "Login Data: " . $data . "\n";
-
+        
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
@@ -82,39 +82,39 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_TIMEOUT, 30);
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-
+        
         $logMessage .= "cURL seçenekleri ayarlandı\n";
-
+        
         $result = curl_exec($curl);
         $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
         $curlError = curl_error($curl);
         $curlErrno = curl_errno($curl);
-
+        
         $logMessage .= "cURL HTTP Code: " . $httpCode . "\n";
         $logMessage .= "cURL Error No: " . $curlErrno . "\n";
         $logMessage .= "cURL Error: " . $curlError . "\n";
         $logMessage .= "cURL Response: " . $result . "\n";
-
+        
         curl_close($curl);
-
+        
         $json=json_decode($result,true);
         $logMessage .= "JSON decode başarılı: " . (is_array($json) ? 'Evet' : 'Hayır') . "\n";
         if (is_array($json)) {
             $logMessage .= "JSON Response: " . print_r($json, true) . "\n";
         }
-
+        
         // "session" değerini al
         $session_id = $json['msg'] ?? '';
         $logMessage .= "Session ID: " . $session_id . "\n";
         $logMessage .= "=== getsessionid TAMAMLANDI ===\n\n";
-
+        
         // Log dosyasına yaz
         file_put_contents(\Yii::getAlias('@runtime/dia_session_log.txt'), $logMessage, FILE_APPEND | LOCK_EX);
         self::$cached_session_id = $session_id;
         self::$session_expire_time = time() + 300;
         return $session_id;
     }
-    public static function getEkstre($carikod,$tarih,$detay){
+    public static function getEkstre($carikod,$tarih,$detay,$tarih2,$ft){
 
         $url = self::getDiaUrl('rpr');
         // SESSION ID MANUEL GİRİLMELİ
@@ -128,41 +128,47 @@ class Dia extends Component{
         if($cari->_key==null)
             return ["sonuc"=>0,"hata"=>"Cari key bulunamadı"];
         $carikey=$cari->_key;
-
         $tarih1=date("Y-m-d");
 
+        if($ft==0)
+            $ft1="False";
+        else 
+            $ft1="True";
         $data = <<<EOT
         {"rpr_raporsonuc_getir" :
             {"session_id": "$session_id",
             "firma_kodu": $firma_kodu,
             "donem_kodu": $donem_kodu,
             "report_code":"scf1110a",
-            "tasarim_key": 693,
-            "param":  {"_key": "$carikey",
-            "tarihbaslangic": "$tarih",
-            "tarihbitis": "2025-12-31",
-            "tarihreferans": "$tarih1",
-            "vadeyontem": "B",
-            "vadefarki": "0",
-            "__ekparametreler": ["acilisbakiyesi","teslimolmamissiparisler"],
-            "__fisturleri": [],
-            "_key_sis_sube": 0,
-            "_depolar" : [],
-            "_subeler": [],
-            "ustIslemTuruKeys": 0,
-            "topluekstre": "False",
-            "tekniksformgoster": "False",
-            "basitsegosterme": $detay,
-            "filtreler": [{"filtreadi": "vadetarihi",
+            "tasarim_key": 7609566,
+        
+            "param":  {
+                "_key": "$carikey",
+                "tarihbaslangic": "$tarih",
+                "tarihbitis": "$tarih2",
+                "tarihreferans": "$tarih1",
+                "irsaliyeleriDahilEt":"$ft1",
+                "vadeyontem": "B",
+                "vadefarki": "0",
+                "__ekparametreler": ["acilisbakiyesi","teslimolmamissiparisler"],
+                "__fisturleri": [],
+                "_key_sis_sube": 0,
+                "_depolar" : [],
+                "_subeler": [],
+                "ustIslemTuruKeys": 0,
+                "topluekstre": "False",
+                "tekniksformgoster": "False",
+                "basitsegosterme": $detay,
+                "filtreler": [{"filtreadi": "vadetarihi",
                             "filtreturu": "aralik",
                             "ilkdeger": "2025-01-01",
                             "sondeger": "2025-12-31",
                             "serbest": ""
                             }],
-            "siralama":[{"fieldname": "vadetarihi",
+                "siralama":[{"fieldname": "vadetarihi",
                             "sorttype": "asc"
                             }],
-            "gruplama":[{"fieldname": "turu"}]
+                "gruplama":[{"fieldname": "turu"}]
             },
             "format_type": "pdf"
             }
@@ -187,14 +193,14 @@ class Dia extends Component{
         if (!$b64) {
             throw new \yii\web\BadRequestHttpException('Missing "result"');
         }
-
+    
         // Base64 -> binary
         $binary = base64_decode($b64, true);
         if ($binary === false) {
             throw new \yii\web\BadRequestHttpException('Invalid base64');
         }
-
-
+    
+        
         //PDF'i dosyaya yazmadan, direkt response olarak gönder
         return Yii::$app->response->sendContentAsFile(
             $binary,
@@ -209,7 +215,7 @@ class Dia extends Component{
         // if ($binary === false) {
         //     throw new \yii\web\BadRequestHttpException('Invalid base64');
         // }
-
+    
         // $response = Yii::$app->response;
         // $response->format = \yii\web\Response::FORMAT_RAW;
         // $response->headers->set('Content-Type', 'application/pdf');
@@ -255,8 +261,8 @@ class Dia extends Component{
                 "format_type" => "json"
             ]
         ];
-
-
+        
+        
 
         $jsonData = json_encode($data);
         $curl = curl_init();
@@ -273,7 +279,7 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 30); // 30 saniye bağlantı zaman aşımı
 
         $result = curl_exec($curl);
-
+        
         // Hata kontrolü ekleyelim
         if (curl_errno($curl)) {
             $error = curl_error($curl);
@@ -282,13 +288,13 @@ class Dia extends Component{
             return ['error' => $error];
         }
         curl_close($curl);
-
+        
         // Ham sonucu loglayalım
         Yii::info("Raw API response: $result", __METHOD__);
-
+        
         try {
             $jsonResponse = json_decode($result, true);
-
+            
             // Eğer result anahtarı varsa ve base64 encoded ise decode et
             if (isset($jsonResponse['result']) && is_string($jsonResponse['result'])) {
                 $decodedResult = base64_decode($jsonResponse['result']);
@@ -304,7 +310,7 @@ class Dia extends Component{
                     Yii::warning("Base64 decode başarısız oldu", __METHOD__);
                 }
             }
-
+            
             return $jsonResponse["result"]["__rows"] ?? null;
         } catch (\Exception $e) {
             Yii::error("JSON decode error: " . $e->getMessage(), __METHOD__);
@@ -375,7 +381,7 @@ class Dia extends Component{
             curl_close($curl);
             return $result;
     }
-
+    
 
     public static function kampanyagetir(){
         $url =  self::getDiaUrl('scf');
@@ -422,7 +428,7 @@ class Dia extends Component{
         $session_id = dia::getsessionid();
         $firma_kodu = 1;
         $donem_kodu = 1;
-
+        
         $tarih = date('Y-m-d');
 
         $data = <<<EOT
@@ -437,7 +443,7 @@ class Dia extends Component{
             }
         }
         EOT;
-
+        
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
         curl_setopt($curl, CURLOPT_POSTFIELDS, $data);
@@ -448,7 +454,7 @@ class Dia extends Component{
         );
         curl_setopt($curl, CURLOPT_URL, $url);
         $result = curl_exec($curl);
-
+        
         //$json=json_decode($result,true);
         curl_close($curl);
         return $result;
@@ -479,10 +485,10 @@ class Dia extends Component{
                 "donem_kodu" => 1,
             ]
 
-
+            
         ];
         $jsonData = json_encode($data);
-
+        
             $curl = curl_init();
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
             curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
@@ -493,13 +499,13 @@ class Dia extends Component{
                 'Content-Type: application/json',
                 'Content-Length: ' . strlen($jsonData))
             );
-
+      
              curl_setopt($curl, CURLOPT_URL, $url);
              $result = curl_exec($curl);
             if (curl_errno($curl)) {
                 $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
             file_put_contents('runtime/curl_hatalari.txt', $hataMesaji, FILE_APPEND | LOCK_EX);
-            }
+            } 
             else {
                 $filePath = Yii::getAlias('@app/runtime/stokdata'.date("Ymdhis").'.txt');
 
@@ -507,7 +513,7 @@ class Dia extends Component{
                 file_put_contents($filePath, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
                 echo ["sonuc"=>'@app/runtime/stokdata'.date("Ymdhis").'.txt'];
             }
-
+    
             curl_close($curl);
             return;
     }
@@ -515,23 +521,23 @@ class Dia extends Component{
     public static function stokalimsatimanalizgetir($stokkodu){
         $timestamp = date("Ymdhis");
         $logFilePath = Yii::getAlias('@app/runtime/stokanaliz_detay_log_'.$timestamp.'.txt');
-
+        
         // Detaylı log başlangıcı
         $logContent = "=== STOK ALIM SATIS ANALIZ DETAY LOG - " . date("Y-m-d H:i:s") . " ===\n";
         $logContent .= "Stok Kodu: " . $stokkodu . "\n";
         $logContent .= "Timestamp: " . $timestamp . "\n\n";
-
+        
         try {
             // 1. URL alma
             $logContent .= "1. URL alma işlemi başladı\n";
             $url = self::getDiaUrl('rpr');
             $logContent .= "   URL alındı: " . $url . "\n\n";
-
+            
             // 2. Session ID alma
             $logContent .= "2. Session ID alma işlemi başladı\n";
             $session_id = Dia::getsessionid();
             $logContent .= "   Session ID alındı: " . $session_id . "\n\n";
-
+            
             // 3. Parametreler hazırlanıyor
             $logContent .= "3. Parametreler hazırlanıyor\n";
             $firma_kodu = 1;
@@ -548,10 +554,10 @@ class Dia extends Component{
                     "donem_kodu" => 1,
                     "report_code" => "scf9007a",
                     "tasarim_key" => 1042,
-                    "param" => [
-
+                    "param" => [ 
+                  
                             "param.stokkartkodu1" => $stokkodu,
-
+                                
                                     ],
                     "format_type" => "pdf"
                 ]
@@ -576,13 +582,13 @@ class Dia extends Component{
             $logContent .= "7. cURL seçenekleri ayarlama\n";
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
             $logContent .= "   CURLOPT_CUSTOMREQUEST: POST\n";
-
+            
             curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
             $logContent .= "   CURLOPT_POSTFIELDS ayarlandı\n";
-
+            
             curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
             $logContent .= "   CURLOPT_RETURNTRANSFER: true\n";
-
+            
             curl_setopt($curl, CURLOPT_HTTPHEADER, array(
                 'Content-Type: application/json',
                 'Content-Length: ' . strlen($jsonData))
@@ -590,7 +596,7 @@ class Dia extends Component{
             $logContent .= "   HTTP Headers ayarlandı\n";
             $logContent .= "   Content-Type: application/json\n";
             $logContent .= "   Content-Length: " . strlen($jsonData) . "\n";
-
+            
             curl_setopt($curl, CURLOPT_URL, $url);
             $logContent .= "   URL ayarlandı: " . $url . "\n\n";
 
@@ -606,23 +612,23 @@ class Dia extends Component{
                 $error = curl_error($curl);
                 $logContent .= "   cURL HATASI: " . $error . "\n";
                 curl_close($curl);
-
+                
                 // Log dosyasına yazma
                 file_put_contents($logFilePath, $logContent);
-
+                
                 return ['error' => $error, 'log_file' => $logFilePath];
             } else {
                 $logContent .= "   cURL hatası yok\n\n";
-
+                
                 // 10. Response işleme
                 $logContent .= "10. Response işleme\n";
-
+                
                 // Ham response'u kaydet
                 $hamFilePath = Yii::getAlias('@app/runtime/stokdata_ham_'.$timestamp.'.txt');
                 $logContent .= "   Ham dosya yolu: " . $hamFilePath . "\n";
                 $writeResult = file_put_contents($hamFilePath, $result);
                 $logContent .= "   Ham dosya yazma sonucu: " . ($writeResult ? "Başarılı (".strlen($result)." byte)" : "Başarısız") . "\n";
-
+                
                 // JSON decoded response'u kaydet
                 $logContent .= "   JSON decode işlemi başlıyor\n";
                 $jsonResponse = json_decode($result, true);
@@ -630,13 +636,13 @@ class Dia extends Component{
                 $logContent .= "   JSON dosya yolu: " . $jsonFilePath . "\n";
                 $jsonWriteResult = file_put_contents($jsonFilePath, json_encode($jsonResponse, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
                 $logContent .= "   JSON dosya yazma sonucu: " . ($jsonWriteResult ? "Başarılı" : "Başarısız") . "\n";
-
+                
                 // Request data'sını da kaydet
                 $requestFilePath = Yii::getAlias('@app/runtime/stokdata_request_'.$timestamp.'.txt');
                 $logContent .= "   Request dosya yolu: " . $requestFilePath . "\n";
                 $requestWriteResult = file_put_contents($requestFilePath, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
                 $logContent .= "   Request dosya yazma sonucu: " . ($requestWriteResult ? "Başarılı" : "Başarısız") . "\n\n";
-
+                
                 // JSON response analizi
                 $logContent .= "11. JSON Response analizi\n";
                 if ($jsonResponse) {
@@ -655,10 +661,10 @@ class Dia extends Component{
                     $logContent .= "   JSON decode başarısız\n";
                     $logContent .= "   Ham response ilk 500 karakter: " . substr($result, 0, 500) . "\n";
                 }
-
+                
                 curl_close($curl);
                 $logContent .= "   cURL kapatıldı\n\n";
-
+                
                 // 12. Sonuç hazırlama
                 $logContent .= "12. Sonuç hazırlama\n";
                 $returnData = [
@@ -674,24 +680,24 @@ class Dia extends Component{
                 $logContent .= "   JSON sonuç: " . $jsonFilePath . "\n";
                 $logContent .= "   Request sonuç: " . $requestFilePath . "\n";
                 $logContent .= "   Log dosyası: " . $logFilePath . "\n\n";
-
+                
                 $logContent .= "=== İŞLEM BAŞARILI BİTTİ - " . date("Y-m-d H:i:s") . " ===\n";
-
+                
                 // Log dosyasına yazma
                 file_put_contents($logFilePath, $logContent);
-
+                
                 return $returnData;
             }
-
+            
         } catch (Exception $e) {
             $logContent .= "HATA YAKALANDI: " . $e->getMessage() . "\n";
             $logContent .= "Dosya: " . $e->getFile() . "\n";
             $logContent .= "Satır: " . $e->getLine() . "\n";
             $logContent .= "Trace: " . $e->getTraceAsString() . "\n";
-
+            
             // Log dosyasına yazma
             file_put_contents($logFilePath, $logContent);
-
+            
             return ['error' => $e->getMessage(), 'log_file' => $logFilePath];
         }
     }
@@ -703,7 +709,7 @@ class Dia extends Component{
 
         if($model->FisId==null)
             $fisid=$model->HareketId;
-        else
+        else 
             $fisid=$model->FisId;
         $tarih=date("Y-m-d");
         $saat=date("H:i:s");
@@ -712,7 +718,7 @@ class Dia extends Component{
                 {"session_id": "$ssid",
                 "firma_kodu": 1,
                 "donem_kodu": 1,
-                "kart":
+                "kart": 
                     {
                     "_key_sis_ozelkod": 0,
                     "_key_sis_seviyekodu": 0,
@@ -772,14 +778,14 @@ class Dia extends Component{
         $logMessage .= "OdemeYontemi: " . $model->OdemeYontemi . "\n";
         $logMessage .= "CariKod: " . $model->carikod . "\n";
         $logMessage .= "Aciklama: " . $model->Aciklama . "\n";
-
+        
         $tahsilatUrl = self::getDiaUrl('scf');
         $logMessage .= "DIA URL: " . $tahsilatUrl . "\n";
-
+        
         $dateOnly = date('Y-m-d');
         $ssid = Dia::getsessionid();
         $logMessage .= "Session ID: " . $ssid . "\n";
-
+        
         // Gönderilecek veri
         $tur = null;
         $aciklama = null;
@@ -805,7 +811,7 @@ class Dia extends Component{
 
         $logMessage .= "Ödeme Türü: " . $tur . "\n";
         $logMessage .= "BankaKey: " . ($bankaKey !== null ? $bankaKey : 'YOK') . "\n";
-
+        
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
 
         // fisno (DIA için tekil belge numarası) -> Virgül içeriyorsa (çoklu fiş) HareketId kullan
@@ -814,7 +820,7 @@ class Dia extends Component{
             $fisno = $model->FisId;
         }
         $logMessage .= "Kullanılan fisno: " . $fisno . "\n";
-
+        
         // Kalem (bankahesap sadece KK'da gönderilecek)
         $kalem = [
             "_key_scf_carikart" => ["carikartkodu" => $model->carikod],
@@ -860,7 +866,7 @@ class Dia extends Component{
         $jsonData = json_encode($data);
         $logMessage .= "JSON Data: " . $jsonData . "\n";
         $logMessage .= "JSON Data Length: " . strlen($jsonData) . "\n";
-
+        
         // cURL başlat
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $tahsilatUrl);
@@ -874,7 +880,7 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($curl, CURLOPT_TIMEOUT, 120); // 2 dakika toplam işlem süresi
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 30); // 30 saniye bağlantı zaman aşımı
-
+        
         $logMessage .= "cURL seçenekleri ayarlandı\n";
         $logMessage .= "cURL URL: " . $tahsilatUrl . "\n";
         $logMessage .= "cURL Method: POST\n";
@@ -884,7 +890,7 @@ class Dia extends Component{
         $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
         $curlError = curl_error($curl);
         $curlErrno = curl_errno($curl);
-
+        
         $logMessage .= "cURL HTTP Code: " . $httpCode . "\n";
         $logMessage .= "cURL Error No: " . $curlErrno . "\n";
         $logMessage .= "cURL Error: " . $curlError . "\n";
@@ -907,10 +913,10 @@ class Dia extends Component{
         curl_close($curl);
         $logMessage .= "cURL kapatıldı\n";
         $logMessage .= "=== DIA::tahsilatgonder TAMAMLANDI ===\n\n";
-
+        
         // Log dosyasına yaz
         file_put_contents(\Yii::getAlias('@runtime/dia_tahsilat_log.txt'), $logMessage, FILE_APPEND | LOCK_EX);
-
+        
         return $result;
     }
     public static function cekiletahsilatgonder($model){
@@ -922,15 +928,15 @@ class Dia extends Component{
         $logMessage .= "Tutar: " . $model->Tutar . "\n";
         $logMessage .= "OdemeYontemi: " . $model->OdemeYontemi . "\n";
         $logMessage .= "CariKod: " . $model->carikod . "\n";
-        $logMessage .= "Aciklama: " . $model->Aciklama . "\n";
-
+        $logMessage .= "Aciklama: " . $model->Aciklama . "\n"; 
+        
         $tahsilatUrl = self::getDiaUrl('bcs');
         $logMessage .= "DIA URL: " . $tahsilatUrl . "\n";
-
+        
         $dateOnly = date('Y-m-d');
         $ssid = Dia::getsessionid();
         $logMessage .= "Session ID: " . $ssid . "\n";
-
+        
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
 
         // fisno (DIA için tekil belge numarası) -> Virgül içeriyorsa (çoklu fiş) HareketId kullan
@@ -942,7 +948,9 @@ class Dia extends Component{
         $subeKodu= Yii::$app->guser->identity->branch_code;
         $sube= Branches::find()->where(["branch_code"=>$subeKodu])->one();
         $bankaKey = is_numeric(Yii::$app->params['dia_banka_key']) ? (int)Yii::$app->params['dia_banka_key'] : Yii::$app->params['dia_banka_key'];
-
+        file_put_contents(\Yii::getAlias('@runtime/dia_tahsilat_log.txt'), $logMessage, FILE_APPEND | LOCK_EX);
+        $logMessage="";
+        /*
         $data = [
             "bcs_cs_bordro_ekle" => [
                 "session_id" => $ssid,
@@ -987,17 +995,89 @@ class Dia extends Component{
                             "tutar" => $model->Tutar,
                             "tutar_cari" => $model->Tutar,
                             "vade" => $model->vadetarihi,
-
+                            
                         ]
                     ]
                 ]
             ]
         ];
+        */
 
-        $jsonData = json_encode($data);
+        $key=$model->cari->_key;
+        $borclu=$model->cari->Unvan;
+        $tutar=$model->Tutar;
+        $tarih=$model->HareketTarihi;
+        $vadeTarihi = !empty($model->vadetarihi) ? (string)$model->vadetarihi : date('Y-m-d');
+        // Banka hesabını DİA'nın beklediği şekilde referansla: öncelik hesapkodu, aksi halde _key
+        $bankaHesapKodu = Yii::$app->params['dia_banka_hesapkodu'] ?? null;
+        if (!empty($bankaHesapKodu)) {
+            $bankahesapRef = ["hesapkodu" => (string)$bankaHesapKodu];
+        } elseif (!empty($bankaKey)) {
+            $bankahesapRef = ["_key" => (int)$bankaKey];
+        } else {
+            $bankahesapRef = 0;
+        }
+        // Geçerli JSON üretimi: PHP array -> json_encode
+        $data = [
+            "bcs_cs_bordro_ekle" => [
+                "session_id" => $ssid,
+                "firma_kodu" => 1,
+                "donem_kodu" => 1,
+                "kart" => [
+                    "_key_kodu"=> $key,
+                    "_key_sis_sube" => $sube ? $sube->_key : 0,
+                    "aciklama1" => "Çek ile Tahsilat",
+                    "aciklama2" => (string)$model->Aciklama,
+                    "aciklama3" => "",
+                    "bordrono" => (string)$model->HareketId,
+                    "bordrotarihi" => date('Y-m-d'),
+                    "raporlamadovizkuru" => "1.00",
+                    "saat" => date('H:i:s'),
+                    "teminatdurumu" => "H",
+                    "belgeturu" => 2,
+                    "turu" => "CG",
+                    "m_ceksenet" => [
+                        [
+                            "_key_bcs_bankahesabi" => $bankahesapRef,
+                            "_key_muh_masrafmerkezi" => 0,
+                            "_key_muh_masrafmerkezi_donemsiz" => 0,
+                            "_key_prj_proje" => 0,
+                            "_key_scf_carikart" => 0,
+                            "_key_scf_malzeme_baglantisi" => 0,
+                            "_key_sis_doviz" => ["adi" => "GBP"],
+                            "_key_sis_ozelkod" => 0,
+                            "_key_sis_seviyekodu" => 0,
+                            "_key_sis_doviz_cari"=> 2303,
+                            "dovizkuru"=> "1.000000",
+                            "dovizkuru_iliski"=> "1.000000",
+                            "aciklama" => (string)$model->Aciklama,
+                            "bankaadi" => "",
+                            "borclu" => (string)$model->carikod,
+                            "cirolu" => "H",
+                            "hesapno" => "",
+                            "iban" => "",
+                            "kefil" => "",
+                            "kefil2" => "",
+                            "kefil2bilgi" => "",
+                            "kefilbilgi" => "",
+                            "muhabirsube" => "",
+                            "odemeyeri" => "",
+                            "subekodu" => (string)$subeKodu,
+                            "tutar" => (string)$model->Tutar,
+                            "tutar_cari" => (string)$model->Tutar,
+                            "vade" => $vadeTarihi,
+                            "valor" => $vadeTarihi,
+                            "turu" => "CEK_MST"
+                        ]
+                    ]
+                ]
+            ]
+        ];
+        $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
+        
         $logMessage .= "JSON Data: " . $jsonData . "\n";
         $logMessage .= "JSON Data Length: " . strlen($jsonData) . "\n";
-
+        
         // cURL başlat
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $tahsilatUrl);
@@ -1011,7 +1091,7 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($curl, CURLOPT_TIMEOUT, 120); // 2 dakika toplam işlem süresi
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 30); // 30 saniye bağlantı zaman aşımı
-
+        
         $logMessage .= "cURL seçenekleri ayarlandı\n";
         $logMessage .= "cURL URL: " . $tahsilatUrl . "\n";
         $logMessage .= "cURL Method: POST\n";
@@ -1021,7 +1101,7 @@ class Dia extends Component{
         $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
         $curlError = curl_error($curl);
         $curlErrno = curl_errno($curl);
-
+        
         $logMessage .= "cURL HTTP Code: " . $httpCode . "\n";
         $logMessage .= "cURL Error No: " . $curlErrno . "\n";
         $logMessage .= "cURL Error: " . $curlError . "\n";
@@ -1044,10 +1124,10 @@ class Dia extends Component{
         curl_close($curl);
         $logMessage .= "cURL kapatıldı\n";
         $logMessage .= "=== DIA::tahsilatgonder TAMAMLANDI ===\n\n";
-
+        
         // Log dosyasına yaz
         file_put_contents(\Yii::getAlias('@runtime/dia_tahsilat_log.txt'), $logMessage, FILE_APPEND | LOCK_EX);
-
+        
         return $result;
     }
 
@@ -1183,7 +1263,7 @@ class Dia extends Component{
             $kalemler[]=$sd;
             $sira++;
         }
-
+   
         $data = [
             "scf_fatura_ekle" => [
                 "session_id" => $ssid,
@@ -1215,7 +1295,7 @@ class Dia extends Component{
                 ]
             ]
         ];
-
+        
         $jsonData = json_encode($data);
        // echo $jsonData;
         // cURL başlat
@@ -1228,11 +1308,11 @@ class Dia extends Component{
             'Content-Type: application/json',
             'Content-Length: ' . strlen($jsonData)
         ]);
-
+        
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // Sertifika doğrulamasını kapatıyoruz (test amaçlı)
-
+        
         $result = curl_exec($curl);
-
+        
         // Eğer cURL hatası varsa yazdır
         if (curl_errno($curl)) {
             $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
@@ -1251,9 +1331,9 @@ class Dia extends Component{
              }
              return 0;
 
-        }
+        }  
         curl_close($curl);
-         return $sonuc;
+         return $sonuc; 
     }
     public static function fisgonder($fis,$tur){
         $tahsilatUrl = self::getDiaUrl('scf');
@@ -1266,7 +1346,7 @@ class Dia extends Component{
 
         $kalemler=[];
         $sira=1;
-
+            
         foreach ($satirlar as $satir) {
             $sd=[];
             if($satir->ToplamTutar>0.01){
@@ -1303,7 +1383,7 @@ class Dia extends Component{
                 $sira++;
             }
         }
-
+   
             if($tur==2){
                 $iskonto=$fis->Iskontotutari;
             }
@@ -1319,7 +1399,7 @@ class Dia extends Component{
                 "dovizkuru"=>1
             ];
         }
-        else
+        else 
             $alt=null;
 
         $data = [
@@ -1368,7 +1448,7 @@ class Dia extends Component{
             ];
             $data['scf_fatura_ekle']['kart']['m_altlar'] = [$alt];
         }
-
+        
         $jsonData = json_encode($data);
         // echo $jsonData;
         // cURL başlat
@@ -1382,11 +1462,11 @@ class Dia extends Component{
             'Content-Type: application/json',
             'Content-Length: ' . strlen($jsonData)
         ]);
-
+        
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // Sertifika doğrulamasını kapatıyoruz (test amaçlı)
-
+        
         $result = curl_exec($curl);
-
+        
         // Eğer cURL hatası varsa yazdır
         if (curl_errno($curl)) {
             $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
@@ -1395,7 +1475,7 @@ class Dia extends Component{
         } else {
              $json = json_decode($result, true);
               echo json_encode($json);
-
+     
              if($json["code"]==200){
                 if($json["key"]){
                     $fis->diakey=$json["key"];
@@ -1406,14 +1486,14 @@ class Dia extends Component{
                     }
                  }
                  $sonuc= $json;
-             }
-             else
+             } 
+             else 
              $sonuc= $json;
-        }
+        }   
         curl_close($curl);
-        return $sonuc;
+        return $sonuc; 
     }
-
+    
 
     public static function gunlukfaturagetir($faturano){
         $url = self::getDiaUrl('rpr');
@@ -1452,7 +1532,7 @@ class Dia extends Component{
     }
 
     public static function faturapdfgetir($keyno){
-
+        
         $url = self::getDiaUrl('rpr');
         $session_id = Dia::getsessionid();
         $firma_kodu = 1;
@@ -1470,7 +1550,7 @@ class Dia extends Component{
             ]
         ];
         $jsonData = json_encode($data);
-
+        
             $curl = curl_init();
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
             curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
@@ -1481,13 +1561,13 @@ class Dia extends Component{
                 'Content-Type: application/json',
                 'Content-Length: ' . strlen($jsonData))
             );
-
+      
              curl_setopt($curl, CURLOPT_URL, $url);
              $result = curl_exec($curl);
             if (curl_errno($curl)) {
                 $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
             file_put_contents('runtime/curl_hatalari.txt', $hataMesaji, FILE_APPEND | LOCK_EX);
-            }
+            } 
             else {
                 // Sonuç
                 // $json = json_decode($result, true);
@@ -1495,29 +1575,29 @@ class Dia extends Component{
                 // print_r($json); // API'nin dönüşünü yazdır
                 // echo "</pre>";
             }
-
+    
              curl_close($curl);
 
-
+        
         // $json=json_decode($result,true);
         // curl_close($curl);
         // print_r($json);
-
+        
         //$pdfContent = base64_decode($json['result']);
         //echo $result["result"];
         // // PDF'in geçerli olup olmadığını kontrol etme
         // if (strpos($pdfContent, '%PDF') !== 0) {
         //     throw new \yii\web\HttpException(400, 'Geçersiz PDF dosyası');
         // }
-
+        
         // // Yanıtı PDF olarak gönderme
         // \Yii::$app->response->format = Response::FORMAT_RAW;
         // \Yii::$app->response->headers->add('Content-Type', 'application/pdf');
         // \Yii::$app->response->headers->add('Content-Disposition', 'attachment; filename="belge.pdf"');
-
+        
         //return $pdfContent;
     }
-
+    
 
     public static function iadefaturapdfgetir($keyno){
         $url = self::getDiaUrl('rpr');
@@ -1537,7 +1617,7 @@ class Dia extends Component{
             ]
         ];
         $jsonData = json_encode($data);
-
+        
             $curl = curl_init();
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
             curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
@@ -1548,13 +1628,13 @@ class Dia extends Component{
                 'Content-Type: application/json',
                 'Content-Length: ' . strlen($jsonData))
             );
-
+      
              curl_setopt($curl, CURLOPT_URL, $url);
              $result = curl_exec($curl);
             if (curl_errno($curl)) {
                 $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
             file_put_contents('runtime/curl_hatalari.txt', $hataMesaji, FILE_APPEND | LOCK_EX);
-            }
+            } 
             else {
                 // Sonuç
                 // $json = json_decode($result, true);
@@ -1562,28 +1642,28 @@ class Dia extends Component{
                 // print_r($json); // API'nin dönüşünü yazdır
                 // echo "</pre>";
             }
-
+    
              curl_close($curl);
 
-
+        
         // $json=json_decode($result,true);
         // curl_close($curl);
         // print_r($json);
-
+        
         //$pdfContent = base64_decode($json['result']);
         //echo $result["result"];
         // // PDF'in geçerli olup olmadığını kontrol etme
         // if (strpos($pdfContent, '%PDF') !== 0) {
         //     throw new \yii\web\HttpException(400, 'Geçersiz PDF dosyası');
         // }
-
+        
         // // Yanıtı PDF olarak gönderme
         // \Yii::$app->response->format = Response::FORMAT_RAW;
         // \Yii::$app->response->headers->add('Content-Type', 'application/pdf');
         // \Yii::$app->response->headers->add('Content-Disposition', 'attachment; filename="belge.pdf"');
-
+        
         //return $pdfContent;
-    }
+    }  
     public static function siparisgondermobil($fis, $tur = 1, $logFilePath = null)
     {
         ini_set('memory_limit', '512M');
@@ -1593,10 +1673,11 @@ class Dia extends Component{
         // while (ob_get_level()) {
         //     ob_end_clean();
         // }
-
+        
        // Yii::$app->response->format = \yii\web\Response::FORMAT_RAW;
         //Yii::$app->response->headers->set('Content-Type', 'text/plain; charset=UTF-8');
-
+     
+        $logFilePath = Yii::getAlias('@app/runtime/mobilsiparis_'.date("ymdhis").'.txt');
 
         $logAction = function($message) use ($logFilePath) {
             if ($logFilePath) {
@@ -1615,7 +1696,7 @@ class Dia extends Component{
 
         $firma_kodu = 1;
         $donem_kodu = 1;
-
+        
         if ($tur == 1) {
             $satirlar = $fis->getSatinAlmaSiparisFisSatirs()->with('urun')->all();
             $logAction("3. Satınalma sipariş satırları çekildi. Satır sayısı: " . count($satirlar));
@@ -1688,7 +1769,8 @@ class Dia extends Component{
                 "sonbirimfiyati" => $satir->BirimFiyat ?? 0,
                 "tutari" => $satirtutari,
                 "yerelbirimfiyati" => $satir->BirimFiyat ?? 0,
-                "indirim1" => $satir->Iskonto
+                "indirim1" => $satir->Iskonto,
+                "note"=>$satir->comment
             ];
             $kalemler[] = $sd;
             $logAction("     Kalem oluşturuldu ve eklendi.");
@@ -1743,7 +1825,7 @@ class Dia extends Component{
                 ]
             ]
         ];
-
+        
         $jsonData = json_encode($data, JSON_UNESCAPED_UNICODE);
         $logAction("7. DIA'ya gönderilecek JSON hazırlandı:\n" . json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
@@ -1758,10 +1840,10 @@ class Dia extends Component{
             'Content-Length: ' . strlen($jsonData)
         ]);
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
-
+        
         $result = curl_exec($curl);
         $logAction("9. cURL isteği tamamlandı. Ham Sonuç:\n" . $result);
-
+        
         if (curl_errno($curl)) {
             $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
             file_put_contents('runtime/curl_hatalari.txt', $hataMesaji, FILE_APPEND | LOCK_EX);
@@ -1784,7 +1866,7 @@ class Dia extends Component{
                 $logAction("HATA: DIA'dan başarısız yanıt alındı. Code: " . ($json["code"] ?? 'N/A') . ", Mesaj: " . ($json["msg"] ?? 'N/A'));
             }
         }
-
+        
         curl_close($curl);
         $logAction("12. cURL bağlantısı kapatıldı.");
         $logAction("--- siparisgondermobil LOG SON ---");
@@ -1797,9 +1879,9 @@ class Dia extends Component{
         $session_id = Dia::getsessionid();
         $firma_kodu = 1;
         $donem_kodu = 1;
-        if($tur==1)
+        if($tur==1)          
             $satirlar=$fis->getSatinAlmaSiparisFisSatirs()->with('urun')->all();
-        else
+        else 
             $satirlar=$fis->getSatissatirlari()->all();
         $sira=1;
         $kalemler = [];
@@ -1809,7 +1891,7 @@ class Dia extends Component{
             $birimAlani = null;
             if($tur==1)
                 $stno=$satir->urun_id;
-            else
+            else 
                 $stno=$stok->StokKodu;
 
             if ($satir instanceof \app\models\SatinAlmaSiparisFisSatir) { // Satınalma sipariş satırı ise
@@ -1900,7 +1982,7 @@ class Dia extends Component{
                 ]
             ]
         ];
-
+        
         $jsonData = json_encode($data);
        // echo $jsonData;
         // cURL başlat
@@ -1913,9 +1995,9 @@ class Dia extends Component{
             'Content-Type: application/json',
             'Content-Length: ' . strlen($jsonData)
         ]);
-
+        
         curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // Sertifika doğrulamasını kapatıyoruz (test amaçlı)
-
+        
         $result = curl_exec($curl);
         print_r($result);
         // Eğer cURL hatası varsa yazdır
@@ -2000,7 +2082,7 @@ class Dia extends Component{
         $session_id = Dia::getsessionid();
         $firma_kodu = 1;
         $donem_kodu = 1;
-
+ 
         $data = [
             "scf_siparis_listele_ayrintili" => [
                 "session_id" => $session_id,
@@ -2039,7 +2121,7 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15); // 15 saniye bağlantı timeout
 
         $result = curl_exec($curl);
-
+        
         if (curl_errno($curl)) {
             $error = curl_error($curl);
             Yii::error('Sipariş ayrıntı cURL hatası: ' . $error, 'dia');
@@ -2062,7 +2144,7 @@ class Dia extends Component{
         $session_id = Dia::getsessionid();
         $firma_kodu = 1;
         $donem_kodu = 1;
-
+ 
         $data = [
             "scf_siparis_listele_ayrintili" => [
                 "session_id" => $session_id,
@@ -2104,7 +2186,7 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15); // 15 saniye bağlantı timeout
 
         $result = curl_exec($curl);
-
+        
         if (curl_errno($curl)) {
             $error = curl_error($curl);
             Yii::error('Sipariş ayrıntı cURL hatası: ' . $error, 'dia');
@@ -2269,7 +2351,7 @@ class Dia extends Component{
     public static function irsaliyeEkle($data = null)
     {
         $startTime = microtime(true);
-
+        
         try {
             $url = self::getDiaUrl('scf');
 
@@ -2403,7 +2485,7 @@ class Dia extends Component{
                     ]
                 ];
             }
-
+            
             // Encode the data - whether it's the default or provided data
             $jsonData = json_encode($data);
             // Belge/Fis numarasını log dosya adlarında kullanmak için hazırla
@@ -2412,7 +2494,7 @@ class Dia extends Component{
                 $belgeNo = $data['scf_irsaliye_ekle']['kart']['belgeno'] ?? ($data['scf_irsaliye_ekle']['kart']['fisno'] ?? null);
             }
             $safeBelge = $belgeNo ? preg_replace('/[^A-Za-z0-9_-]/', '_', (string)$belgeNo) : 'NA';
-
+            
             if ($jsonData === false) {
                 $errorLogFile = Yii::getAlias('@app/runtime/dia_irsaliye_errors_' . date('Y_m_d') . '.txt');
                 $errorMessage = date('Y-m-d H:i:s') . " - JSON ENCODE HATASI: " . json_last_error_msg() . "\n";
@@ -2421,7 +2503,7 @@ class Dia extends Component{
             }
 
             $curl = curl_init();
-
+            
             curl_setopt($curl, CURLOPT_URL, $url);
             curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
             curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
@@ -2433,29 +2515,29 @@ class Dia extends Component{
             curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
             curl_setopt($curl, CURLOPT_TIMEOUT, 30);
             curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 10);
-
+            
             $result = curl_exec($curl);
             $requestTime = microtime(true) - $startTime;
-
+            
             // Detaylı curl bilgileri al
             $curlInfo = curl_getinfo($curl);
             $curlError = curl_error($curl);
             $curlErrno = curl_errno($curl);
-
+            
             if (curl_errno($curl)) {
                 $error = curl_error($curl);
                 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
+                
                 curl_close($curl);
-
+                
                 // Sadece hata durumlarında log dosyasına yaz
                 $errorLogFile = Yii::getAlias('@app/runtime/dia_irsaliye_errors_' . date('Y_m_d') . '.txt');
                 $errorMessage = date('Y-m-d H:i:s') . " - CURL HATASI: $error - HTTP: $httpCode\n";
                 file_put_contents($errorLogFile, $errorMessage, FILE_APPEND | LOCK_EX);
-
+                
                 $hataMesaji = 'cURL hatası: ' . $error . ' - ' . date('Y-m-d H:i:s') . ' - HTTP: ' . $httpCode . PHP_EOL;
                 file_put_contents(Yii::getAlias('@app/runtime/curl_hatalari.txt'), $hataMesaji, FILE_APPEND | LOCK_EX);
-
+                
                 // Ayrıntılı TXT log: istek/yanıt/curl info
                 $detailPath = Yii::getAlias('@app/runtime/irsaliye_curl_error_' . date('YmdHis') . '_' . $safeBelge . '.txt');
                 $detail = [
@@ -2470,15 +2552,15 @@ class Dia extends Component{
                     'request' => $data,
                 ];
                 @file_put_contents($detailPath, json_encode($detail, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-
+                
                 return null;
             } else {
                 $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-
+                
                 curl_close($curl);
-
+                
                 $json = json_decode($result, true);
-
+                
                 if ($json === null && json_last_error() !== JSON_ERROR_NONE) {
                     $errorLogFile = Yii::getAlias('@app/runtime/dia_irsaliye_errors_' . date('Y_m_d') . '.txt');
                     $errorMessage = date('Y-m-d H:i:s') . " - JSON DECODE HATASI: " . json_last_error_msg() . " - Response: " . substr($result, 0, 500) . "\n";
@@ -2497,20 +2579,20 @@ class Dia extends Component{
                         'json_error' => json_last_error_msg(),
                     ];
                     @file_put_contents($detailPath, json_encode($detail, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-
+                    
                     return null;
                 }
-
+                
                 // Sadece hata durumlarında log dosyasına yaz
                 $isSuccess = false;
                 if (is_array($json)) {
                     // code 200 veya success true ise başarılı
-                    if ((isset($json['code']) && ($json['code'] == '200' || $json['code'] == 200)) ||
+                    if ((isset($json['code']) && ($json['code'] == '200' || $json['code'] == 200)) || 
                         (isset($json['success']) && $json['success'])) {
                         $isSuccess = true;
                     }
                 }
-
+                
                 if (!$isSuccess) {
                     $resultLogFile = Yii::getAlias('@app/runtime/irsaliye_basarisiz_' . date('Y_m_d') . '.txt');
                     $resultLogMessage = date('Y-m-d H:i:s') . " - ";
@@ -2533,15 +2615,15 @@ class Dia extends Component{
                     ];
                     @file_put_contents($detailPath, json_encode($detail, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
                 }
-
+                
                 return $json;
             }
-
+            
         } catch (\Exception $e) {
             $errorLogFile = Yii::getAlias('@app/runtime/dia_irsaliye_errors_' . date('Y_m_d') . '.txt');
             $errorMessage = date('Y-m-d H:i:s') . " - DIA COMPONENT EXCEPTION: " . $e->getMessage() . " - File: " . $e->getFile() . " - Line: " . $e->getLine() . "\n";
             file_put_contents($errorLogFile, $errorMessage, FILE_APPEND | LOCK_EX);
-
+            
             return null;
         }
     }
@@ -2580,10 +2662,10 @@ class Dia extends Component{
             return ['error' => $error];
         }
         curl_close($curl);
-
+        
         // Ham sonucu loglayalım
         Yii::info("Raw API response: $result", __METHOD__);
-
+        
         // PythonDictConverter'ı kaldırıp doğrudan JSON decode edelim
         try {
             return json_decode($result, true);
@@ -2633,10 +2715,10 @@ class Dia extends Component{
             return ['error' => $error];
         }
         curl_close($curl);
-
+        
         // Ham sonucu loglayalım
         Yii::info("Raw API response: $result", __METHOD__);
-
+        
         // PythonDictConverter'ı kaldırıp doğrudan JSON decode edelim
         try {
             return json_decode($result, true);
@@ -2685,7 +2767,7 @@ class Dia extends Component{
 
         $result = curl_exec($curl);
         $result = PythonDictConverter::toJson($result);
-
+    
         // Hata kontrolü ekleyelim
         if (curl_errno($curl)) {
             $error = curl_error($curl);
@@ -2694,9 +2776,13 @@ class Dia extends Component{
             return ['error' => $error];
         }
         curl_close($curl);
-
+        
         // Ham sonucu loglayalım
         Yii::info("Raw API response: $result", __METHOD__);
+        
+        // Add logging to a file in runtime directory
+        $logFilePath = Yii::getAlias('@runtime') . '/stok_hareket_log.json';
+        file_put_contents($logFilePath, $result);
 
         // PythonDictConverter'ı kaldırıp doğrudan JSON decode edelim
         try {
@@ -2743,7 +2829,7 @@ class Dia extends Component{
             $json = json_decode($result, true);
             return $result;//$json;
         }
-        curl_close($curl);
+        curl_close($curl);      
     }
     public static function faturaListele($startDate = null,$endDate = null,$raw=false){
         if($startDate==null){
@@ -2752,11 +2838,11 @@ class Dia extends Component{
         if($endDate==null){
             $endDate = date('Y-m-d');
         }
-
+        
         // Tarih formatını basitleştir - direkt string olarak kullan
         $startDateFormatted = $startDate;
         $endDateFormatted = $endDate;
-
+        
         $url = self::getDiaUrl('scf');
         $session_id = Dia::getsessionid();
         $firma_kodu = 1;
@@ -2890,16 +2976,16 @@ class Dia extends Component{
         if($endDate==null){
             $endDate = date('Y-m-d');
         }
-
+        
         // Tarih formatını basitleştir - direkt string olarak kullan
         $startDateFormatted = $startDate;
         $endDateFormatted = $endDate;
-
+        
         $url = self::getDiaUrl('scf');
         $session_id = Dia::getsessionid();
         $firma_kodu = 1;
         $donem_kodu = 1;
-
+ 
         $data = [
             "scf_fatura_listele_ayrintili" => [
                 "session_id" => $session_id,
@@ -3015,302 +3101,232 @@ class Dia extends Component{
                 }
                 return $result;
             }
-            return $decoded["result"] ?? null;
+            return $decoded["result"] ?? null; 
         }
     }
-    public static function siparisgonder($fis, $session_id = null){
+    public static function siparisgonder($fis, $session_id = null, $tur = 1){
         $logFile = Yii::getAlias('@runtime/logs/siparisgonder_critical.log');
+
         try {
-            $logDir = dirname($logFile);
-            if (!is_dir($logDir)) {
-                \yii\helpers\FileHelper::createDirectory($logDir);
+            $mainOrder = null;
+            $satirlar = [];
+            $carikart_kodu = null;
+            $fisno = null;
+            $api_turu = 0;
+            $item_class_name = '';
+
+            if ($tur == 1) { // Satınalma Siparişi
+                $mainOrder = $fis->satinalmasiparisfis;
+                $satirlar = $fis->getSatinAlmaSiparisFisSatirs()->andWhere(['>', 'miktar', 0])->with('urun')->all();
+                $carikart_kodu = $fis->tedarikci->tedarikci_kodu;
+                $fisno = $fis->fisno;
+                $api_turu = 1;
+                $item_class_name = \app\models\SatinAlmaSiparisFisSatir::class;
+            } elseif ($tur == 2) { // Satış Fişi
+                $mainOrder = $fis;
+                $satirlar = $fis->getSalesReceiptItem()->andWhere(['>', 'miktar', 0])->with('urun')->all();
+                $carikart_kodu = $fis->customer_code;
+                $fisno = $fis->so_id;
+                $api_turu = 2; // DIA'da satış siparişi türü (varsayım)
+                $item_class_name = \app\models\SalesReceiptItem::class;
+            } else {
+                throw new \InvalidArgumentException("Geçersiz sipariş türü: $tur");
             }
-        } catch (\Exception $e) {
-            // Directory creation failed, log to default runtime path
-            $logFile = Yii::getAlias('@runtime/siparisgonder_critical.log');
-        }
-
-        $logContent = "====================================================================\n";
-        $logContent .= "[".date('Y-m-d H:i:s')."] [INFO] Siparisgonder başladı - Fis ID: {$fis->id}\n";
-
-        $url = self::getDiaUrl('scf');
-        $logContent .= "[".date('Y-m-d H:i:s')."] API URL: $url\n";
-
-        if ($session_id === null) {
-            $session_id = Dia::getsessionid();
-            $logContent .= "[".date('Y-m-d H:i:s')."] Yeni Session ID alındı: $session_id\n";
-        } else {
-            $logContent .= "[".date('Y-m-d H:i:s')."] Mevcut Session ID kullanılıyor: $session_id\n";
-        }
-        $logContent .= "[".date('Y-m-d H:i:s')."] Session ID alındı: $session_id\n";
-
-        $firma_kodu = 1;
-        $donem_kodu = 1;
-
-
-        $satirlar=$fis->getSatinAlmaSiparisFisSatirs()->andWhere(['>', 'miktar', 0])->with('urun')->all();
-
-        // Miktarı 0'dan büyük olan satır yoksa işlemi sonlandır
-        if (empty($satirlar)) {
-            $errorMsg = "[".date('Y-m-d H:i:s')."] UYARI: Siparişte miktarı 0'dan büyük olan ürün bulunamadı. Sipariş gönderimi iptal edildi.\n";
-            $logContent .= $errorMsg;
-            file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
-            return ['success' => false, 'message' => $errorMsg];
-        }
-
-        $branchCode= Warehouses::find()->select(["branch_code"])->where(["warehouse_code" => $fis->satinalmasiparisfis->warehouse_code])->scalar();
-        $logContent .= "[".date('Y-m-d H:i:s')."] Miktarı > 0 olan satır sayısı: " . count($satirlar) . "\n";
-
-        $sira=1;
-        $kalemler = [];
-        foreach ($satirlar as $satir) {
-            $logContent .= "[".date('Y-m-d H:i:s')."] Satır $sira işleniyor...\n";
-
-            $sd=[];
-            $stok = null;
-            $birimAlani = null;
-            $stno=$satir->StokKodu;
-
-            $logContent .= "[".date('Y-m-d H:i:s')."] Stok No: $stno\n";
-
-            if ($satir instanceof \app\models\SatinAlmaSiparisFisSatir) { // Satınalma sipariş satırı ise
-                if (!$satir->urun) {
-                    $logContent .= "[".date('Y-m-d H:i:s')."] UYARI: Satır $sira için ürün bulunamadı, atlanıyor\n";
-                    continue; // İlişkili ürün yoksa atla
-                }
-                $stok = $satir->urun;
-                $birimAlani = $satir->birim; // birim alanı kullanılıyor
-                $logContent .= "[".date('Y-m-d H:i:s')."] Ürün bulundu: {$stok->StokKodu}, Birim: $birimAlani\n";
-            } else { // Satış sipariş satırı ise (varsayılan)
-                $stok = Urunler::find()->where(["StokKodu" =>$stno ])->one();
-                if (!$stok) {
-                    $logContent .= "[".date('Y-m-d H:i:s')."] UYARI: Stok kodu $stno için ürün bulunamadı, atlanıyor\n";
-                    continue;
-                }
-                $birimAlani = $satir->BirimTipi; // BirimTipi alanı olduğu varsayılıyor
-                $logContent .= "[".date('Y-m-d H:i:s')."] Ürün bulundu: {$stok->StokKodu}, Birim: $birimAlani\n";
-            }
-
-            // Birim-key seçimi: normalize et, güvenli varsayılan uygula, tanımsız kalmasını engelle
-            $birimkey = null;
-            $birimAlaniNormalized = strtoupper(trim((string)$birimAlani));
-
-            $logContent .= "[".date('Y-m-d H:i:s')."] Normalized Birim: '{$birimAlaniNormalized}', Stok Kodu: {$stok->StokKodu}\n";
-
-            if ($birimAlaniNormalized === 'BOX') {
-                $birimkey = $stok->BirimKey2;
-                $logContent .= "[".date('Y-m-d H:i:s')."] Birim='BOX', BirimKey2 kullanılacak: {$stok->BirimKey2}\n";
-            } elseif ($birimAlaniNormalized === 'PACK') {
-                $birimkey = $stok->BirimKey3;
-                $logContent .= "[".date('Y-m-d H:i:s')."] Birim='PACK', BirimKey3 kullanılacak: {$stok->BirimKey3}\n";
-            } else { // 'UNIT' or empty/unknown, default to BirimKey1
-                $birimkey = $stok->BirimKey1;
-                $logContent .= "[".date('Y-m-d H:i:s')."] Birim='{$birimAlaniNormalized}' (UNIT veya varsayılan), BirimKey1 kullanılacak: {$stok->BirimKey1}\n";
-            }
-
-            // Eğer birim seçilmiş ('BOX' veya 'PACK') ama ilgili key tanımsızsa, bu bir veri hatasıdır.
-            // Bu durumda siparişi göndermek yanlış olur. Ana birime (BirimKey1) dönmek yerine işlemi durdur.
-            if (in_array($birimAlaniNormalized, ['BOX', 'PACK']) && empty($birimkey)) {
-                $errorMsg = "[".date('Y-m-d H:i:s')."] HATA: '{$birimAlaniNormalized}' birimi seçildi ancak Urunler tablosunda karşılık gelen BirimKey tanımı eksik (StokKodu: {$stok->StokKodu}). Bu satır gönderilemez.\n";
-                $logContent .= $errorMsg;
-                file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
-                return ['success' => false, 'message' => $errorMsg]; // Hatalı veri nedeniyle tüm siparişin gönderimini durdur.
-            }
-
-            // Eğer hiçbir birimkey bulunamadıysa (BirimKey1 de boşsa), bu kritik bir hatadır.
-            if (empty($birimkey)) {
-                 $errorMsg = "[".date('Y-m-d H:i:s')."] KRİTİK HATA: Ürün için hiçbir geçerli BirimKey bulunamadı (StokKodu: {$stok->StokKodu}). Gönderim iptal.\n";
-                 $logContent .= $errorMsg;
-                 file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
-                 return ['success' => false, 'message' => $errorMsg];
-            }
-
-            $logContent .= "[".date('Y-m-d H:i:s')."] Birim Key (seçilen): $birimkey\n";
-
-            $satirtutari=0;//$satir->BirimFiyat*$satir->Miktar*(1-$satir->Iskonto/100);
-            $satirkdv=0;//$satirtutari*$satir->vat/100;
-            /*
-        sd de
-
-        */
-            $sd=[
-                "_key_kalemturu" => ["stokkartkodu" => $stno],
-                "_key_scf_kalem_birimleri" => (int)$birimkey,
-                 "_key_sis_depo_source" => ["depokodu" => $fis->satinalmasiparisfis->warehouse_code],
-                "_key_sis_doviz" => ["adi" => "GBP"],
-                "anamiktar" => number_format($satir->miktar ?? 0, 6, '.', ''),
-                "birimfiyati" => number_format($satir->BirimFiyat??0, 6, '.', ''),
-                "daraadet" => "0.000000",
-                "dovizkuru" => "1.000000",
-                "indirim1" => "0.000000",
-                "indirim2" => "0.000000",
-                "indirim3" => "0.000000",
-                "indirim4" => "0.000000",
-                "indirim5" => "0.000000",
-                "indirimtoplam" => "0.000000",
-                "indirimtutari" => number_format($satir->retro ?? 0, 6, '.', ''),
-                "kalemturu" => "MLZM",
-                "kdv" => number_format($stok->Vat ?? 0, 6, '.', ''),
-                "kdvdurumu" => "H",
-                "kdvtutari" => number_format($satirkdv, 6, '.', ''),
-                "miktar" => number_format($satir->miktar ?? 0, 6, '.', ''),
-                "note" => "",
-                "note2" => "",
-                "onay" => "KABUL",
-                "rezervasyon" => "H",
-                "siptarih" => $fis->satinalmasiparisfis->tarih,
-                "sirano" => $sira,
-                "sonbirimfiyati" => number_format($satir->BirimFiyat??0, 6, '.', ''),
-                "teslimattarihi" => null,
-                "tutari" => number_format($satirtutari, 6, '.', ''),
-                "yerelbirimfiyati" => number_format($satir->BirimFiyat??0, 6, '.', ''),
-                "m_varyantlar" => []
-            ];
-            $kalemler[]=$sd;
-            $logContent .= "[".date('Y-m-d H:i:s')."] Satır $sira kalem array'e eklendi\n";
-            $sira++;
-        }
-
-        $logContent .= "[".date('Y-m-d H:i:s')."] Tedarikci kodu: {$fis->tedarikci->tedarikci_kodu}\n";
-        $logContent .= "[".date('Y-m-d H:i:s')."] Fisno: {$fis->fisno}\n";
-        $logContent .= "[".date('Y-m-d H:i:s')."] Tarih: {$fis->satinalmasiparisfis->tarih}\n";
-        /*
-        data da  "_key_sis_depo_source" => ["depokodu" => "44.03.01"], iptal edildi
-         "_key_krg_firma" => 183509,
-          "_key_scf_carikart_adresleri" => 178718,
-        */
-        $data = [
-            "scf_siparis_ekle" => [
-                "session_id" => $session_id,
-                "firma_kodu" => 1,
-                "donem_kodu" => 1,
-                "kart" => [
-                    "_key_sis_sube_source" => ["subekodu" => $branchCode],
-                    "_key_scf_carikart" => ["carikartkodu" =>$fis->tedarikci->tedarikci_kodu],
-                    "_key_sis_depo_source" => ["depokodu" => $fis->satinalmasiparisfis->warehouse_code],
-
-                    "_key_sis_doviz" => ["adi" => "GBP"],
-                    "_key_sis_doviz_raporlama" => ["adi" => "GBP"],
-                    "_key_sis_ozelkod1" => 0,
-                    "_key_sis_ozelkod2" => 0,
-                    "_key_sis_sube_source" => ["subekodu" => (string)$branchCode],
-                    "aciklama1" => "",
-                    "aciklama2" => "",
-                    "aciklama3" => "",
-                    "belgeno" => "",
-                    "dovizkuru" => "1.000000",
-                    "ekalan1" => "",
-                    "fisno" => $fis->fisno,
-                    "m_kalemler" => $kalemler,
-                    "net" => "0.000000",
-                    "netdvz" => "0.000000",
-                    "odemeislemli" => "f",
-                    "odemeli" => "f",
-                    "onay" => "KABUL",
-                    "ortalamavade" => $fis->satinalmasiparisfis->tarih,
-                    "raporlamadovizkuru" => "1.000000",
-                    "saat" => date("H:i:s"),
-                    "tarih" => date("Y-m-d"),
-                    "teslimat_adres1" => "",
-                    "teslimat_adres2" => "",
-                    "teslimat_adsoyad" => "",
-                    "teslimat_ceptel" => "",
-                    "teslimat_ilce" => "",
-                    "teslimat_key_sis_sehirler" => 0,
-                    "teslimat_telefon" => "",
-                    "toplam" => "00.000000",
-                    "toplamdvz" => "0.000000",
-                    "toplamindirim" => "0.000000",
-                    "toplamindirimdvz" => "0.000000",
-                    "toplamkdv" => "0.000000",
-                    "toplamkdvdvz" => "0.000000",
-                    "toplammasraf" => "0.000000",
-                    "toplammasrafdvz" => "0.000000",
-                    "turu" => 1
-                ]
-            ]
-        ];
-
-        $jsonData = json_encode($data);
-        $logContent .= "[".date('Y-m-d H:i:s')."] GÖNDERILEN JSON DATA:\n" . $jsonData . "\n";
-        $logContent .= "[".date('Y-m-d H:i:s')."] JSON DATA (Pretty Print):\n" . json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
-
-       // echo $jsonData;
-        // cURL başlat
-        $logContent .= "[".date('Y-m-d H:i:s')."] cURL başlatılıyor...\n";
-        $curl = curl_init();
-        curl_setopt($curl, CURLOPT_URL,  $url); // Burada $newUrl kullanıyoruz
-        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
-        curl_setopt($curl, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-            'Content-Length: ' . strlen($jsonData)
-        ]);
-
-        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false); // Sertifika doğrulamasını kapatıyoruz (test amaçlı)
-
-        $logContent .= "[".date('Y-m-d H:i:s')."] cURL isteği gönderiliyor...\n";
-        $result = curl_exec($curl);
-        $logContent .= "[".date('Y-m-d H:i:s')."] cURL isteği tamamlandı\n";
-
-        print_r($result);
-        // Eğer cURL hatası varsa yazdır
-        $logContent .= "[".date('Y-m-d H:i:s')."] API Response: " . $result . "\n";
-        if (curl_errno($curl)) {
-            $hataMesaji = 'cURL hatası: ' . curl_error($curl) . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
-            file_put_contents('runtime/curl_hatalari.txt', $hataMesaji, FILE_APPEND | LOCK_EX);
-           $sonuc=0;
-            $errorMsg = 'cURL hatası: ' . curl_error($curl);
-            $logContent .= "[".date('Y-m-d H:i:s')."] ERROR: $errorMsg\n";
-            file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
-            curl_close($curl);
-            return ['success' => false, 'message' => $errorMsg];
-        } else {
-            $json = json_decode($result, true);
-            $logContent .= "[".date('Y-m-d H:i:s')."] JSON Decode: " . print_r($json, true) . "\n";
-
-            // API response'unda hata kontrolü yap
-            if (isset($json['code']) && $json['code'] != '200' && $json['code'] != 200) {
-                $errorMsg = isset($json['msg']) ? $json['msg'] : 'Bilinmeyen API hatası';
-                $logContent .= "[".date('Y-m-d H:i:s')."] API HATASI: Code: {$json['code']}, Message: $errorMsg\n";
-                $logContent .= "[".date('Y-m-d H:i:s')."] Siparisgonder başarısız - Return: 0\n";
-                file_put_contents($logFile, $logContent, FILE_APPEND | LOCK_EX);
-                curl_close($curl);
+            
+            if (empty($satirlar)) {
+                $errorMsg = "Siparişte miktarı 0'dan büyük olan ürün bulunamadı. Sipariş gönderimi iptal edildi. FisNo: $fisno";
+                file_put_contents($logFile, "[".date('Y-m-d H:i:s')."] UYARI: $errorMsg\n", FILE_APPEND | LOCK_EX);
                 return ['success' => false, 'message' => $errorMsg];
             }
 
-            $logContent .= "[".date('Y-m-d H:i:s')."] Fis Errors: " . print_r($fis->errors, true) . "\n";
-
-            // API response'undan fisno'yu al
-            $returnedFisno = null;
-            if (isset($json['extra']['fisno'])) {
-                $returnedFisno = $json['extra']['fisno'];
-                $logContent .= "[".date('Y-m-d H:i:s')."] API'den dönen fisno: $returnedFisno\n";
+            if (empty($carikart_kodu)) {
+                $errorMsg = "Cari kart kodu (tedarikçi/müşteri) bulunamadı. Sipariş gönderimi iptal edildi. FisNo: $fisno";
+                file_put_contents($logFile, "[".date('Y-m-d H:i:s')."] HATA: $errorMsg\n", FILE_APPEND | LOCK_EX);
+                return ['success' => false, 'message' => $errorMsg];
             }
 
-            // Başarılı durumda log dosyası oluşturulmayacak.
-            // $logContent .= "[".date('Y-m-d H:i:s')."] Siparisgonder başarılı - Return: " . ($returnedFisno ?: 1) . "\n";
-            // file_put_contents($logFile, $logContent);
+            $url = self::getDiaUrl('scf');
+            if ($session_id === null) {
+                $session_id = Dia::getsessionid();
+            }
+
+            $branchCode = Warehouses::find()->select(["branch_code"])->where(["warehouse_code" => $mainOrder->warehouse_code])->scalar();
+            
+            $sira = 1;
+            $kalemler = [];
+            foreach ($satirlar as $satir) {
+                if (!$satir->urun) {
+                    continue; // İlişkili ürün yoksa atla
+                }
+                $stok = $satir->urun;
+                $stno = $stok->StokKodu;
+                $birimAlani = $satir->birim;
+
+                $birimkey = null;
+                $birimAlaniNormalized = strtoupper(trim((string)$birimAlani));
+
+                if ($birimAlaniNormalized === 'BOX') {
+                    $birimkey = $stok->BirimKey2;
+                } elseif ($birimAlaniNormalized === 'PACK') {
+                    $birimkey = $stok->BirimKey3;
+                } else { // 'UNIT' or empty/unknown, default to BirimKey1
+                    $birimkey = $stok->BirimKey1;
+                }
+                
+                if (in_array($birimAlaniNormalized, ['BOX', 'PACK']) && empty($birimkey)) {
+                    $errorMsg = "HATA: '{$birimAlaniNormalized}' birimi seçildi ancak Urunler tablosunda karşılık gelen BirimKey tanımı eksik (StokKodu: {$stok->StokKodu}). FisNo: $fisno";
+                    throw new \Exception($errorMsg);
+                }
+
+                if (empty($birimkey)) {
+                    $errorMsg = "KRİTİK HATA: Ürün için hiçbir geçerli BirimKey bulunamadı (StokKodu: {$stok->StokKodu}). FisNo: $fisno";
+                    throw new \Exception($errorMsg);
+                }
+
+                $sd = [
+                    "_key_kalemturu" => ["stokkartkodu" => $stno],
+                    "_key_scf_kalem_birimleri" => (int)$birimkey,
+                    "_key_sis_depo_source" => ["depokodu" => $mainOrder->warehouse_code],
+                    "_key_sis_doviz" => ["adi" => "GBP"],
+                    "anamiktar" => number_format($satir->miktar ?? 0, 6, '.', ''),
+                    "birimfiyati" => number_format($satir->BirimFiyat ?? 0, 6, '.', ''),
+                    "daraadet" => "0.000000",
+                    "dovizkuru" => "1.000000",
+                    "indirim1" => "0.000000",
+                    "indirim2" => "0.000000",
+                    "indirim3" => "0.000000",
+                    "indirim4" => "0.000000",
+                    "indirim5" => "0.000000",
+                    "indirimtoplam" => "0.000000",
+                    "indirimtutari" => number_format($satir->retro ?? 0, 6, '.', ''),
+                    "kalemturu" => "MLZM",
+                    "kdv" => number_format($stok->Vat ?? 0, 6, '.', ''),
+                    "kdvdurumu" => "H",
+                    "kdvtutari" => "0.000000",
+                    "miktar" => number_format($satir->miktar ?? 0, 6, '.', ''),
+                    "note" => "",
+                    "note2" => "",
+                    "onay" => "KABUL",
+                    "rezervasyon" => "H",
+                    "siptarih" => $mainOrder->tarih,
+                    "sirano" => $sira,
+                    "sonbirimfiyati" => number_format($satir->BirimFiyat ?? 0, 6, '.', ''),
+                    "teslimattarihi" => null,
+                    "tutari" => "0.000000",
+                    "yerelbirimfiyati" => number_format($satir->BirimFiyat ?? 0, 6, '.', ''),
+                    "m_varyantlar" => []
+                ];
+                $kalemler[] = $sd;
+                $sira++;
+            }
+            
+            $data = [
+                "scf_siparis_ekle" => [
+                    "session_id" => $session_id,
+                    "firma_kodu" => 1,
+                    "donem_kodu" => 1,
+                    "kart" => [
+                        "_key_sis_sube_source" => ["subekodu" => $branchCode],
+                        "_key_scf_carikart" => ["carikartkodu" => $carikart_kodu],
+                        "_key_sis_depo_source" => ["depokodu" => $mainOrder->warehouse_code],
+                        "_key_sis_doviz" => ["adi" => "GBP"],
+                        "_key_sis_doviz_raporlama" => ["adi" => "GBP"],
+                        "_key_sis_ozelkod1" => 0,
+                        "_key_sis_ozelkod2" => 0,
+                        "_key_sis_sube_source" => ["subekodu" => (string)$branchCode],
+                        "aciklama1" => "",
+                        "aciklama2" => "",
+                        "aciklama3" => "",
+                        "belgeno" => "",
+                        "dovizkuru" => "1.000000",
+                        "ekalan1" => "",
+                        "fisno" => $fisno,
+                        "m_kalemler" => $kalemler,
+                        "net" => "0.000000",
+                        "netdvz" => "0.000000",
+                        "odemeislemli" => "f",
+                        "odemeli" => "f",
+                        "onay" => "KABUL",
+                        "ortalamavade" => $mainOrder->tarih,
+                        "raporlamadovizkuru" => "1.000000",
+                        "saat" => date("H:i:s"),
+                        "tarih" => date("Y-m-d"),
+                        "teslimat_adres1" => "",
+                        "teslimat_adres2" => "",
+                        "teslimat_adsoyad" => "",
+                        "teslimat_ceptel" => "",
+                        "teslimat_ilce" => "",
+                        "teslimat_key_sis_sehirler" => 0,
+                        "teslimat_telefon" => "",
+                        "toplam" => "00.000000",
+                        "toplamdvz" => "0.000000",
+                        "toplamindirim" => "0.000000",
+                        "toplamindirimdvz" => "0.000000",
+                        "toplamkdv" => "0.000000",
+                        "toplamkdvdvz" => "0.000000",
+                        "toplammasraf" => "0.000000",
+                        "toplammasrafdvz" => "0.000000",
+                        "turu" => $api_turu
+                    ]
+                ]
+            ];
+            
+            $jsonData = json_encode($data);
+            
+            $curl = curl_init();
+            curl_setopt($curl, CURLOPT_URL,  $url);
+            curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+            curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
+            curl_setopt($curl, CURLOPT_HTTPHEADER, [
+                'Content-Type: application/json',
+                'Content-Length: ' . strlen($jsonData)
+            ]);
+            curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+            
+            $result = curl_exec($curl);
+            
+            if (curl_errno($curl)) {
+                $errorMsg = 'cURL hatası: ' . curl_error($curl);
+                throw new \Exception($errorMsg);
+            }
+            
+            $json = json_decode($result, true);
+            
+            if (isset($json['code']) && $json['code'] != '200' && $json['code'] != 200) {
+                $errorMsg = $json['msg'] ?? 'Bilinmeyen API hatası';
+                $errorMsg = "API Hatası (Code: {$json['code']}): $errorMsg. FisNo: $fisno";
+                throw new \Exception($errorMsg);
+            }
+            
+            $returnedFisno = $json['extra']['fisno'] ?? null;
             curl_close($curl);
             return ['success' => true, 'fisno' => $returnedFisno];
+
+        } catch (\Exception $e) {
+            $hataMesaji = 'siparisgonder HATA: ' . $e->getMessage() . ' - ' . date('Y-m-d H:i:s') . PHP_EOL;
+            file_put_contents($logFile, $hataMesaji, FILE_APPEND | LOCK_EX);
+            if (isset($curl) && is_resource($curl)) {
+                curl_close($curl);
+            }
+            return ['success' => false, 'message' => $e->getMessage()];
         }
     }
 
     public static function goodReceiptIrsaliyeEkle($fis,$kalemler)
     {
-
-
+        
+    
         $url = self::getDiaUrl('scf');
         $session_id = Dia::getsessionid();
 
         $firma_kodu = 1;
         $donem_kodu = 1;
-
+        
         $sira=0;
         $tumkalemler=[];
-
-
+        
+        
         foreach($kalemler as $k){
             // urun_key kullan (veritabanında bu şekilde tanımlı)
             $urun=Urunler::find()->where(["_key"=>$k->urun_key])->one();
@@ -3318,15 +3334,15 @@ class Dia extends Component{
             if($urun){
                 // birim_key direkt kullanılıyor
                 $unitKey = $k->birim_key ?? null;
-
+                
                 if(!$unitKey) {
-                    $errorMsg = "Unit key bulunamadı. Receipt item: " . $k->id .
-                        ", urun_key: " . $k->urun_key .
+                    $errorMsg = "Unit key bulunamadı. Receipt item: " . $k->id . 
+                        ", urun_key: " . $k->urun_key . 
                         ", birim_key: " . ($k->birim_key ?? 'null');
                     Yii::error($errorMsg, __METHOD__);
                     throw new \Exception($errorMsg);
                 }
-
+                
                 $kalem= [
                     "_key_kalemturu" => $urun->_key, // DIA bu alanı zorunlu istiyor
                     "_key_scf_stokkart" => ["stokkodu" => $urun->StokKodu], // Stok kartı referansı
@@ -3347,25 +3363,25 @@ class Dia extends Component{
                     "promosyonkalemid" => "",
                     "sirano" => $sira
                 ];
-
+                
                 // siparis_key varsa ekle
                 if(!empty($k->siparis_key)) {
                     $kalem["_key_scf_siparis_kalemi"] = $k->siparis_key;
                 }
-
+                
                 $kalem["m_varyantlar"] = [];
                 $tumkalemler[] = $kalem; // $kalem tanımlı olduğundan emin olduktan sonra ekle
             }
         }
-
-
+        
+       
         // Warehouse ve branch kontrolü
         if (!$fis->warehouse || !$fis->warehouse->_key) {
             $errorMsg = "Warehouse bilgisi bulunamadı veya _key değeri eksik. Receipt ID: " . $fis->goods_receipt_id;
             Yii::error($errorMsg, __METHOD__);
             throw new \Exception($errorMsg);
         }
-
+        
         if (!$fis->warehouse->branch || !$fis->warehouse->branch->_key) {
             $errorMsg = "Branch bilgisi bulunamadı veya _key değeri eksik. Warehouse: " . $fis->warehouse->warehouse_code;
             Yii::error($errorMsg, __METHOD__);
@@ -3377,8 +3393,8 @@ class Dia extends Component{
         if($fis->siparis && isset($fis->siparis->__carikodu) && !empty($fis->siparis->__carikodu)) {
             $carikod = $fis->siparis->__carikodu;
         }
-
-
+    
+    
         $data = [
             "scf_irsaliye_ekle" => [
                 "session_id" => $session_id,
@@ -3403,13 +3419,13 @@ class Dia extends Component{
                 ]
             ]
         ];
-
+       
 
         $jsonData = json_encode($data);
 
         // Debug: Gönderilen veriyi logla
         Yii::info("DIA'ya gönderilen JSON: " . $jsonData, __METHOD__);
-
+     
         $curl = curl_init();
         curl_setopt($curl, CURLOPT_URL, $url);
         curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
@@ -3433,10 +3449,10 @@ class Dia extends Component{
         } else {
             curl_close($curl);
             $json = json_decode($result, true);
-
+            
             // Debug için DIA yanıtını logla
             Yii::info("DIA İrsaliye Ekleme Yanıtı: " . json_encode($json), __METHOD__);
-
+            
             // Başarılı/başarısız durumu kontrol et
             if(isset($json['code'])) {
                 if($json['code'] == '200') {
@@ -3445,7 +3461,7 @@ class Dia extends Component{
                     Yii::error("DIA İrsaliye eklenemedi. Hata: " . ($json['msg'] ?? 'Bilinmeyen hata'), __METHOD__);
                 }
             }
-
+            
             return $json;
         }
     }
@@ -3802,7 +3818,7 @@ class Dia extends Component{
         curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 45);
 
         $result = curl_exec($curl);
-
+        
         if (curl_errno($curl)) {
             $errorMsg = curl_error($curl);
             Yii::error('Rafyeri listele cURL hatası: ' . $errorMsg, 'dia');
@@ -3814,5 +3830,159 @@ class Dia extends Component{
         $decoded = json_decode($result, true);
 
         return $decoded["result"] ?? null;
+    }
+    public static function irsaliyelistele($startDate,$endDate){
+        if($startDate == null){
+            $startDate = date('Y-m-d 00:00:00', strtotime('-1 day'));
+        }
+        if($endDate == null){
+            $endDate = date('Y-m-d 23:59:59');
+        }
+        $url = self::getDiaUrl('scf');
+        $session_id = Dia::getsessionid();
+        $firma_kodu = 1;
+        $donem_kodu = 1;
+
+        $data = [
+            "scf_irsaliye_listele" => [
+                "session_id" => $session_id,
+                "firma_kodu" => $firma_kodu,
+                "donem_kodu" => $donem_kodu,
+                "filters" => [
+                    ["field" => "_cdate", "operator" => ">=", "value" => $startDate],
+                    ["field" => "_cdate", "operator" => "<=", "value" => $endDate],
+                ],
+            ]
+        ];
+
+        $jsonData = json_encode($data);
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($jsonData)
+        ]);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 120);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 30);
+
+        $result = curl_exec($curl);
+        if (curl_errno($curl)) {
+            Yii::error('İrsaliye listele cURL hatası: ' . curl_error($curl), 'dia');
+            curl_close($curl);
+            return null;
+        } else {
+            $json = json_decode($result, true);
+            curl_close($curl);
+            return $json['result'] ?? null;
+        }
+    }
+
+    public static function irsaliyelisteleayrintili($startDate,$endDate){
+        if($startDate == null){
+            $startDate = date('Y-m-d 00:00:00', strtotime('-1 day'));
+        }
+        if($endDate == null){
+            $endDate = date('Y-m-d 23:59:59');
+        }
+        $url = self::getDiaUrl('scf');
+        $session_id = Dia::getsessionid();
+        $firma_kodu = 1;
+        $donem_kodu = 1;
+ 
+        $data = [
+            "scf_irsaliye_listele_ayrintili" => [
+                "session_id" => $session_id,
+                "firma_kodu" => $firma_kodu,
+                "donem_kodu" => $donem_kodu,
+                "filters" => [
+                    ["field" => "_cdate", "operator" => ">=", "value" => $startDate],
+                    ["field" => "_cdate", "operator" => "<=", "value" => $endDate],
+                ],
+            ]
+        ];
+
+        $jsonData = json_encode($data);
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($jsonData)
+        ]);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 60);
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15);
+
+        $result = curl_exec($curl);
+        
+        if (curl_errno($curl)) {
+            Yii::error('İrsaliye listele ayrıntılı cURL hatası: ' . curl_error($curl), 'dia');
+            curl_close($curl);
+            return null;
+        } else {
+            $json = json_decode($result, true);
+            curl_close($curl);
+            return $json['result'] ?? null;
+        }
+    }
+
+    public static function irsaliyelisteleayrintilibykey($startDate, $endDate, $irsaliye_key){
+        if($startDate == null){
+            $startDate = date('Y-m-d 00:00:00', strtotime('-1 day'));
+        }
+        if($endDate == null){
+            $endDate = date('Y-m-d 23:59:59');
+        }
+        $url = self::getDiaUrl('scf');
+        $session_id = Dia::getsessionid();
+        $firma_kodu = 1;
+        $donem_kodu = 1;
+ 
+        $data = [
+            "scf_irsaliye_listele_ayrintili" => [
+                "session_id" => $session_id,
+                "firma_kodu" => $firma_kodu,
+                "donem_kodu" => $donem_kodu,
+                "filters" => [
+                    ["field" => "_cdate", "operator" => ">=", "value" => $startDate],
+                    ["field" => "_cdate", "operator" => "<=", "value" => $endDate],
+                    ["field" => "_key_scf_irsaliye", "operator" => "=", "value" => $irsaliye_key],
+                ],
+            ]
+        ];
+
+        $jsonData = json_encode($data);
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_URL, $url);
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, $jsonData);
+        curl_setopt($curl, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($jsonData)
+        ]);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        // Timeout ayarları ekle
+        curl_setopt($curl, CURLOPT_TIMEOUT, 60); // 1 dakika
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 15); // 15 saniye bağlantı timeout
+
+        $result = curl_exec($curl);
+        
+        if (curl_errno($curl)) {
+            $error = curl_error($curl);
+            Yii::error('İrsaliye ayrıntı cURL hatası: ' . $error, 'dia');
+            curl_close($curl);
+            return null;
+        } else {
+            $json = json_decode($result, true);
+            curl_close($curl);
+            return $json['result'] ?? null;
+        }
     }
 }
