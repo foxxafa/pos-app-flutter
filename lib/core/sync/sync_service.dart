@@ -748,6 +748,7 @@ static final Set<String> _activeDownloads = <String>{};
 static bool _backgroundDownloadActive = false;
 
 // Arama sonucu ürünlerin resimlerini hemen indir (Cart View'den çağrılır)
+// ✅ OPTIMIZE: Batch'lere ayırarak paralel indir (10 resim aynı anda)
 static Future<void> downloadSearchResultImages(List<ProductModel> searchProducts, {Function? onImagesDownloaded}) async {
   try {
     final dir = await getApplicationDocumentsDirectory();
@@ -773,7 +774,15 @@ static Future<void> downloadSearchResultImages(List<ProductModel> searchProducts
 
     if (futures.isNotEmpty) {
       print('🔍 ${futures.length} arama sonucu resmi indiriliyor...');
-      await Future.wait(futures);
+
+      // ✅ OPTIMIZE: Batch'lere ayır (10'ar 10'ar paralel indir)
+      const int batchSize = 10;
+      for (int i = 0; i < futures.length; i += batchSize) {
+        final batch = futures.skip(i).take(batchSize).toList();
+        await Future.wait(batch);
+        print('📥 ${i + batch.length}/${futures.length} resim indirildi');
+      }
+
       print('✅ Arama sonucu resimleri indirildi');
 
       // Resimler indirildikten sonra callback çağır (UI'ı yenile)

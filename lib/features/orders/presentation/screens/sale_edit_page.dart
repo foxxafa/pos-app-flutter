@@ -141,13 +141,6 @@ class _SaleEditPageState extends State<SaleEditPage> {
   });
 }
 
-
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!searchFocusNode.hasFocus) {
-                FocusScope.of(context).requestFocus(searchFocusNode);
-              }
-            });
-
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(ctx).viewInsets.bottom,

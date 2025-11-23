@@ -57,11 +57,17 @@ class _CartViewState extends State<CartView> {
   // ✅ Stok bilgilerini Map'te sakla (StokKodu -> miktar)
   final Map<String, double> _stockInfoMap = {};
 
+  // ✅ Suggestions bilgilerini Map'te sakla (StokKodu -> formatted string)
+  final Map<String, String> _suggestionsInfoMap = {};
+
   // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
   bool _isUpdatingFromScanner = false;
 
   // El terminali için debounce timer (çift eklemeyi önler)
   Timer? _scanDebounceTimer;
+
+  // Arama için debounce timer (yazarken her tuşa basmada tetiklenmemesi için)
+  Timer? _searchDebounceTimer;
 
   Timer? _imageDownloadTimer;
 
@@ -78,7 +84,6 @@ class _CartViewState extends State<CartView> {
     _loadProducts();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      _barcodeFocusNode.requestFocus();
       await _syncWithProvider();
     });
   }
@@ -130,6 +135,7 @@ class _CartViewState extends State<CartView> {
   void dispose() {
     _imageDownloadTimer?.cancel();
     _scanDebounceTimer?.cancel();
+    _searchDebounceTimer?.cancel();
     _barcodeFocusNode.dispose();
     _barcodeFocusNode2.dispose();
     _searchController2.dispose();
@@ -177,13 +183,25 @@ class _CartViewState extends State<CartView> {
 
   /// Tüm ürünler için birimleri background'da yükle
   Future<void> _loadAllBirimler(List<ProductModel> products) async {
-    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+    if (products.isEmpty) return;
 
-    for (final product in products) {
+    // Sadece henüz yüklenmemiş ürünleri filtrele
+    final newProducts = products.where((p) => !_productBirimlerMap.containsKey(p.stokKodu)).toList();
+
+    if (newProducts.isEmpty) {
+      print('🔄 Background birim yüklemesi: Tüm birimler zaten yüklü');
+      return;
+    }
+
+    print('🔄 Background: ${newProducts.length} ürün için birimler yükleniyor...');
+
+    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+    int loadedCount = 0;
+
+    for (final product in newProducts) {
       if (!mounted) break;
 
       final key = product.stokKodu;
-      if (_productBirimlerMap.containsKey(key)) continue;
 
       try {
         final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
@@ -207,56 +225,120 @@ class _CartViewState extends State<CartView> {
               _isBoxMap[key] = birimAdi.contains('box');
             }
           });
+
+          // ✅ Her 10 üründe bir ilerleme göster
+          loadedCount++;
+          if (loadedCount % 10 == 0 || loadedCount == newProducts.length) {
+            print('🔄 Background: $loadedCount/${newProducts.length} ürün için birim yüklendi');
+          }
         }
       } catch (e) {
         debugPrint('⚠️ Birim yüklenemedi ($key): $e');
       }
     }
+
+    print('✅ Background birim yüklemesi tamamlandı (${newProducts.length} ürün)');
   }
 
-  /// Tüm ürünler için stok bilgilerini TEK SORGUDA yükle
-  Future<void> _loadAllStockInfo(List<ProductModel> products) async {
+  /// ✅ OPTIMIZE: Sadece yeni ürünler için birimleri yükle (zaten yüklü olanları atla)
+  Future<void> _loadBirimlerForNewProducts(List<ProductModel> products) async {
+    if (products.isEmpty) return;
+
+    // Sadece henüz yüklenmemiş ürünleri filtrele
+    final newProducts = products.where((p) => !_productBirimlerMap.containsKey(p.stokKodu)).toList();
+
+    if (newProducts.isEmpty) {
+      print('✅ Tüm ürünler için birimler zaten yüklü');
+      return;
+    }
+
+    print('📋 ${newProducts.length} yeni ürün için birimler yükleniyor...');
+
+    final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+    int loadedCount = 0;
+
+    for (final product in newProducts) {
+      if (!mounted) break;
+
+      final key = product.stokKodu;
+
+      try {
+        final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+
+        if (mounted) {
+          setState(() {
+            _productBirimlerMap[key] = birimler;
+            if (birimler.isNotEmpty) {
+              BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+                (b) {
+                  final birimAdi = b?.birimadi?.toLowerCase() ?? '';
+                  return birimAdi.contains('box');
+                },
+                orElse: () => null,
+              );
+              final selectedBirim = defaultBirim ?? birimler.first;
+              _selectedBirimMap[key] = selectedBirim;
+
+              // ✅ _isBoxMap'i güncelle
+              final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
+              _isBoxMap[key] = birimAdi.contains('box');
+            }
+          });
+
+          // ✅ Her 10 üründe bir ilerleme göster
+          loadedCount++;
+          if (loadedCount % 10 == 0 || loadedCount == newProducts.length) {
+            print('📥 $loadedCount/${newProducts.length} ürün için birim yüklendi');
+          }
+        }
+      } catch (e) {
+        debugPrint('⚠️ Birim yüklenemedi ($key): $e');
+      }
+    }
+
+    print('✅ ${newProducts.length} ürün için birimler yüklendi');
+  }
+
+  /// ✅ OPTIMIZE: Sadece görünen ürünler için stok bilgilerini yükle
+  Future<void> _loadStockInfoForProducts(List<ProductModel> products) async {
+    if (products.isEmpty) return;
+
     try {
       final db = await DatabaseHelper().database;
 
-      // Depostok tablosu boş mu kontrol et
-      final anyResult = await db.rawQuery('SELECT 1 FROM Depostok LIMIT 1');
-      if (anyResult.isEmpty) {
-        // Depostok boş → Tüm ürünlere 0 ata
-        for (final product in products) {
+      // ✅ Sadece bu ürünlerin stokKodu'larını al
+      final stokKodlari = products.map((p) => p.stokKodu).toList();
+
+      // ✅ SQL IN clause ile sadece bu ürünler için sorgu at
+      final placeholders = stokKodlari.map((_) => '?').join(',');
+      final stocks = await db.rawQuery(
+        'SELECT StokKodu, miktar FROM Depostok WHERE StokKodu IN ($placeholders) AND UPPER(birim) = ?',
+        [...stokKodlari, 'UNIT'],
+      );
+
+      // Map'e ekle
+      for (final row in stocks) {
+        final stokKodu = row['StokKodu'].toString();
+        final miktar = (row['miktar'] as num?)?.toDouble() ?? 0.0;
+        _stockInfoMap[stokKodu] = miktar;
+      }
+
+      // Bulunamayanlar için 0 ata
+      for (final product in products) {
+        if (!_stockInfoMap.containsKey(product.stokKodu)) {
           _stockInfoMap[product.stokKodu] = 0.0;
         }
-        return;
       }
 
-      // TÜM stokları TEK SORGUDA çek
-      final allStocks = await db.query(
-        'Depostok',
-        columns: ['StokKodu', 'miktar'],
-        where: 'UPPER(birim) = ?',
-        whereArgs: ['UNIT'],
-      );
-
-      // Map oluştur
-      final stockMap = Map<String, double>.fromEntries(
-        allStocks.map((row) => MapEntry(
-          row['StokKodu'].toString(),
-          (row['miktar'] as num?)?.toDouble() ?? 0.0,
-        ))
-      );
-
-      // Her ürün için stock bilgisini Map'e kaydet
-      for (final product in products) {
-        _stockInfoMap[product.stokKodu] = stockMap[product.stokKodu] ?? 0.0;
-      }
+      print('✅ ${products.length} ürün için stok bilgisi yüklendi (${stocks.length} kayıt bulundu)');
     } catch (e) {
       debugPrint('⚠️ Stok bilgileri yüklenemedi: $e');
-      // Hata durumunda tüm ürünlere 0 ata
       for (final product in products) {
         _stockInfoMap[product.stokKodu] = 0.0;
       }
     }
   }
+
 
   Future<void> _loadProducts() async {
     // ⚡ İlk yüklemede sadece ID ve stokKodu'nu al (hafif veri)
@@ -287,8 +369,8 @@ class _CartViewState extends State<CartView> {
       _generateImageFutures(_filteredProducts);
     });
 
-    // ✅ Stok bilgilerini TEK SORGUDA yükle
-    await _loadAllStockInfo(products);
+    // ✅ Sadece görünen ürünler için stok bilgilerini yükle
+    await _loadStockInfoForProducts(products);
 
     // ✅ Birimleri background'da yükle (UI'ı bloklamadan)
     Future.microtask(() => _loadAllBirimler(products));
@@ -615,42 +697,19 @@ class _CartViewState extends State<CartView> {
       _generateImageFutures(_filteredProducts);
     });
 
-    // ✅ Yeni ürünler için _isBoxMap ve birimler listesini doldur
-    // Listeyi kopyala (concurrent modification hatası önlemek için)
-    final productsCopy = List<ProductModel>.from(_filteredProducts);
+    // ✅ Arama sonuçları için stok bilgilerini yükle
+    await _loadStockInfoForProducts(filtered);
 
-    for (var product in productsCopy) {
-      final key = product.stokKodu;
+    // ✅ OPTIMIZE: Birimleri ve resimleri PARALEL yükle
+    _scheduleImageDownload(); // Resim indirmeyi hemen başlat (paralel)
 
-      // Sadece daha önce set edilmemişse default değer ata
-      if (!_isBoxMap.containsKey(key)) {
-        print('📋 _filterProducts: Loading birimler for $key');
-        // Birimler listesini yükle (içinde _selectedBirimMap set ediliyor)
-        await _loadBirimlerForProduct(product);
-
-        // Seçilen birime göre _isBoxMap'i set et
-        final selectedBirim = _selectedBirimMap[key];
-        if (selectedBirim != null) {
-          final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
-          _isBoxMap[key] = birimAdi.contains('box');
-          print('   ✅ Set _isBoxMap[$key] = ${_isBoxMap[key]} (birim: $birimAdi)');
-          print('   ✅ Set _selectedBirimMap[$key] = $birimAdi (fiyat7: ${selectedBirim.fiyat7})');
-        } else {
-          // Birim yoksa default Unit
-          _isBoxMap[key] = false;
-          print('   ⚠️ No birim found, defaulting _isBoxMap[$key] = false');
-        }
-      } else {
-        print('📋 _filterProducts: Skipping $key (_isBoxMap already set to ${_isBoxMap[key]})');
-      }
-    }
+    // ✅ OPTIMIZE: Sadece yeni ürünler için birimleri toplu olarak yükle
+    await _loadBirimlerForNewProducts(filtered);
 
     // Arama yapıldığında listenin en üste scroll edilmesi
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
     }
-
-    _scheduleImageDownload();
 
     if (!fromUI) {
       if (_filteredProducts.length == 1 && RegExp(r'^\d+$').hasMatch(query)) {
@@ -888,7 +947,16 @@ class _CartViewState extends State<CartView> {
             onChanged: (value) {
               // Scanner'dan güncelleme yapılıyorsa ignore et (çift çağrıyı önle)
               if (_isUpdatingFromScanner) return;
-              _filterProducts(queryOverride: value);
+
+              // Debounce timer: Timer'ı iptal et ve yeniden başlat
+              _searchDebounceTimer?.cancel();
+              print('⏱️ Search debounce timer started (500ms) for: "$value"');
+              _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+                if (mounted) {
+                  print('✅ Search debounce timer fired for: "$value"');
+                  _filterProducts(queryOverride: value);
+                }
+              });
             },
           ),
         ),
@@ -1090,6 +1158,7 @@ class _CartViewState extends State<CartView> {
           quantity: context.watch<CartProvider>().getmiktar(key, (_isBoxMap[key] ?? false) ? 'Box' : 'Unit'),
           birimler: _productBirimlerMap[key] ?? [],
           selectedBirim: _selectedBirimMap[key],
+          suggestionsInfoMap: _suggestionsInfoMap,
           onBirimTipiChanged: (isNowBox) {
             // ⚠️ DEPRECATED: Bu callback artık kullanılmıyor
             // onBirimChanged callback'i tüm işi yapıyor
@@ -1110,8 +1179,10 @@ class _CartViewState extends State<CartView> {
               String? oldCartKey;
 
               // Sepetteki bu stokKodu'na ait tüm itemları kontrol et
+              // ✅ FIX: FREE itemları hariç tut (FREE itemların stokKodu'nda (FREE) var)
               for (var entry in provider.items.entries) {
-                if (entry.key.startsWith('${product.stokKodu}_')) {
+                if (entry.key.startsWith('${product.stokKodu}_') &&
+                    !entry.value.stokKodu.contains('(FREE')) {
                   oldCartItem = entry.value;
                   oldCartKey = entry.key;
                   break;
@@ -1211,6 +1282,7 @@ class ProductListItem extends StatefulWidget {
   final VoidCallback formatPriceField;
   final String? Function() getBirimTipi;
   final double? availableStock; // ✅ Stok bilgisi
+  final Map<String, String> suggestionsInfoMap; // ✅ Suggestions cache
 
   const ProductListItem({
     super.key,
@@ -1233,6 +1305,7 @@ class ProductListItem extends StatefulWidget {
     required this.formatPriceField,
     required this.getBirimTipi,
     this.availableStock,
+    required this.suggestionsInfoMap,
   });
 
   @override
@@ -1338,6 +1411,7 @@ class _ProductListItemState extends State<ProductListItem> {
               updateQuantityFromTextField: widget.updateQuantityFromTextField,
               formatPriceField: widget.formatPriceField,
               getBirimTipi: widget.getBirimTipi,
+              suggestionsInfoMap: widget.suggestionsInfoMap,
             ),
           ),
         ],
@@ -1652,6 +1726,7 @@ class ProductDetails extends StatefulWidget {
   final ValueChanged<String> updateQuantityFromTextField;
   final VoidCallback formatPriceField;
   final String? Function() getBirimTipi;
+  final Map<String, String> suggestionsInfoMap; // ✅ Cache map'i parent'tan al
 
   const ProductDetails({
     super.key,
@@ -1673,6 +1748,7 @@ class ProductDetails extends StatefulWidget {
     required this.updateQuantityFromTextField,
     required this.formatPriceField,
     required this.getBirimTipi,
+    required this.suggestionsInfoMap,
   });
 
   @override
@@ -2271,7 +2347,7 @@ class _ProductDetailsState extends State<ProductDetails> {
   Widget _buildFreeItemBadge(BuildContext context, {required bool isBox}) {
     final type = isBox ? 'Box' : 'Unit';
     final count = widget.provider.items.values
-        .where((item) => item.urunAdi == '${widget.product.urunAdi}_(FREE$type)' && item.birimTipi == type)
+        .where((item) => item.urunAdi == '${widget.product.urunAdi}_(FREE)' && item.birimTipi == type)
         .fold(0, (sum, item) => sum + item.miktar);
 
     return Positioned(
@@ -2344,11 +2420,11 @@ class _ProductDetailsState extends State<ProductDetails> {
     if (result == null) return;
 
     widget.provider.customerName = customer!.kod!;
-    final freeKey = "${widget.product.stokKodu}_(FREE${result['birimTipi']})";
+    final freeKey = "${widget.product.stokKodu}_(FREE)";
 
     widget.provider.addOrUpdateItem(
       stokKodu: freeKey,
-      urunAdi: "${widget.product.urunAdi}_(FREE${result['birimTipi']})",
+      urunAdi: "${widget.product.urunAdi}_(FREE)",
       birimFiyat: 0,
       miktar: result['miktar'],
       urunBarcode: widget.product.barcode1,
@@ -2506,10 +2582,19 @@ class _ProductDetailsState extends State<ProductDetails> {
     return Theme.of(context).colorScheme.onSurface;
   }
 
-  /// Suggestions tablosundan müşterinin bu ürünü son satın alış bilgisini getirir
+  /// ✅ OPTIMIZE: Suggestions bilgisini cache-first yaklaşımla getirir
+  /// İlk kez yüklendiğinde DB'den çeker ve cache'e ekler, sonra cache'den döner
   Future<String> _getSuggestionInfo(String? musteriId) async {
     if (musteriId == null || musteriId.isEmpty) return "";
 
+    final stokKodu = widget.product.stokKodu;
+
+    // ✅ Cache'de var mı kontrol et
+    if (widget.suggestionsInfoMap.containsKey(stokKodu)) {
+      return widget.suggestionsInfoMap[stokKodu]!;
+    }
+
+    // ✅ Cache'de yok - DB'den yükle
     try {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
@@ -2517,11 +2602,14 @@ class _ProductDetailsState extends State<ProductDetails> {
       final result = await db.query(
         'Suggestions',
         where: 'MusteriId = ? AND StokKodu = ?',
-        whereArgs: [musteriId, widget.product.stokKodu],
+        whereArgs: [musteriId, stokKodu],
         limit: 1,
       );
 
-      if (result.isEmpty) return "";
+      if (result.isEmpty) {
+        widget.suggestionsInfoMap[stokKodu] = ""; // Cache'e "yok" olarak kaydet
+        return "";
+      }
 
       final suggestion = result.first;
       final miktar = (suggestion['Miktar'] as num?)?.toDouble() ?? 0.0;
@@ -2530,17 +2618,27 @@ class _ProductDetailsState extends State<ProductDetails> {
       final iskonto = (suggestion['Iskonto'] as num?)?.toInt() ?? 0;
       final sonSatisTarihi = suggestion['SonSatisTarihi'] as String?;
 
-      if (sonSatisTarihi == null) return "";
+      if (sonSatisTarihi == null) {
+        widget.suggestionsInfoMap[stokKodu] = "";
+        return "";
+      }
 
       // Tarihi parse et
       final tarih = DateTime.tryParse(sonSatisTarihi);
-      if (tarih == null) return "";
+      if (tarih == null) {
+        widget.suggestionsInfoMap[stokKodu] = "";
+        return "";
+      }
 
       final formattedDate = "${tarih.day.toString().padLeft(2, '0')}/${tarih.month.toString().padLeft(2, '0')}/${tarih.year}";
+      final info = "[Qty:${miktar}x$birimTipi] [Total:${toplamTutar.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
 
-      return "[Qty:${miktar}x$birimTipi] [Total:${toplamTutar.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
+      // ✅ Cache'e kaydet
+      widget.suggestionsInfoMap[stokKodu] = info;
+      return info;
     } catch (e) {
       print('❌ Suggestions bilgisi alınamadı: $e');
+      widget.suggestionsInfoMap[stokKodu] = ""; // Hata durumunda cache'e kaydet
       return "";
     }
   }
