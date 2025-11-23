@@ -51,6 +51,7 @@ class RefundRepositoryImpl implements RefundRepository {
             'vat': refund.vat,
             'iskonto': refund.iskonto,
             'birimFiyat': refund.birimFiyat,
+            'toplamTutar': refund.toplamTutar,
           });
         }
 
@@ -78,6 +79,7 @@ class RefundRepositoryImpl implements RefundRepository {
             vat: (row['vat'] as int?) ?? 0,
             birim: row['birim'] as String,
             birimFiyat: (row['birimFiyat'] as double?) ?? 0.0,
+            toplamTutar: row['toplamTutar'] != null ? (row['toplamTutar'] as num?)?.toDouble() : null,
           );
         }).toList();
       }
@@ -108,6 +110,7 @@ class RefundRepositoryImpl implements RefundRepository {
         vat: row['vat'] as int,
         birim: row['birim'] as String,
         birimFiyat: (row['birimFiyat'] as num).toDouble(),
+        toplamTutar: row['toplamTutar'] != null ? (row['toplamTutar'] as num?)?.toDouble() : null,
       );
     }).toList();
   }
@@ -137,6 +140,7 @@ class RefundRepositoryImpl implements RefundRepository {
         vat: row['vat'] as int,
         birim: row['birim'] as String,
         birimFiyat: (row['birimFiyat'] as num).toDouble(),
+        toplamTutar: row['toplamTutar'] != null ? (row['toplamTutar'] as num?)?.toDouble() : null,
       );
     }).toList();
   }

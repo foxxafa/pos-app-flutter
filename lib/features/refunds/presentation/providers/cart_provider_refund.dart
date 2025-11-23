@@ -62,12 +62,14 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
     int vat = 18,
     String adetFiyati = '', // yeni parametre
     String kutuFiyati = '', // yeni parametre
+    String? selectedBirimKey, // ✅ Seçili birim key'i (String tipinde - BirimModel.key ile uyumlu)
   }) {
     print('📦 REFUND addOrUpdateItem:');
     print('   stokKodu: $stokKodu');
     print('   miktar param: $miktar');
     print('   birimTipi: $birimTipi');
     print('   birimFiyat: $birimFiyat');
+    print('   selectedBirimKey: $selectedBirimKey');
 
     if (_items.containsKey(stokKodu)) {
       print('   ✅ Item EXISTS');
@@ -90,6 +92,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
         current.durum = durum;
         current.adetFiyati = adetFiyati;
         current.kutuFiyati = kutuFiyati;
+        current.selectedBirimKey = selectedBirimKey; // ✅ Update selectedBirimKey
         print('   ✅ Item UPDATED');
       }
     } else {
@@ -113,6 +116,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
         vat: vat,
         adetFiyati: adetFiyati,
         kutuFiyati: kutuFiyati,
+        selectedBirimKey: selectedBirimKey, // ✅ Set selectedBirimKey for new item
       );
     }
 
@@ -179,6 +183,7 @@ Future<void> loadCartRefundFromDatabase(String customerName) async {
       vat: item['vat'],
       adetFiyati: item['adetFiyati'],
       kutuFiyati: item['kutuFiyati'],
+      selectedBirimKey: item['selectedBirimKey'], // ✅ Load selectedBirimKey from DB
     );
 
     _items[cartItem.stokKodu] = cartItem;

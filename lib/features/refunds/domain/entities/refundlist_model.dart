@@ -11,6 +11,7 @@ class Refund {
   final double birimFiyat;
   final int vat;
   final double iskonto;
+  final double? toplamTutar;
 
   Refund({
     required this.fisNo,
@@ -25,6 +26,7 @@ class Refund {
     required this.birimFiyat,
   required this.vat,
   required this.iskonto,
+  this.toplamTutar,
   });
 
   factory Refund.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class Refund {
       iskonto: double.tryParse(json['iskonto'] ?? '0') ?? 0.0,
       birim: json['Birim'] ?? '',
       birimFiyat: double.tryParse(json['BirimFiyat'] ?? '0') ?? 0,
+      toplamTutar: json['ToplamTutar'] != null ? double.tryParse(json['ToplamTutar'].toString()) : null,
     );
   }
 
@@ -58,6 +61,7 @@ class Refund {
       'vat': vat,
       'iskonto': iskonto,
       'birimFiyat': birimFiyat,
+      'toplamTutar': toplamTutar,
     };
   }
 
@@ -75,6 +79,7 @@ class Refund {
       iskonto: (map['iskonto'] is num) ? (map['iskonto'] as num).toDouble() : 0.0,
       birim: map['birim'],
       birimFiyat: (map['birimFiyat'] is num) ? (map['birimFiyat'] as num).toDouble() : 0.0,
+      toplamTutar: map['toplamTutar'] != null && map['toplamTutar'] is num ? (map['toplamTutar'] as num).toDouble() : null,
     );
   }
 

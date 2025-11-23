@@ -712,6 +712,7 @@ class _RefundCartItemCardState extends State<RefundCartItemCard> {
       durum: item.durum,
       vat: item.vat,
       imsrc: item.imsrc,
+      selectedBirimKey: newBirim.key, // ✅ FIX: Seçili birimi kaydet
     );
 
     // ✅ Fiyat controller'ını güncelle (%70 indirimli fiyatla)

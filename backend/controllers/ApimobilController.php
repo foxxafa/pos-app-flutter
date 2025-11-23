@@ -668,7 +668,8 @@ namespace app\controllers;
                     ss.Vat,
                     ss.Iskonto,
                     ss.BirimTipi as Birim,
-                    ss.BirimFiyat
+                    ss.BirimFiyat,
+                    ss.ToplamTutar
                  FROM SatisFisleri sf
                     INNER JOIN Musteriler m ON m.Kod = sf.MusteriId
                     INNER JOIN SatisSatirlari ss ON ss.FisNo = sf.FisNo

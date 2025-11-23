@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//d/Kodlama/java-mobil/DIAPALET/lib/**)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}

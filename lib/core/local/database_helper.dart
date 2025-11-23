@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 11;  // Version artırıldı (Suggestions tablosuna ToplamTutar ve Iskonto sütunları eklendi)
+  static const _databaseVersion = 12;  // Version artırıldı (Refunds tablosuna toplamTutar sütunu eklendi)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -79,6 +79,17 @@ class DatabaseHelper {
         debugPrint('✅ Iskonto column added to Suggestions');
       } catch (e) {
         debugPrint('ℹ️ Iskonto column already exists: $e');
+      }
+    }
+
+    // Version 12: Refunds tablosuna toplamTutar sütunu ekle
+    if (oldVersion < 12) {
+      debugPrint('Adding toplamTutar column to Refunds table...');
+      try {
+        await db.execute('ALTER TABLE Refunds ADD COLUMN toplamTutar REAL');
+        debugPrint('✅ toplamTutar column added to Refunds');
+      } catch (e) {
+        debugPrint('ℹ️ toplamTutar column already exists: $e');
       }
     }
   }
@@ -180,7 +191,8 @@ class DatabaseHelper {
         vat INTEGER,
         iskonto REAL,
         birim TEXT,
-        birimFiyat REAL
+        birimFiyat REAL,
+        toplamTutar REAL
       )
     ''');
 

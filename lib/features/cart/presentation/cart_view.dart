@@ -2538,10 +2538,7 @@ class _ProductDetailsState extends State<ProductDetails> {
 
       final formattedDate = "${tarih.day.toString().padLeft(2, '0')}/${tarih.month.toString().padLeft(2, '0')}/${tarih.year}";
 
-      // Birim fiyat hesapla (ToplamTutar / Miktar)
-      final birimFiyat = miktar > 0 ? toplamTutar / miktar : toplamTutar;
-
-      return "[Qty:${miktar}x$birimTipi] [Price:${birimFiyat.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
+      return "[Qty:${miktar}x$birimTipi] [Total:${toplamTutar.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
     } catch (e) {
       print('❌ Suggestions bilgisi alınamadı: $e');
       return "";

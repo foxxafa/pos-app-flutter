@@ -135,8 +135,7 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         final tarih = DateTime.tryParse(sonSatisTarihi);
         if (tarih != null) {
           final formattedDate = "${tarih.day.toString().padLeft(2, '0')}/${tarih.month.toString().padLeft(2, '0')}/${tarih.year}";
-          final birimFiyat = miktar > 0 ? toplamTutar / miktar : toplamTutar;
-          _suggestionsInfoMap[stokKodu] = "[Qty:${miktar}x$birimTipi] [Price:${birimFiyat.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
+          _suggestionsInfoMap[stokKodu] = "[Qty:${miktar}x$birimTipi] [Total:${toplamTutar.toStringAsFixed(2)}] [Dsc:$iskonto%] [Date:$formattedDate]";
         }
       }
 

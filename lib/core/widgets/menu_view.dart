@@ -14,6 +14,7 @@ import 'package:pos_app/features/refunds/domain/repositories/refund_repository.d
 import 'package:provider/provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:pos_app/core/local/database_helper.dart';
+import 'package:pos_app/core/services/app_version_service.dart';
 
 class MenuView extends StatefulWidget {
   const MenuView({Key? key}) : super(key: key);
@@ -24,12 +25,14 @@ class MenuView extends StatefulWidget {
 
 class _MenuViewState extends State<MenuView> {
   String _userName = '...';
+  String _appVersion = '';
   late SyncService _syncService;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadAppVersion();
   }
 
   @override
@@ -49,6 +52,15 @@ class _MenuViewState extends State<MenuView> {
     if (mounted) {
       setState(() {
         _userName = userProvider.username;
+      });
+    }
+  }
+
+  Future<void> _loadAppVersion() async {
+    final version = await AppVersionService.instance.getVersionForDisplay();
+    if (mounted) {
+      setState(() {
+        _appVersion = version;
       });
     }
   }
@@ -134,6 +146,23 @@ class _MenuViewState extends State<MenuView> {
         appBar: AppBar(
           title: Text('app.title'.tr()),
           automaticallyImplyLeading: false,
+          leading: _appVersion.isEmpty
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'v$_appVersion',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).appBarTheme.foregroundColor ??
+                                Theme.of(context).colorScheme.onPrimary,
+                            fontSize: 11,
+                          ),
+                    ),
+                  ),
+                ),
+          leadingWidth: _appVersion.isEmpty ? null : 70,
           actions: [
             IconButton(
               icon: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
@@ -208,18 +237,6 @@ class _MenuViewState extends State<MenuView> {
                           context,
                           MaterialPageRoute(
                             builder: (context) => CartListPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _HomeButton(
-                      icon: Icons.settings_outlined,
-                      label: 'home.settings'.tr(),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('home.settings_not_ready'.tr()),
                           ),
                         );
                       },
