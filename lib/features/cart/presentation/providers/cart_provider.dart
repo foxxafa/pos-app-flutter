@@ -59,9 +59,13 @@ extension CartItemVatExtension on CartItem {
 
 extension CartItemExtension on CartItem {
   Map<String, dynamic> toJson() {
+    // Bedava ürünlerde _(FREE) ekini kaldır
+    final cleanStokKodu = stokKodu.replaceAll('_(FREE)', '');
+    final cleanUrunAdi = urunAdi.replaceAll('_(FREE)', '');
+
     return {
-      "StokKodu": stokKodu,
-      "UrunAdi": urunAdi,
+      "StokKodu": cleanStokKodu,
+      "UrunAdi": cleanUrunAdi,
       "Miktar": miktar,
       "BirimFiyat": birimFiyat,
       "ToplamTutar": fiyat,

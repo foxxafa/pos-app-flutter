@@ -243,7 +243,10 @@ class _RefundActivityViewState extends State<RefundActivityView> {
         }
       }
 
-      debugPrint('🔍 Load Item: stokKodu=$stokKodu, birimTipi=$birimTipi, selectedBirimKey=$selectedBirimKey');
+      // ✅ Load aciklama (refund reason) from satir
+      final String aciklama = s['aciklama']?.toString() ?? '';
+
+      debugPrint('🔍 Load Item: stokKodu=$stokKodu, birimTipi=$birimTipi, selectedBirimKey=$selectedBirimKey, aciklama=$aciklama');
 
       provider.addOrUpdateItem(
         stokKodu: stokKodu,
@@ -259,6 +262,7 @@ class _RefundActivityViewState extends State<RefundActivityView> {
         adetFiyati: s['AdetFiyati']?.toString() ?? '',
         kutuFiyati: s['KutuFiyati']?.toString() ?? '',
         selectedBirimKey: selectedBirimKey,  // ✅ Now passing selectedBirimKey
+        aciklama: aciklama,  // ✅ Load refund reason
       );
     }
 

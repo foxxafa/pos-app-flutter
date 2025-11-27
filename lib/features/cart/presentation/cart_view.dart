@@ -1011,6 +1011,9 @@ class _CartViewState extends State<CartView> {
         // CartView2'ye git
         await Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2()));
 
+        // ✅ Geri döndüğünde provider'dan sepet state'ini sync et (birim değişiklikleri dahil)
+        await _syncWithProvider();
+
         // CartView2'den döndükten sonra scan sayacını temizle
         _cleanupScanCounters();
 

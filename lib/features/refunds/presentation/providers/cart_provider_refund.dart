@@ -95,6 +95,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
     String adetFiyati = '', // yeni parametre
     String kutuFiyati = '', // yeni parametre
     String? selectedBirimKey, // ✅ Seçili birim key'i (String tipinde - BirimModel.key ile uyumlu)
+    String aciklama = '', // ✅ Refund sebebi (Load Refund için)
   }) {
     print('📦 REFUND addOrUpdateItem:');
     print('   stokKodu: $stokKodu');
@@ -102,6 +103,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
     print('   birimTipi: $birimTipi');
     print('   birimFiyat: $birimFiyat');
     print('   selectedBirimKey: $selectedBirimKey');
+    print('   aciklama: $aciklama');
 
     if (_items.containsKey(stokKodu)) {
       print('   ✅ Item EXISTS');
@@ -125,6 +127,10 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
         current.adetFiyati = adetFiyati;
         current.kutuFiyati = kutuFiyati;
         current.selectedBirimKey = selectedBirimKey; // ✅ Update selectedBirimKey
+        // ✅ Load Refund için aciklama'yı koru (yeni değer varsa güncelle)
+        if (aciklama.isNotEmpty) {
+          current.aciklama = aciklama;
+        }
         print('   ✅ Item UPDATED');
       }
     } else {
@@ -149,6 +155,7 @@ void updateAciklama(String stokKodu, String yeniAciklama) {
         adetFiyati: adetFiyati,
         kutuFiyati: kutuFiyati,
         selectedBirimKey: selectedBirimKey, // ✅ Set selectedBirimKey for new item
+        aciklama: aciklama, // ✅ Set aciklama for new item (Load Refund)
       );
     }
 

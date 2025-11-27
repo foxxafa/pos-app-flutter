@@ -543,7 +543,12 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
   Widget _buildShoppingCartIcon(int itemCount, int totalQuantity) {
     return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2())),
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(builder: (context) => const CartView2()));
+
+        // ✅ Geri döndüğünde provider'dan sepet state'ini sync et (birim değişiklikleri dahil)
+        await _syncWithProvider();
+      },
       behavior: HitTestBehavior.translucent,
       child: Container(
         width: 18.w,
