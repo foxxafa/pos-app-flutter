@@ -66,6 +66,10 @@ class _CartViewState extends State<CartView> {
   // El terminali için debounce timer (çift eklemeyi önler)
   Timer? _scanDebounceTimer;
 
+  // 🧪 DEBUG: El terminali simülasyonu için (test modunda true yap)
+  // static const bool _debugScannerMode = true; // TODO: Production'da false yap
+  static const bool _debugScannerMode = false; // Production
+
   // Arama için debounce timer (yazarken her tuşa basmada tetiklenmemesi için)
   Timer? _searchDebounceTimer;
 
@@ -582,12 +586,13 @@ class _CartViewState extends State<CartView> {
   /// SUSPENDED ürünler (miktar <= 0): HER ZAMAN dit.mp3
   /// Normal ürünler - İlk okutma: beepk.mp3, sonraki tüm okutmalar: boopk.mp3
   Future<void> playBeepForProduct(ProductModel product) async {
-    // ✅ Suspended kontrolü: miktar 0 veya negatif ise suspended
-    // NOT: ProductImage'deki showBanner ile AYNI kontrol!
-    final isSuspended = (product.miktar ?? 0) <= 0;
+    // ✅ Suspended kontrolü: Depostok'tan gelen stok bilgisini kullan (product.miktar null olabilir!)
+    final key = product.stokKodu;
+    final stockFromDepostok = _stockInfoMap[key] ?? product.miktar ?? 0.0;
+    final isSuspended = stockFromDepostok <= 0;
 
     // 🐛 DEBUG
-    print('🔊 playBeepForProduct(${product.stokKodu}): isSuspended=$isSuspended, miktar=${product.miktar}');
+    print('🔊 playBeepForProduct($key): isSuspended=$isSuspended, stockFromDepostok=$stockFromDepostok, product.miktar=${product.miktar}');
 
     // ⚠️ SUSPENDED ÜRÜN: HER ZAMAN dit.mp3 çal
     if (isSuspended) {
@@ -716,14 +721,18 @@ class _CartViewState extends State<CartView> {
         final product = _filteredProducts.first;
         final key = product.stokKodu;
 
-        // ⚠️ SUSPENDED KONTROL: miktar <= 0 ise sepete EKLEME!
-        final isSuspended = (product.miktar ?? 0) <= 0;
+        // ⚠️ SUSPENDED KONTROL: Depostok'tan gelen stok bilgisini kullan (product.miktar null olabilir!)
+        // _stockInfoMap zaten _loadStockInfoForProducts ile yüklendi
+        final stockFromDepostok = _stockInfoMap[key] ?? product.miktar ?? 0.0;
+        final isSuspended = stockFromDepostok <= 0;
+        print('📦 STOK KONTROL: ${product.urunAdi} - stockFromDepostok: $stockFromDepostok, _stockInfoMap[$key]: ${_stockInfoMap[key]}, product.miktar: ${product.miktar}, isSuspended: $isSuspended');
         if (isSuspended) {
-          print('⚠️ SUSPENDED ürün sepete EKLENMEDİ: ${product.urunAdi} (miktar: ${product.miktar})');
+          print('⚠️ SUSPENDED ürün sepete EKLENMEDİ: ${product.urunAdi} (stockFromDepostok: $stockFromDepostok, product.miktar: ${product.miktar})');
           playBeepForProduct(product); // Ses çal (ditdit.mp3)
           _clearAndFocusBarcode();
           return; // Sepete ekleme - sadece ses çal ve çık
         }
+        print('✅ STOK MEVCUT - Sepete ekleme işlemi başlıyor...');
 
         // ✅ Seçili birimi al (yoksa default)
         final selectedBirim = _selectedBirimMap[key];
@@ -797,6 +806,109 @@ class _CartViewState extends State<CartView> {
     if (mounted) {
       _barcodeFocusNode.requestFocus();
     }
+  }
+
+  /// 🧪 DEBUG: El terminali simülasyon dialog'u
+  /// Normal telefonda barkod okutma testleri için kullanılır
+  void _showDebugScannerDialog(BuildContext context) {
+    final barcodeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.bug_report, color: Colors.orange),
+            SizedBox(width: 8),
+            Text('Scanner Simülasyonu', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Barkod numarasını yazın ve "Okut" butonuna basın.\n'
+              'Bu, el terminalinden okutma işlemini simüle eder.',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            SizedBox(height: 12),
+            TextField(
+              controller: barcodeController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Barkod',
+                hintText: 'Örn: 8691234567890',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.qr_code),
+              ),
+              onSubmitted: (value) {
+                if (value.isNotEmpty) {
+                  Navigator.pop(ctx);
+                  _simulateScan(value);
+                }
+              },
+            ),
+            SizedBox(height: 12),
+            // Debug bilgileri
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('📋 Debug Info:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
+                  SizedBox(height: 4),
+                  Text('• Filtrelenen ürün: ${_filteredProducts.length}', style: TextStyle(fontSize: 10)),
+                  Text('• Toplam ürün: ${_allProducts.length}', style: TextStyle(fontSize: 10)),
+                  Text('• Birim map: ${_productBirimlerMap.length}', style: TextStyle(fontSize: 10)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('İptal'),
+          ),
+          ElevatedButton.icon(
+            icon: Icon(Icons.qr_code_scanner),
+            label: Text('Okut'),
+            onPressed: () {
+              final barcode = barcodeController.text.trim();
+              if (barcode.isNotEmpty) {
+                Navigator.pop(ctx);
+                _simulateScan(barcode);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 🧪 DEBUG: Barkod okutma simülasyonu
+  void _simulateScan(String barcode) {
+    print('🧪 DEBUG SCAN: Simulating barcode scan: $barcode');
+    print('   _filteredProducts.length BEFORE: ${_filteredProducts.length}');
+
+    // El terminalinin yaptığını simüle et
+    _onBarcodeScanned(barcode);
+
+    // Sonuçları logla
+    Future.delayed(Duration(milliseconds: 500), () {
+      print('   _filteredProducts.length AFTER: ${_filteredProducts.length}');
+      if (_filteredProducts.isNotEmpty) {
+        print('   First product: ${_filteredProducts.first.urunAdi}');
+        print('   First product stokKodu: ${_filteredProducts.first.stokKodu}');
+        print('   First product miktar: ${_filteredProducts.first.miktar}');
+      }
+    });
   }
 
   // --- UI Helper Methods ---
@@ -961,6 +1073,13 @@ class _CartViewState extends State<CartView> {
           ),
         ),
         actions: [
+          // 🧪 DEBUG: El terminali simülasyon butonu
+          if (_debugScannerMode)
+            IconButton(
+              icon: Icon(Icons.bug_report, size: 20.sp, color: Colors.yellow),
+              tooltip: 'Debug: Simulate Scanner',
+              onPressed: () => _showDebugScannerDialog(context),
+            ),
           _buildShoppingCartIcon(cartItems.length, totalQuantity),
         ],
       ),
