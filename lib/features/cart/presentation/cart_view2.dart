@@ -825,19 +825,19 @@ class _CartItemCardState extends State<_CartItemCard> {
 
   /// İndirim alanı manuel olarak değiştirildiğinde tetiklenir.
   void _onDiscountChanged(String value) {
-    // ✅ SEÇENEK 2: İndirim güncel/custom fiyat üzerinden hesaplansın
-    // Price controller'daki güncel fiyatı al (kullanıcı manuel değiştirmiş olabilir)
-    final currentPriceText = _priceController.text.replaceAll(',', '.');
-    final currentPrice = double.tryParse(currentPriceText) ?? widget.item.birimFiyat;
+    // ✅ FIX: İndirim HER ZAMAN ORİJİNAL fiyat üzerinden hesaplanmalı!
+    // widget.item.birimFiyat = orijinal fiyat (provider'da saklanan)
+    // _priceController.text = indirimli fiyat (görüntülenen) - KULLANMA!
+    final orjinalFiyat = widget.item.birimFiyat;
 
     // Eğer kullanıcı alanı boşaltmak istiyorsa, indirimi sıfırla
     if (value.isEmpty) {
-      // İndirim kaldırıldı - mevcut fiyatı koru (artık orijinale dönme!)
-      // Provider'ı 0 indirim ile güncelle, ama mevcut birimFiyat'ı koru
-      _updateProviderItem(birimFiyat: currentPrice, iskonto: 0.0);
+      // İndirim kaldırıldı - orijinal fiyata dön
+      _updateProviderItem(birimFiyat: orjinalFiyat, iskonto: 0.0);
 
       // ✅ FIX: Fiyat controller'ını orijinal fiyata geri döndür
-      _priceController.text = currentPrice.toStringAsFixed(2);
+      _priceController.text = orjinalFiyat.toStringAsFixed(2);
+      _oldPriceValue = _priceController.text;
       return;
     }
 
@@ -845,18 +845,15 @@ class _CartItemCardState extends State<_CartItemCard> {
     double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
     discountPercent = discountPercent.clamp(0.0, 100.0);
 
-    // İndirim miktarını hesapla - güncel fiyat üzerinden!
-    final discountAmount = (currentPrice * discountPercent) / 100;
-
-    // İndirimli fiyatı hesapla
-    final discountedPrice = currentPrice - discountAmount;
+    // ✅ FIX: İndirimli fiyatı ORİJİNAL fiyattan hesapla
+    final discountedPrice = orjinalFiyat * (1 - discountPercent / 100);
 
     // ✅ FIX: Controller'ları PostFrameCallback ile güncelle (TextField internal state conflict'i önle)
     final formattedDiscount = discountPercent.toString();
     final formattedPrice = discountedPrice.toStringAsFixed(2);
 
-    // Provider'ı güncelle - güncel fiyat üzerinden indirim uygulandı
-    _updateProviderItem(birimFiyat: currentPrice, iskonto: discountPercent);
+    // Provider'ı güncelle - ORİJİNAL fiyat korunuyor, sadece iskonto değişiyor
+    _updateProviderItem(birimFiyat: orjinalFiyat, iskonto: discountPercent);
 
     // ✅ FIX: Controller güncellemesini provider update'inden SONRA yap
     // Focus kontrolü KALDIRILDI - Enter basıldığında da güncelleme yapılmalı

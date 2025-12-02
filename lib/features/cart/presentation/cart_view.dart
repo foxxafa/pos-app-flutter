@@ -1912,31 +1912,30 @@ class _ProductDetailsState extends State<ProductDetails> {
     final cartKey = '${widget.product.stokKodu}_$selectedType';
     final cartItem = widget.provider.items[cartKey];
 
+    // ✅ FIX: ORİJİNAL fiyatı her zaman selectedBirim.fiyat7 veya product'tan al
+    // cartItem.birimFiyat DEĞİL! (çünkü o zaten indirimli olabilir)
+    double orjinalFiyat;
+    if (widget.selectedBirim != null) {
+      orjinalFiyat = widget.selectedBirim!.fiyat7 ?? 0;
+    } else {
+      orjinalFiyat = (selectedType.toUpperCase() == 'UNIT')
+          ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
+          : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+    }
+
     // ⚠️ SADECE sepette olan itemler için provider'ı güncelle
     // Eğer item henüz sepette değilse, sadece preview için controller'ları güncelle
     if (cartItem == null || cartItem.miktar <= 0) {
       // Item sepette değil - sadece preview için controller'ları güncelle
-      // ✅ FIX: selectedBirim.fiyat7'den fiyat al (product.adetFiyati/kutuFiyati DEĞİL!)
-      double previewPrice;
-      if (widget.selectedBirim != null) {
-        // Seçili birim varsa fiyat7'den al
-        previewPrice = widget.selectedBirim!.fiyat7 ?? 0;
-      } else {
-        // Yoksa eski mantık (fallback)
-        previewPrice = (selectedType.toUpperCase() == 'UNIT')
-            ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-            : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
-      }
-
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           if (val.isEmpty) {
             widget.discountController.text = '';
-            widget.priceController.text = previewPrice.toStringAsFixed(2);
+            widget.priceController.text = orjinalFiyat.toStringAsFixed(2);
           } else {
             double discountPercent = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
             if (discountPercent > 100) discountPercent = 100;
-            final discountedPrice = previewPrice * (1 - (discountPercent / 100));
+            final discountedPrice = orjinalFiyat * (1 - (discountPercent / 100));
             widget.priceController.text = discountedPrice.toStringAsFixed(2);
           }
         }
@@ -1945,7 +1944,7 @@ class _ProductDetailsState extends State<ProductDetails> {
     }
 
     // Item sepette var - provider'ı güncelle
-    final currentBirimFiyat = cartItem.birimFiyat;
+    // ✅ FIX: birimFiyat olarak ORİJİNAL fiyatı gönder (indirimli fiyat DEĞİL!)
 
     if (val.isEmpty) {
       // İskonto kaldırıldı
@@ -1955,7 +1954,7 @@ class _ProductDetailsState extends State<ProductDetails> {
         iskonto: 0.0,
         birimTipi: selectedType,
         urunAdi: widget.product.urunAdi,
-        birimFiyat: currentBirimFiyat,
+        birimFiyat: orjinalFiyat, // ✅ Orijinal fiyat
         vat: widget.product.vat,
         imsrc: widget.product.imsrc,
         adetFiyati: widget.product.adetFiyati,
@@ -1967,14 +1966,14 @@ class _ProductDetailsState extends State<ProductDetails> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           widget.discountController.text = '';
-          widget.priceController.text = currentBirimFiyat.toStringAsFixed(2);
+          widget.priceController.text = orjinalFiyat.toStringAsFixed(2);
         }
       });
     } else {
       double discountPercent = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
       if (discountPercent > 100) discountPercent = 100;
 
-      final discountedPrice = currentBirimFiyat * (1 - (discountPercent / 100));
+      final discountedPrice = orjinalFiyat * (1 - (discountPercent / 100));
 
       widget.provider.addOrUpdateItem(
         stokKodu: widget.product.stokKodu,
@@ -1982,7 +1981,7 @@ class _ProductDetailsState extends State<ProductDetails> {
         iskonto: discountPercent,
         birimTipi: selectedType,
         urunAdi: widget.product.urunAdi,
-        birimFiyat: currentBirimFiyat,
+        birimFiyat: orjinalFiyat, // ✅ Orijinal fiyat
         vat: widget.product.vat,
         imsrc: widget.product.imsrc,
         adetFiyati: widget.product.adetFiyati,

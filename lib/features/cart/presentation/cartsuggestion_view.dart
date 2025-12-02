@@ -767,12 +767,21 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
 
               final value = _discountControllers[controllerKey]!.text;
 
-              // ⚠️ KRITIK: CartProvider'dan mevcut birimFiyat'ı al (price override'ı koru)
-              final currentBirimFiyat = cartItem.birimFiyat;
+              // ✅ FIX: ORİJİNAL fiyatı her zaman selectedBirim.fiyat7 veya product'tan al
+              // cartItem.birimFiyat DEĞİL! (çünkü indirim her zaman orijinal fiyattan hesaplanmalı)
+              final selectedBirim = _selectedBirimMap[capturedStokKodu];
+              double orjinalFiyat;
+              if (selectedBirim != null) {
+                orjinalFiyat = selectedBirim.fiyat7 ?? 0;
+              } else {
+                orjinalFiyat = (capturedBirimTipi == 'UNIT')
+                    ? (double.tryParse(currentProduct.adetFiyati.toString()) ?? 0)
+                    : (double.tryParse(currentProduct.kutuFiyati.toString()) ?? 0);
+              }
 
               if (value.isEmpty) {
-                // İndirim kaldırıldı - fiyat alanını güncelle
-                _priceControllers[controllerKey]!.text = currentBirimFiyat.toStringAsFixed(2);
+                // İndirim kaldırıldı - fiyat alanını orijinal fiyata güncelle
+                _priceControllers[controllerKey]!.text = orjinalFiyat.toStringAsFixed(2);
 
                 currentCartProvider.customerKod = currentCustomerProvider.selectedCustomer!.kod!;
                 currentCartProvider.customerName = currentCustomerProvider.selectedCustomer!.unvan ?? currentCustomerProvider.selectedCustomer!.kod!;
@@ -782,12 +791,13 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                   iskonto: 0,
                   birimTipi: capturedBirimTipi,
                   urunAdi: currentProduct.urunAdi,
-                  birimFiyat: currentBirimFiyat, // Mevcut birimFiyat'ı koru
+                  birimFiyat: orjinalFiyat, // ✅ Orijinal fiyat
                   vat: currentProduct.vat,
                   imsrc: currentProduct.imsrc,
                   adetFiyati: currentProduct.adetFiyati,
                   kutuFiyati: currentProduct.kutuFiyati,
                   urunBarcode: currentProduct.barcode1,
+                  selectedBirimKey: selectedBirim?.key,
                 );
                 return;
               }
@@ -795,9 +805,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
               double discountPercent = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
               discountPercent = discountPercent.clamp(0.0, 100.0);
 
-              // İndirimli fiyatı hesapla (mevcut birimFiyat'tan)
-              final discountAmount = (currentBirimFiyat * discountPercent) / 100;
-              final discountedPrice = currentBirimFiyat - discountAmount;
+              // ✅ İndirimli fiyatı hesapla (ORİJİNAL fiyattan)
+              final discountedPrice = orjinalFiyat * (1 - discountPercent / 100);
               _priceControllers[controllerKey]!.text = discountedPrice.toStringAsFixed(2);
 
               currentCartProvider.customerKod = currentCustomerProvider.selectedCustomer!.kod!;
@@ -808,12 +817,13 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
                 iskonto: discountPercent,
                 birimTipi: capturedBirimTipi,
                 urunAdi: currentProduct.urunAdi,
-                birimFiyat: currentBirimFiyat, // Mevcut birimFiyat'ı koru
+                birimFiyat: orjinalFiyat, // ✅ Orijinal fiyat
                 vat: currentProduct.vat,
                 imsrc: currentProduct.imsrc,
                 adetFiyati: currentProduct.adetFiyati,
                 kutuFiyati: currentProduct.kutuFiyati,
                 urunBarcode: currentProduct.barcode1,
+                selectedBirimKey: selectedBirim?.key,
               );
             }
           });
@@ -1170,6 +1180,10 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
             ),
             onSubmitted: (value) {
               // On submit, just unfocus. The focus listener will handle the update.
+              discountFocusNode.unfocus();
+            },
+            onEditingComplete: () {
+              // ✅ Enter tuşuna basıldığında veya klavye kapatıldığında focus'u kapat
               discountFocusNode.unfocus();
             },
           ),
