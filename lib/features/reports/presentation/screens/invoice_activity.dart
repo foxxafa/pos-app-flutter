@@ -240,6 +240,11 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
     // ✅ OrderInfoProvider'a da fisNo'yu BOŞ bırak - Yeni fisNo oluşturulacak
     orderInfoProvider.orderNo = '';
 
+    // ✅ Comment'i PendingSales'tan yükle ve OrderInfoProvider'a set et
+    final loadedComment = fis['Comment']?.toString() ?? '';
+    orderInfoProvider.comment = loadedComment;
+    print("DEBUG: Load Order - Comment loaded: '$loadedComment'");
+
     // ✅ Clear cart AFTER setting customer info
     await provider.clearCart();
 

@@ -253,11 +253,23 @@ class _CartView2State extends State<CartView2> {
       );
 
       // Ana müşteri görünümüne dön
-      Navigator.of(context).pushAndRemoveUntil(
+      // ✅ FIX: Doğru navigasyon stack'i koruyarak CustomerView'e dön
+      // Mevcut Stack: MenuView > SalesView > CustomerView > InvoiceActivityView > Invoice2Activity > CartView > CartView2
+      // Hedef Stack: MenuView > SalesView > CustomerView (geri basınca SalesView'e gider)
+      //
+      // 5 kez pop yap: CartView2, CartView, Invoice2Activity, InvoiceActivityView, CustomerView (eski) kaldır
+      // Sonra push ile yeni CustomerView ekle
+      Navigator.of(context)
+        ..pop() // CartView2 kapat
+        ..pop() // CartView kapat
+        ..pop() // Invoice2Activity kapat
+        ..pop() // InvoiceActivityView kapat
+        ..pop(); // Eski CustomerView kapat
+      // Şimdi SalesView'deyiz, yeni CustomerView'i push et
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CustomerView(bakiye: bakiye),
         ),
-            (route) => false,
       );
     } catch (e) {
       // Genel hata yakalama
@@ -1159,6 +1171,9 @@ class _CartItemCardState extends State<_CartItemCard> {
 
   /// Birim seçimi, fiyat ve indirim alanlarını oluşturan widget.
   Widget _buildPriceRow(BuildContext context) {
+    // ✅ FREE item kontrolü - stokKodu'nda (FREE) varsa disable yap
+    final isFreeItem = widget.item.stokKodu.contains('(FREE)');
+
     return Row(
       children: [
         // Birim kontrolü (Dropdown veya Text)
@@ -1173,16 +1188,17 @@ class _CartItemCardState extends State<_CartItemCard> {
           child: TextField(
             controller: _priceController,
             focusNode: _priceFocusNode,
+            enabled: !isFreeItem, // ✅ FREE item için disabled
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            onChanged: _onPriceChanged,
-            onSubmitted: (_) => _formatPriceField(),
+            onChanged: isFreeItem ? null : _onPriceChanged,
+            onSubmitted: isFreeItem ? null : (_) => _formatPriceField(),
             textAlign: TextAlign.center,
             decoration: InputDecoration(
               filled: true,
               fillColor: Theme.of(context)
                   .colorScheme
                   .surfaceContainerHighest
-                  .withValues(alpha: 0.7),
+                  .withValues(alpha: isFreeItem ? 0.4 : 0.7),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide.none,
@@ -1190,7 +1206,11 @@ class _CartItemCardState extends State<_CartItemCard> {
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             ),
-            style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w500,
+              color: isFreeItem ? Colors.grey : null,
+            ),
           ),
         ),
         SizedBox(width: 2.w),
@@ -1203,16 +1223,18 @@ class _CartItemCardState extends State<_CartItemCard> {
               Icon(
                 Icons.local_offer,
                 size: 18.sp,
-                color: Theme.of(context).colorScheme.error,
+                color: isFreeItem
+                    ? Theme.of(context).colorScheme.error.withValues(alpha: 0.4)
+                    : Theme.of(context).colorScheme.error,
               ),
               SizedBox(width: 1.w),
               Expanded(
                 child: TextField(
                   controller: _discountController,
                   focusNode: _discountFocusNode,
+                  enabled: !isFreeItem, // ✅ FREE item için disabled
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  onSubmitted: (value) {
-                    // ✅ FIX: Enter basıldığında indirimi uygula ve focus'u kapat
+                  onSubmitted: isFreeItem ? null : (value) {
                     _onDiscountChanged(value);
                     _discountFocusNode.unfocus();
                   },
@@ -1221,7 +1243,7 @@ class _CartItemCardState extends State<_CartItemCard> {
                     fillColor: Theme.of(context)
                         .colorScheme
                         .surfaceContainerHighest
-                        .withValues(alpha: 0.7),
+                        .withValues(alpha: isFreeItem ? 0.4 : 0.7),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                       borderSide: BorderSide.none,
@@ -1232,10 +1254,16 @@ class _CartItemCardState extends State<_CartItemCard> {
                     prefixStyle: TextStyle(
                       fontSize: 14.sp,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.error,
+                      color: isFreeItem
+                          ? Theme.of(context).colorScheme.error.withValues(alpha: 0.4)
+                          : Theme.of(context).colorScheme.error,
                     ),
                   ),
-                  style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.w500,
+                    color: isFreeItem ? Colors.grey : null,
+                  ),
                 ),
               ),
             ],

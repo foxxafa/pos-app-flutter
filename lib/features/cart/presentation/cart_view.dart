@@ -1323,18 +1323,23 @@ class _CartViewState extends State<CartView> {
                 print('   newCartKey: $newCartKey');
                 print('   birimFiyat: $birimFiyat');
 
-                // ⚠️ KRITIK: Eski item'ı sil, yeni item ekle (birim tipi değiştiği için key değişir)
-                if (oldCartKey != newCartKey) {
-                  print('   🔄 Birim değişti, eski item siliniyor ve yeni item ekleniyor');
-                  provider.removeItem(oldCartKey);
+                // ✅ FIX: Aynı birim seçildiyse hiçbir şey yapma (miktar 2 katına çıkmasını önle)
+                if (oldCartKey == newCartKey) {
+                  print('   ⏭️ Aynı birim seçildi, işlem yapılmıyor');
+                  return;
                 }
+
+                // ⚠️ KRITIK: Eski item'ı sil, yeni item ekle (birim tipi değiştiği için key değişir)
+                print('   🔄 Birim değişti, eski item siliniyor ve yeni item ekleniyor');
+                // ✅ FIX: removeItem iki parametre alır (stokKodu, birimTipi)
+                provider.removeItem(oldCartItem.stokKodu, oldCartItem.birimTipi);
 
                 provider.addOrUpdateItem(
                   stokKodu: product.stokKodu,
                   urunAdi: product.urunAdi,
                   birimFiyat: birimFiyat,
                   urunBarcode: product.barcode1,
-                  miktar: oldCartItem.miktar, // ⚠️ FIX: Eski miktarı koru (0 DEĞİL!)
+                  miktar: oldCartItem.miktar, // ✅ Eski miktarı koru
                   iskonto: oldCartItem.iskonto,
                   birimTipi: birimTipi,
                   vat: product.vat,
@@ -2459,81 +2464,138 @@ class _ProductDetailsState extends State<ProductDetails> {
             child: Image.asset('assets/hand.png', width: 10.w, height: 10.w),
           ),
         ),
-        _buildFreeItemBadge(context, isBox: true),
-        _buildFreeItemBadge(context, isBox: false),
+        // ✅ Dinamik birim sistemi: Her birim tipi için ayrı badge
+        ..._buildFreeItemBadges(context),
       ],
     );
   }
 
-  Widget _buildFreeItemBadge(BuildContext context, {required bool isBox}) {
-    final type = isBox ? 'Box' : 'Unit';
-    final count = widget.provider.items.values
-        .where((item) => item.urunAdi == '${widget.product.urunAdi}_(FREE)' && item.birimTipi == type)
-        .fold(0, (sum, item) => sum + item.miktar);
+  /// ✅ FREE item badge'leri: Üstte mavi (çeşit sayısı), altta turuncu (toplam miktar)
+  List<Widget> _buildFreeItemBadges(BuildContext context) {
+    // Bu ürüne ait tüm FREE itemları bul
+    final freeItems = widget.provider.items.values
+        .where((item) => item.stokKodu.startsWith('${widget.product.stokKodu}_(FREE)') && item.miktar > 0)
+        .toList();
 
-    return Positioned(
-      right: -2.w,
-      top: isBox ? -1.w : null,
-      bottom: isBox ? null : -1.w,
-      child: Container(
-        padding: EdgeInsets.all(1.w),
-        decoration: BoxDecoration(
-          color: isBox ? Theme.of(context).colorScheme.secondary : Colors.orange,
-          shape: BoxShape.circle,
-        ),
-        constraints: BoxConstraints(minWidth: 6.w, minHeight: 6.w),
-        child: Center(
-          child: Text(
-            '$count',
-            style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold),
+    // Kaç farklı çeşit (birim tipi) var
+    final itemCount = freeItems.length;
+
+    // Toplam miktar
+    final totalQuantity = freeItems.fold(0, (sum, item) => sum + item.miktar);
+
+    return [
+      // Üstteki mavi badge: Çeşit sayısı
+      Positioned(
+        right: -2.w,
+        top: -1.w,
+        child: Container(
+          padding: EdgeInsets.all(1.w),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.secondary,
+            shape: BoxShape.circle,
+          ),
+          constraints: BoxConstraints(minWidth: 6.w, minHeight: 6.w),
+          child: Center(
+            child: Text(
+              '$itemCount',
+              style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold),
+            ),
           ),
         ),
       ),
-    );
+      // Alttaki turuncu badge: Toplam miktar
+      Positioned(
+        right: -2.w,
+        bottom: -1.w,
+        child: Container(
+          padding: EdgeInsets.all(1.w),
+          decoration: BoxDecoration(
+            color: Colors.orange,
+            shape: BoxShape.circle,
+          ),
+          constraints: BoxConstraints(minWidth: 6.w, minHeight: 6.w),
+          child: Center(
+            child: Text(
+              '$totalQuantity',
+              style: TextStyle(color: Colors.white, fontSize: 12.sp, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+      ),
+    ];
   }
 
   Future<void> _showFreeItemDialog(BuildContext context, dynamic customer) async {
-    String selectedBirimTipi = (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit';
+    // ✅ Dinamik birim sistemi: widget.birimler listesinden birimleri al
+    final birimler = widget.birimler;
+
+    if (birimler.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bu ürün için birim tanımı bulunamadı.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // ✅ İlk birimi default olarak seç
+    BirimModel selectedBirim = birimler.first;
     final miktarController = TextEditingController(text: '1');
+
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('cart.add_free_product'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedBirimTipi,
-                items: [
-                  if((double.tryParse(widget.product.adetFiyati.toString()) ?? 0) > 0) DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
-                  if((double.tryParse(widget.product.kutuFiyati.toString()) ?? 0) > 0) DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('cart.add_free_product'.tr()),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ✅ Dinamik birim dropdown
+                  DropdownButtonFormField<BirimModel>(
+                    value: selectedBirim,
+                    items: birimler.map((birim) {
+                      return DropdownMenuItem<BirimModel>(
+                        value: birim,
+                        child: Text(birim.birimadi ?? birim.birimkod ?? 'N/A'),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          selectedBirim = value;
+                        });
+                      }
+                    },
+                    decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: miktarController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
+                  ),
                 ],
-                onChanged: (value) {
-                  if (value != null) selectedBirimTipi = value;
-                },
-                decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: miktarController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text('cart.cancel'.tr())),
-            ElevatedButton(
-              onPressed: () {
-                final miktar = int.tryParse(miktarController.text);
-                if (miktar != null && miktar > 0) {
-                  Navigator.pop(context, {'birimTipi': selectedBirimTipi, 'miktar': miktar});
-                }
-              },
-              child: Text('cart.add'.tr()),
-            ),
-          ],
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text('cart.cancel'.tr())),
+                ElevatedButton(
+                  onPressed: () {
+                    final miktar = int.tryParse(miktarController.text);
+                    if (miktar != null && miktar > 0) {
+                      Navigator.pop(dialogContext, {
+                        'birim': selectedBirim,
+                        'miktar': miktar,
+                      });
+                    }
+                  },
+                  child: Text('cart.add'.tr()),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -2542,6 +2604,9 @@ class _ProductDetailsState extends State<ProductDetails> {
 
     widget.provider.customerName = customer!.kod!;
     final freeKey = "${widget.product.stokKodu}_(FREE)";
+    final BirimModel secilenBirim = result['birim'];
+    // ✅ birimTipi UPPERCASE olmalı (dinamik birim sistemine uygun)
+    final birimTipi = (secilenBirim.birimkod ?? secilenBirim.birimadi ?? 'UNIT').toUpperCase();
 
     widget.provider.addOrUpdateItem(
       stokKodu: freeKey,
@@ -2550,12 +2615,12 @@ class _ProductDetailsState extends State<ProductDetails> {
       miktar: result['miktar'],
       urunBarcode: widget.product.barcode1,
       iskonto: 100,
-      birimTipi: result['birimTipi'],
+      birimTipi: birimTipi,
       imsrc: widget.product.imsrc,
       vat: widget.product.vat,
       adetFiyati: '0',
       kutuFiyati: '0',
-      selectedBirimKey: null, // ✅ FREE item için birim yok
+      selectedBirimKey: secilenBirim.key, // ✅ Dinamik birim key'i
     );
   }
 
