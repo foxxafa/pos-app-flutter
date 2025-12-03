@@ -67,14 +67,6 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
       final customerProvider = Provider.of<SalesCustomerProvider>(context, listen: false);
       final orderInfoProvider = Provider.of<OrderInfoProvider>(context, listen: false);
 
-      // ✅ Provider'daki comment'i local state'e ve controller'a yükle (kullanıcı geri döndüğünde güncel olsun)
-      if (mounted) {
-        setState(() {
-          comment = orderInfoProvider.comment;
-          _commentController.text = comment;
-        });
-      }
-
       final currentCustomerKod = customerProvider.selectedCustomer?.kod ?? '';
 
       // ✅ ÖNCE: CartProvider'da fisNo varsa kontrol et
@@ -93,10 +85,12 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
         // OrderInfoProvider'ı mevcut fisNo ile senkronize et
         orderInfoProvider.orderNo = cartProvider.fisNo;
 
-        // ✅ KRITIK: setState ile UI'ı güncelle
+        // ✅ Provider'daki comment'i local state'e ve controller'a yükle (mevcut sipariş devam ederken)
         if (mounted) {
           setState(() {
             orderNo = cartProvider.fisNo;
+            comment = orderInfoProvider.comment;
+            _commentController.text = comment;
           });
         }
         return;
@@ -118,6 +112,14 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
         orderInfoProvider.orderNo = orderNo;
 
         print('✅ Yeni FisNo oluşturuldu: $orderNo');
+
+        // ✅ Load Order'dan gelen comment'i UI'a yükle
+        if (mounted) {
+          setState(() {
+            comment = orderInfoProvider.comment;
+            _commentController.text = comment;
+          });
+        }
 
         // ⚡ KRITIK: Database'e HEMEN kaydet (telefon kapanırsa sepet kaybolmasın)
         await cartProvider.forceSaveToDatabase();
@@ -166,9 +168,21 @@ class _Invoice2ActivityState extends State<Invoice2Activity> {
       cartProvider.customerName = customerName;  // unvan kullan, kod değil!
       cartProvider.fisNo = fisNo;
 
+      // ✅ YENİ SİPARİŞ: Comment'i temizle
+      orderInfoProvider.comment = '';
+
       // Cart'ı sadece memory'den temizle (yeni sipariş için boş başlat)
       // Database'deki önceki siparişler korunur (Saved Carts'ta görünür)
       cartProvider.clearCartMemoryOnly();
+
+      // ✅ UI'daki comment alanını da temizle
+      if (mounted) {
+        setState(() {
+          comment = '';
+          _commentController.text = '';
+        });
+      }
+
       print('✅ Cart memory temizlendi - Yeni sipariş başlatıldı (Kod: $customerCode, Name: $customerName, FisNo: $fisNo)');
     } catch (e) {
       print('⚠️ Cart temizleme hatası: $e');
