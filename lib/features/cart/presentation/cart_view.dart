@@ -185,7 +185,7 @@ class _CartViewState extends State<CartView> {
     }
   }
 
-  /// Tüm ürünler için birimleri background'da yükle
+  /// Tüm ürünler için birimleri background'da yükle (OPTIMIZED: Tek sorgu)
   Future<void> _loadAllBirimler(List<ProductModel> products) async {
     if (products.isEmpty) return;
 
@@ -197,54 +197,57 @@ class _CartViewState extends State<CartView> {
       return;
     }
 
-    print('🔄 Background: ${newProducts.length} ürün için birimler yükleniyor...');
+    print('🔄 Background: ${newProducts.length} ürün için birimler yükleniyor (BATCH)...');
 
     final unitRepository = Provider.of<UnitRepository>(context, listen: false);
-    int loadedCount = 0;
 
-    for (final product in newProducts) {
-      if (!mounted) break;
+    try {
+      // ✅ OPTIMIZATION: Tek sorgu ile tüm birimleri çek (N+1 sorgu problemi çözüldü!)
+      final stokKodlari = newProducts.map((p) => p.stokKodu).toList();
+      final allBirimler = await unitRepository.getBirimlerForMultipleStokKodlari(stokKodlari);
 
-      final key = product.stokKodu;
+      if (!mounted) return;
 
-      try {
-        final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+      // ✅ OPTIMIZATION: Tek setState ile tüm map'leri güncelle (aşırı rebuild önlendi!)
+      final newBirimlerMap = <String, List<BirimModel>>{};
+      final newSelectedBirimMap = <String, BirimModel?>{};
+      final newIsBoxMap = <String, bool>{};
 
-        if (mounted) {
-          setState(() {
-            _productBirimlerMap[key] = birimler;
-            if (birimler.isNotEmpty) {
-              BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
-                (b) {
-                  final birimAdi = b?.birimadi?.toLowerCase() ?? '';
-                  return birimAdi.contains('box');
-                },
-                orElse: () => null,
-              );
-              final selectedBirim = defaultBirim ?? birimler.first;
-              _selectedBirimMap[key] = selectedBirim;
+      for (final product in newProducts) {
+        final key = product.stokKodu;
+        final birimler = allBirimler[key] ?? [];
 
-              // ✅ _isBoxMap'i güncelle
-              final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
-              _isBoxMap[key] = birimAdi.contains('box');
-            }
-          });
+        newBirimlerMap[key] = birimler;
 
-          // ✅ Her 10 üründe bir ilerleme göster
-          loadedCount++;
-          if (loadedCount % 10 == 0 || loadedCount == newProducts.length) {
-            print('🔄 Background: $loadedCount/${newProducts.length} ürün için birim yüklendi');
-          }
+        if (birimler.isNotEmpty) {
+          BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+            (b) {
+              final birimAdi = b?.birimadi?.toLowerCase() ?? '';
+              return birimAdi.contains('box');
+            },
+            orElse: () => null,
+          );
+          final selectedBirim = defaultBirim ?? birimler.first;
+          newSelectedBirimMap[key] = selectedBirim;
+
+          final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
+          newIsBoxMap[key] = birimAdi.contains('box');
         }
-      } catch (e) {
-        debugPrint('⚠️ Birim yüklenemedi ($key): $e');
       }
-    }
 
-    print('✅ Background birim yüklemesi tamamlandı (${newProducts.length} ürün)');
+      setState(() {
+        _productBirimlerMap.addAll(newBirimlerMap);
+        _selectedBirimMap.addAll(newSelectedBirimMap);
+        _isBoxMap.addAll(newIsBoxMap);
+      });
+
+      print('✅ Background birim yüklemesi tamamlandı (${newProducts.length} ürün - BATCH)');
+    } catch (e) {
+      debugPrint('⚠️ Birim yüklenemedi (batch): $e');
+    }
   }
 
-  /// ✅ OPTIMIZE: Sadece yeni ürünler için birimleri yükle (zaten yüklü olanları atla)
+  /// ✅ OPTIMIZE: Sadece yeni ürünler için birimleri yükle (BATCH - tek sorgu)
   Future<void> _loadBirimlerForNewProducts(List<ProductModel> products) async {
     if (products.isEmpty) return;
 
@@ -256,51 +259,54 @@ class _CartViewState extends State<CartView> {
       return;
     }
 
-    print('📋 ${newProducts.length} yeni ürün için birimler yükleniyor...');
+    print('📋 ${newProducts.length} yeni ürün için birimler yükleniyor (BATCH)...');
 
     final unitRepository = Provider.of<UnitRepository>(context, listen: false);
-    int loadedCount = 0;
 
-    for (final product in newProducts) {
-      if (!mounted) break;
+    try {
+      // ✅ OPTIMIZATION: Tek sorgu ile tüm birimleri çek (N+1 sorgu problemi çözüldü!)
+      final stokKodlari = newProducts.map((p) => p.stokKodu).toList();
+      final allBirimler = await unitRepository.getBirimlerForMultipleStokKodlari(stokKodlari);
 
-      final key = product.stokKodu;
+      if (!mounted) return;
 
-      try {
-        final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+      // ✅ OPTIMIZATION: Tek setState ile tüm map'leri güncelle (aşırı rebuild önlendi!)
+      final newBirimlerMap = <String, List<BirimModel>>{};
+      final newSelectedBirimMap = <String, BirimModel?>{};
+      final newIsBoxMap = <String, bool>{};
 
-        if (mounted) {
-          setState(() {
-            _productBirimlerMap[key] = birimler;
-            if (birimler.isNotEmpty) {
-              BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
-                (b) {
-                  final birimAdi = b?.birimadi?.toLowerCase() ?? '';
-                  return birimAdi.contains('box');
-                },
-                orElse: () => null,
-              );
-              final selectedBirim = defaultBirim ?? birimler.first;
-              _selectedBirimMap[key] = selectedBirim;
+      for (final product in newProducts) {
+        final key = product.stokKodu;
+        final birimler = allBirimler[key] ?? [];
 
-              // ✅ _isBoxMap'i güncelle
-              final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
-              _isBoxMap[key] = birimAdi.contains('box');
-            }
-          });
+        newBirimlerMap[key] = birimler;
 
-          // ✅ Her 10 üründe bir ilerleme göster
-          loadedCount++;
-          if (loadedCount % 10 == 0 || loadedCount == newProducts.length) {
-            print('📥 $loadedCount/${newProducts.length} ürün için birim yüklendi');
-          }
+        if (birimler.isNotEmpty) {
+          BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+            (b) {
+              final birimAdi = b?.birimadi?.toLowerCase() ?? '';
+              return birimAdi.contains('box');
+            },
+            orElse: () => null,
+          );
+          final selectedBirim = defaultBirim ?? birimler.first;
+          newSelectedBirimMap[key] = selectedBirim;
+
+          final birimAdi = selectedBirim.birimadi?.toLowerCase() ?? '';
+          newIsBoxMap[key] = birimAdi.contains('box');
         }
-      } catch (e) {
-        debugPrint('⚠️ Birim yüklenemedi ($key): $e');
       }
-    }
 
-    print('✅ ${newProducts.length} ürün için birimler yüklendi');
+      setState(() {
+        _productBirimlerMap.addAll(newBirimlerMap);
+        _selectedBirimMap.addAll(newSelectedBirimMap);
+        _isBoxMap.addAll(newIsBoxMap);
+      });
+
+      print('✅ ${newProducts.length} ürün için birimler yüklendi (BATCH)');
+    } catch (e) {
+      debugPrint('⚠️ Birim yüklenemedi (batch): $e');
+    }
   }
 
   /// ✅ OPTIMIZE: Sadece görünen ürünler için stok bilgilerini yükle
@@ -1261,10 +1267,8 @@ class _CartViewState extends State<CartView> {
           _quantityControllers[key] = TextEditingController(text: provider.getmiktar(key, birimTipi).toString());
         }
 
-        // Load birimler for this product if not loaded
-        if (!_productBirimlerMap.containsKey(key)) {
-          _loadBirimlerForProduct(product);
-        }
+        // ✅ OPTIMIZATION: Birimler artık batch olarak _loadAllBirimler ve _loadBirimlerForNewProducts ile yükleniyor
+        // Bu fallback sadece çok nadir edge case'ler için (build içinde async çağrı problemi çözüldü)
 
         return ProductListItem(
           key: ValueKey(product.stokKodu),

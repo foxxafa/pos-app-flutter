@@ -34,6 +34,11 @@ class _CartView2State extends State<CartView2> {
   /// Double-click protection for Place Order button
   bool _isSubmittingOrder = false;
 
+  // ✅ OPTIMIZATION: Birim cache sistemi (N+1 sorgu problemi çözümü)
+  final Map<String, List<BirimModel>> _productBirimlerMap = {};
+  final Map<String, BirimModel?> _selectedBirimMap = {};
+  bool _birimlersLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +58,9 @@ class _CartView2State extends State<CartView2> {
     // gereksiz yere tetiklenmesi önlenir.
     _generateImageFutures(cartItems);
     _downloadMissingImages(cartItems);
+
+    // ✅ OPTIMIZATION: Tüm birimler için batch yükleme
+    _loadAllBirimlerForCart(cartItems);
   }
 
   @override
@@ -117,6 +125,71 @@ class _CartView2State extends State<CartView2> {
         });
       }
     });
+  }
+
+  // --- Birim Loading Logic (OPTIMIZED: Batch Query) ---
+
+  /// ✅ OPTIMIZATION: Tüm sepet itemları için birimleri TEK SORGU ile yükle
+  Future<void> _loadAllBirimlerForCart(List<CartItem> items) async {
+    if (items.isEmpty) {
+      setState(() => _birimlersLoading = false);
+      return;
+    }
+
+    // Sadece henüz yüklenmemiş ürünleri filtrele
+    final newItems = items.where((item) => !_productBirimlerMap.containsKey(item.stokKodu)).toList();
+
+    if (newItems.isEmpty) {
+      setState(() => _birimlersLoading = false);
+      return;
+    }
+
+    print('🔄 CartView2: ${newItems.length} item için birimler yükleniyor (BATCH)...');
+
+    try {
+      final unitRepository = Provider.of<UnitRepository>(context, listen: false);
+
+      // ✅ OPTIMIZATION: Tek sorgu ile tüm birimleri çek
+      final stokKodlari = newItems.map((item) => item.stokKodu).toList();
+      final allBirimler = await unitRepository.getBirimlerForMultipleStokKodlari(stokKodlari);
+
+      if (!mounted) return;
+
+      // ✅ OPTIMIZATION: Tek setState ile tüm map'leri güncelle
+      final newBirimlerMap = <String, List<BirimModel>>{};
+      final newSelectedBirimMap = <String, BirimModel?>{};
+
+      for (final item in newItems) {
+        final key = item.stokKodu;
+        final birimler = allBirimler[key] ?? [];
+
+        newBirimlerMap[key] = birimler;
+
+        if (birimler.isNotEmpty) {
+          // ✅ Mevcut seçili birimi bul (CartItem'daki selectedBirimKey kullanarak)
+          if (item.selectedBirimKey != null) {
+            newSelectedBirimMap[key] = birimler.firstWhere(
+              (b) => b.key == item.selectedBirimKey,
+              orElse: () => birimler.first,
+            );
+          } else {
+            newSelectedBirimMap[key] = birimler.first;
+          }
+        }
+      }
+
+      setState(() {
+        _productBirimlerMap.addAll(newBirimlerMap);
+        _selectedBirimMap.addAll(newSelectedBirimMap);
+        _birimlersLoading = false;
+      });
+
+      print('✅ CartView2: Birim yüklemesi tamamlandı (${newItems.length} item - BATCH)');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _birimlersLoading = false);
+      print('❌ CartView2: Birim yüklemesi başarısız: $e');
+    }
   }
 
   // --- Order Placement Logic ---
@@ -345,12 +418,21 @@ class _CartView2State extends State<CartView2> {
                 itemCount: cartItems.length,
                 itemBuilder: (context, index) {
                   final item = cartItems[index];
-                  // Her item için kendi state'ini yöneten bir kart oluştur
+                  final stokKodu = item.stokKodu;
+                  // ✅ OPTIMIZATION: Parent'tan gelen birim verilerini kullan
                   return _CartItemCard(
                     key: ValueKey(
-                        '${item.stokKodu}_${item.birimTipi}'), // Benzersiz key (sadece stokKodu + birimTipi)
+                        '${stokKodu}_${item.birimTipi}'), // Benzersiz key (sadece stokKodu + birimTipi)
                     item: item,
-                    imageFuture: _imageFutures[item.stokKodu],
+                    imageFuture: _imageFutures[stokKodu],
+                    birimler: _productBirimlerMap[stokKodu] ?? [],
+                    selectedBirim: _selectedBirimMap[stokKodu],
+                    birimsLoading: _birimlersLoading,
+                    onSelectedBirimChanged: (newBirim) {
+                      setState(() {
+                        _selectedBirimMap[stokKodu] = newBirim;
+                      });
+                    },
                   );
                 },
               ),
@@ -523,11 +605,20 @@ class _CartView2State extends State<CartView2> {
 class _CartItemCard extends StatefulWidget {
   final CartItem item;
   final Future<String?>? imageFuture;
+  // ✅ OPTIMIZATION: Parent'tan gelen birim verileri
+  final List<BirimModel> birimler;
+  final BirimModel? selectedBirim;
+  final bool birimsLoading;
+  final void Function(BirimModel?)? onSelectedBirimChanged;
 
   const _CartItemCard({
     super.key,
     required this.item,
     this.imageFuture,
+    this.birimler = const [],
+    this.selectedBirim,
+    this.birimsLoading = false,
+    this.onSelectedBirimChanged,
   });
 
   @override
@@ -575,51 +666,15 @@ class _CartItemCardState extends State<_CartItemCard> {
     _discountFocusNode.addListener(_onDiscountFocusChange);
     _quantityFocusNode.addListener(_onQuantityFocusChange);
 
-    // ✅ Ürün birimlerini yükle
-    _loadBirimlerForItem();
+    // ✅ OPTIMIZATION: Parent'tan gelen birimleri kullan (bireysel sorgu kaldırıldı!)
+    _initBirimlerFromParent();
   }
 
-  /// Ürün için birimleri veritabanından yükler (fiyat7 kullanarak)
-  Future<void> _loadBirimlerForItem() async {
-    try {
-      setState(() => _birimlersLoading = true);
-
-      final unitRepository = Provider.of<UnitRepository>(context, listen: false);
-      final birimler = await unitRepository.getBirimlerByStokKodu(widget.item.stokKodu);
-
-      if (!mounted) return;
-
-      setState(() {
-        _birimler = birimler;
-        _birimlersLoading = false;
-
-        // ✅ Mevcut seçili birimi bul (CartItem'daki selectedBirimKey kullanarak)
-        if (widget.item.selectedBirimKey != null && _birimler.isNotEmpty) {
-          _selectedBirim = _birimler.firstWhere(
-            (b) => b.key == widget.item.selectedBirimKey,
-            orElse: () => _birimler.first,
-          );
-        } else if (_birimler.isNotEmpty) {
-          // selectedBirimKey yoksa ilk birimi seç (default)
-          _selectedBirim = _birimler.first;
-        }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _birimlersLoading = false;
-        _birimler = [];
-      });
-
-      // Hata durumunda kullanıcıya bilgi ver
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⚠️ Birimler yüklenemedi: $e'),
-          backgroundColor: Colors.orange.shade700,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
+  /// ✅ OPTIMIZATION: Parent'tan gelen birim verilerini kullan
+  void _initBirimlerFromParent() {
+    _birimler = widget.birimler;
+    _selectedBirim = widget.selectedBirim;
+    _birimlersLoading = widget.birimsLoading;
   }
 
   @override
@@ -646,6 +701,15 @@ class _CartItemCardState extends State<_CartItemCard> {
   void didUpdateWidget(_CartItemCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    // ✅ OPTIMIZATION: Parent'tan gelen birim verilerini senkronize et
+    if (widget.birimler != oldWidget.birimler ||
+        widget.selectedBirim != oldWidget.selectedBirim ||
+        widget.birimsLoading != oldWidget.birimsLoading) {
+      _birimler = widget.birimler;
+      _selectedBirim = widget.selectedBirim;
+      _birimlersLoading = widget.birimsLoading;
+    }
+
     // ⚠️ KRITIK: widget.item eski olabilir! Provider'dan GÜNCEL item'ı al
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
     final cartKey = '${widget.item.stokKodu}_${widget.item.birimTipi}';
@@ -661,14 +725,6 @@ class _CartItemCardState extends State<_CartItemCard> {
     print('   Widget Old: birim=${oldWidget.item.birimTipi}, fiyat=${oldWidget.item.birimFiyat}');
     print('   Widget New: birim=${widget.item.birimTipi}, fiyat=${widget.item.birimFiyat}');
     print('   Provider Actual: birim=${actualItem.birimTipi}, fiyat=${actualItem.birimFiyat}');
-
-    // ✅ Birim değişimi kontrolü (UNIT ↔ BOX)
-    if (actualItem.birimTipi != oldWidget.item.birimTipi ||
-        actualItem.selectedBirimKey != oldWidget.item.selectedBirimKey) {
-      print('   ➡️ Birim değişti, dropdown güncelleniyor');
-      // Birim değişti → Dropdown'ı güncelle (asenkron)
-      _loadBirimlerForItem();
-    }
 
     // ✅ Fiyat değişimi kontrolü - birim değişince fiyat da değişir
     // Provider'dan gelen GÜNCEL fiyatı kullan

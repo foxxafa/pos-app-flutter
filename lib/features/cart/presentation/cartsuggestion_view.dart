@@ -178,37 +178,55 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   }
 
   /// Tüm ürünler için birimleri background'da yükle
+  /// ✅ OPTIMIZATION: N+1 sorgu yerine tek batch sorgu kullanır
   Future<void> _loadAllBirimler(List<ProductModel> products) async {
+    if (products.isEmpty) return;
+
     final unitRepository = Provider.of<UnitRepository>(context, listen: false);
 
-    for (final product in products) {
-      if (!mounted) break;
+    // ✅ OPTIMIZATION: Henüz yüklenmemiş stokKodları filtrele
+    final stokKodlariToLoad = products
+        .map((p) => p.stokKodu)
+        .where((kod) => !_productBirimlerMap.containsKey(kod))
+        .toList();
 
-      final key = product.stokKodu;
-      if (_productBirimlerMap.containsKey(key)) continue; // Zaten yüklü
+    if (stokKodlariToLoad.isEmpty) return;
 
-      try {
-        final birimler = await unitRepository.getBirimlerByStokKodu(product.stokKodu);
+    try {
+      // ✅ OPTIMIZATION: Tek sorguda tüm birimleri getir (N+1 yerine 1 sorgu)
+      final birimlerMap = await unitRepository.getBirimlerForMultipleStokKodlari(stokKodlariToLoad);
 
-        if (mounted) {
-          setState(() {
-            _productBirimlerMap[key] = birimler;
-            if (birimler.isNotEmpty) {
-              BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
-                (b) {
-                  final birimAdi = b?.birimadi?.toLowerCase() ?? '';
-                  return birimAdi.contains('box');
-                },
-                orElse: () => null,
-              );
-              final selectedBirim = defaultBirim ?? birimler.first;
-              _selectedBirimMap[key] = selectedBirim;
-            }
-          });
+      if (!mounted) return;
+
+      // ✅ OPTIMIZATION: Tek setState ile tüm verileri güncelle
+      final newProductBirimlerMap = <String, List<BirimModel>>{};
+      final newSelectedBirimMap = <String, BirimModel?>{};
+
+      for (final entry in birimlerMap.entries) {
+        final key = entry.key;
+        final birimler = entry.value;
+
+        newProductBirimlerMap[key] = birimler;
+
+        if (birimler.isNotEmpty) {
+          BirimModel? defaultBirim = birimler.cast<BirimModel?>().firstWhere(
+            (b) {
+              final birimAdi = b?.birimadi?.toLowerCase() ?? '';
+              return birimAdi.contains('box');
+            },
+            orElse: () => null,
+          );
+          newSelectedBirimMap[key] = defaultBirim ?? birimler.first;
         }
-      } catch (e) {
-        debugPrint('⚠️ Birim yüklenemedi ($key): $e');
       }
+
+      setState(() {
+        _productBirimlerMap.addAll(newProductBirimlerMap);
+        _selectedBirimMap.addAll(newSelectedBirimMap);
+      });
+
+    } catch (e) {
+      debugPrint('⚠️ Birimler yüklenemedi: $e');
     }
   }
 

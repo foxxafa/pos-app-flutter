@@ -270,6 +270,7 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
           ? (s['vat'] as num).round()
           : int.tryParse(s['vat'].toString()) ?? 18;
       final String birimTipi = s['BirimTipi']?.toString() ?? 'Box';
+      final String? selectedBirimKey = s['SelectedBirimKey']?.toString();
 
       provider.addOrUpdateItem(
         stokKodu: stokKodu,
@@ -284,6 +285,7 @@ class _InvoiceActivityViewState extends State<InvoiceActivityView> {
         imsrc: product['imsrc']?.toString(),
         adetFiyati: s['AdetFiyati']?.toString() ?? '',
         kutuFiyati: s['KutuFiyati']?.toString() ?? '',
+        selectedBirimKey: selectedBirimKey,
       );
     }
 

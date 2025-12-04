@@ -20,6 +20,11 @@ abstract class UnitRepository {
   /// [stokKodu]: Ürün stok kodu
   Future<List<BirimModel>> getBirimlerByStokKodu(String stokKodu);
 
+  /// Birden fazla ürüne ait birimleri tek sorguda getirir (performans için)
+  /// [stokKodlari]: Ürün stok kodları listesi
+  /// Returns: StokKodu -> List<BirimModel> map
+  Future<Map<String, List<BirimModel>>> getBirimlerForMultipleStokKodlari(List<String> stokKodlari);
+
   /// Belirli bir birim key'ine göre birim getirir
   /// [birimKey]: Birim _key değeri
   Future<BirimModel?> getBirimByKey(String birimKey);

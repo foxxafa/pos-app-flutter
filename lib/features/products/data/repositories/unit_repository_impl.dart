@@ -231,6 +231,42 @@ class UnitRepositoryImpl implements UnitRepository {
   }
 
   @override
+  Future<Map<String, List<BirimModel>>> getBirimlerForMultipleStokKodlari(List<String> stokKodlari) async {
+    if (stokKodlari.isEmpty) return {};
+
+    final db = await _dbHelper.database;
+    final result = <String, List<BirimModel>>{};
+
+    // Initialize empty lists for all requested stokKodlari
+    for (final kod in stokKodlari) {
+      result[kod] = [];
+    }
+
+    // SQLite IN clause limit is ~999 parameters, batch if needed
+    const batchSize = 500;
+    for (int i = 0; i < stokKodlari.length; i += batchSize) {
+      final batch = stokKodlari.skip(i).take(batchSize).toList();
+      final placeholders = batch.map((_) => '?').join(',');
+
+      final maps = await db.rawQuery(
+        'SELECT * FROM Birimler WHERE StokKodu IN ($placeholders)',
+        batch,
+      );
+
+      // Group by StokKodu
+      for (final map in maps) {
+        final birim = BirimModel.fromMap(map);
+        final stokKodu = map['StokKodu']?.toString() ?? '';
+        if (result.containsKey(stokKodu)) {
+          result[stokKodu]!.add(birim);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  @override
   Future<BirimModel?> getBirimByKey(String birimKey) async {
     final db = await _dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(
