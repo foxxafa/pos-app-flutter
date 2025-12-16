@@ -403,22 +403,33 @@ class CustomerRepositoryImpl implements CustomerRepository {
   }
 
   @override
-  Future<dynamic> getCustomerByUnvan(String unvan) async {
+  Future<dynamic> getCustomerByUnvan(String kodOrUnvan) async {
     try {
       final db = await dbHelper.database;
-      final results = await db.query(
+      // ✅ Önce kod ile ara, bulamazsa unvan ile ara
+      var results = await db.query(
         'CustomerBalance',
-        where: 'unvan = ?',
-        whereArgs: [unvan],
+        where: 'kod = ?',
+        whereArgs: [kodOrUnvan],
         limit: 1,
       );
+
+      // Kod ile bulamazsa unvan ile dene
+      if (results.isEmpty) {
+        results = await db.query(
+          'CustomerBalance',
+          where: 'unvan = ?',
+          whereArgs: [kodOrUnvan],
+          limit: 1,
+        );
+      }
 
       if (results.isNotEmpty) {
         return results.first;
       }
       return null;
     } catch (e) {
-      throw Exception('Failed to get customer by unvan: $e');
+      throw Exception('Failed to get customer: $e');
     }
   }
 
