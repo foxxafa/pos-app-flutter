@@ -210,44 +210,17 @@ class RefundRepositoryImpl implements RefundRepository {
   Future<bool> saveRefundOffline(RefundSendModel refund) async {
     final db = await _database;
 
-    // Create table if not exists
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS refund_queue (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data TEXT
-      )
-    ''');
-
-    // ✅ Check if fisNo column exists
-    final tableInfo = await db.rawQuery('PRAGMA table_info(refund_queue)');
-    final hasFisNoColumn = tableInfo.any((column) => column['name'] == 'fisNo');
-
-    // ✅ Add fisNo column if it doesn't exist (migration for existing tables)
-    if (!hasFisNoColumn) {
-      try {
-        await db.execute('ALTER TABLE refund_queue ADD COLUMN fisNo TEXT');
-        print("✅ fisNo column added to refund_queue");
-      } catch (e) {
-        print("⚠️ Error adding fisNo column: $e");
-      }
-    }
-
     // ✅ Check if this fisNo already exists in queue to prevent duplicates
-    try {
-      final existingRefund = await db.query(
-        'refund_queue',
-        where: 'fisNo = ?',
-        whereArgs: [refund.fis.fisNo],
-        limit: 1,
-      );
+    final existingRefund = await db.query(
+      'refund_queue',
+      where: 'fisNo = ?',
+      whereArgs: [refund.fis.fisNo],
+      limit: 1,
+    );
 
-      if (existingRefund.isNotEmpty) {
-        print("⚠️ Refund with fisNo ${refund.fis.fisNo} already exists in queue, skipping duplicate");
-        return false; // Duplicate, not saved
-      }
-    } catch (e) {
-      // If fisNo column doesn't exist yet, continue (will be caught on next run)
-      print("⚠️ Error checking for duplicate fisNo: $e");
+    if (existingRefund.isNotEmpty) {
+      print("⚠️ Refund with fisNo ${refund.fis.fisNo} already exists in queue, skipping duplicate");
+      return false; // Duplicate, not saved
     }
 
     await db.insert(
@@ -284,29 +257,6 @@ class RefundRepositoryImpl implements RefundRepository {
     }
 
     final db = await _database;
-
-    // Create table if not exists
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS refund_queue (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data TEXT
-      )
-    ''');
-
-    // ✅ Check if fisNo column exists
-    final tableInfo = await db.rawQuery('PRAGMA table_info(refund_queue)');
-    final hasFisNoColumn = tableInfo.any((column) => column['name'] == 'fisNo');
-
-    // ✅ Add fisNo column if it doesn't exist (migration for existing tables)
-    if (!hasFisNoColumn) {
-      try {
-        await db.execute('ALTER TABLE refund_queue ADD COLUMN fisNo TEXT');
-        print("✅ fisNo column added to refund_queue");
-      } catch (e) {
-        print("⚠️ Error adding fisNo column: $e");
-      }
-    }
-
     final rawList = await db.query('refund_queue');
 
     for (var row in rawList) {

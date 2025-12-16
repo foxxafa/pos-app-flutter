@@ -765,20 +765,9 @@ class _CartViewState extends State<CartView> {
           final cartItem = provider.items[key];
           final iskonto = cartItem?.iskonto ?? 0;
 
-          // Fiyatı seçili birimden veya default'tan al
-          double birimFiyat;
-          if (selectedBirim != null) {
-            // ✅ Birim fiyatını fiyat7 sütunundan al (dinamik fiyatlandırma)
-            birimFiyat = selectedBirim.fiyat7 ?? 0;
-            print('   ✅ Using selectedBirim.fiyat7: $birimFiyat');
-          } else {
-            // Eski sistem: Box/Unit fiyatı (fallback - birim bulunamazsa)
-            final isBox = _isBoxMap[key] ?? false;
-            birimFiyat = isBox
-                ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-                : double.tryParse(product.adetFiyati.toString()) ?? 0;
-            print('   ⚠️ Using fallback (isBox=$isBox): $birimFiyat');
-          }
+          // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+          double birimFiyat = _getPriceFromBirimler(key, birimTipi);
+          print('   ✅ Using birimFiyat from Birimler table (fiyat7): $birimFiyat');
 
           provider.addOrUpdateItem(
             urunAdi: product.urunAdi,
@@ -946,14 +935,8 @@ class _CartViewState extends State<CartView> {
 
       final selectedBirim = _selectedBirimMap[key];
 
-      // Eğer sepette bu birim için custom fiyat varsa onu kullan, yoksa orijinal fiyatı al
-      final fiyat = existingCartItem?.birimFiyat ?? (
-          selectedBirim != null
-              ? (selectedBirim.fiyat7 ?? 0)
-              : (birimTipi == 'UNIT' || birimTipi == 'Unit')
-                  ? double.tryParse(product.adetFiyati.toString()) ?? 0
-                  : double.tryParse(product.kutuFiyati.toString()) ?? 0
-      );
+      // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+      final fiyat = existingCartItem?.birimFiyat ?? _getPriceFromBirimler(key, birimTipi);
 
       final iskonto = existingCartItem?.iskonto ?? provider.getIskonto(key);
 
@@ -997,13 +980,40 @@ class _CartViewState extends State<CartView> {
       return (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase();
     }
 
-    // ⚠️ Fallback: Eski mantık (uyumluluk için) - UPPERCASE
-    final isBox = _isBoxMap[key] ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0);
-    if (isBox && (double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) return 'BOX';
-    if (!isBox && (double.tryParse(product.adetFiyati.toString()) ?? 0) > 0) return 'UNIT';
-    if ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) return 'BOX';
-    if ((double.tryParse(product.adetFiyati.toString()) ?? 0) > 0) return 'UNIT';
+    // ✅ Birimler listesinden ilk birimi al (Product tablosundan fiyat KULLANMA!)
+    final birimler = _productBirimlerMap[key];
+    if (birimler != null && birimler.isNotEmpty) {
+      final firstBirim = birimler.first;
+      return (firstBirim.birimkod ?? firstBirim.birimadi ?? 'UNIT').toUpperCase();
+    }
+
+    // ⚠️ Hiçbir birim yoksa null dön
     return null;
+  }
+
+  /// ✅ HELPER: Birimler listesinden fiyat7 al (Product tablosu KULLANILMAZ!)
+  double _getPriceFromBirimler(String stokKodu, String? birimTipi) {
+    final selectedBirim = _selectedBirimMap[stokKodu];
+    if (selectedBirim != null) {
+      return selectedBirim.fiyat7 ?? 0;
+    }
+
+    final birimler = _productBirimlerMap[stokKodu];
+    if (birimler == null || birimler.isEmpty) return 0;
+
+    // birimTipi'ye göre birimi bul
+    if (birimTipi != null) {
+      final matchingBirim = birimler.cast<BirimModel?>().firstWhere(
+        (b) => (b?.birimkod ?? b?.birimadi ?? '').toUpperCase() == birimTipi.toUpperCase(),
+        orElse: () => null,
+      );
+      if (matchingBirim != null) {
+        return matchingBirim.fiyat7 ?? 0;
+      }
+    }
+
+    // Fallback: İlk birimin fiyatını al
+    return birimler.first.fiyat7 ?? 0;
   }
 
   // --- Build Method ---
@@ -1219,11 +1229,10 @@ class _CartViewState extends State<CartView> {
 
         // ✅ Controller'ları oluştur (sadece bir kez)
         if (!_priceControllers.containsKey(key)) {
+          // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
           final initialPrice = cartItem != null
               ? (cartItem.birimFiyat * (1 - cartItem.iskonto / 100)).toStringAsFixed(2)
-              : (selectedType ?? 'UNIT').toUpperCase() == 'UNIT'
-              ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
-              : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
+              : _getPriceFromBirimler(key, selectedType).toStringAsFixed(2);
           _priceControllers[key] = TextEditingController(text: initialPrice);
         }
         if (!_discountControllers.containsKey(key)) {
@@ -1235,12 +1244,11 @@ class _CartViewState extends State<CartView> {
         // ⚠️ KRITIK: Focus varsa (kullanıcı yazmaya başlamış) otomatik doldurma yapma!
 
         // Price controller senkronizasyonu
+        // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
         if (!(_priceFocusNodes[key]?.hasFocus ?? false)) {
           final expectedPrice = cartItem != null
               ? (cartItem.birimFiyat * (1 - cartItem.iskonto / 100)).toStringAsFixed(2)
-              : (selectedType ?? 'UNIT').toUpperCase() == 'UNIT'
-              ? (double.tryParse(product.adetFiyati.toString()) ?? 0).toStringAsFixed(2)
-              : (double.tryParse(product.kutuFiyati.toString()) ?? 0).toStringAsFixed(2);
+              : _getPriceFromBirimler(key, selectedType).toStringAsFixed(2);
 
           if (_priceControllers[key]!.text != expectedPrice) {
             _priceControllers[key]!.text = expectedPrice;
@@ -1889,6 +1897,29 @@ class ProductDetails extends StatefulWidget {
 class _ProductDetailsState extends State<ProductDetails> {
   String _oldPriceValue = '';
 
+  /// ✅ HELPER: Birimler listesinden fiyat7 al (Product tablosu KULLANILMAZ!)
+  double _getPriceFromBirimler(String? birimTipi) {
+    if (widget.selectedBirim != null) {
+      return widget.selectedBirim!.fiyat7 ?? 0;
+    }
+
+    if (widget.birimler.isEmpty) return 0;
+
+    // birimTipi'ye göre birimi bul
+    if (birimTipi != null) {
+      final matchingBirim = widget.birimler.cast<BirimModel?>().firstWhere(
+        (b) => (b?.birimkod ?? b?.birimadi ?? '').toUpperCase() == birimTipi.toUpperCase(),
+        orElse: () => null,
+      );
+      if (matchingBirim != null) {
+        return matchingBirim.fiyat7 ?? 0;
+      }
+    }
+
+    // Fallback: İlk birimin fiyatını al
+    return widget.birimler.first.fiyat7 ?? 0;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1921,16 +1952,9 @@ class _ProductDetailsState extends State<ProductDetails> {
     final cartKey = '${widget.product.stokKodu}_$selectedType';
     final cartItem = widget.provider.items[cartKey];
 
-    // ✅ FIX: ORİJİNAL fiyatı her zaman selectedBirim.fiyat7 veya product'tan al
+    // ✅ FIX: ORİJİNAL fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
     // cartItem.birimFiyat DEĞİL! (çünkü o zaten indirimli olabilir)
-    double orjinalFiyat;
-    if (widget.selectedBirim != null) {
-      orjinalFiyat = widget.selectedBirim!.fiyat7 ?? 0;
-    } else {
-      orjinalFiyat = (selectedType.toUpperCase() == 'UNIT')
-          ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-          : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
-    }
+    final orjinalFiyat = _getPriceFromBirimler(selectedType);
 
     // ⚠️ SADECE sepette olan itemler için provider'ı güncelle
     // Eğer item henüz sepette değilse, sadece preview için controller'ları güncelle
@@ -2034,12 +2058,8 @@ class _ProductDetailsState extends State<ProductDetails> {
       // ✅ Güncel birim tipini al
       final currentBirimType = widget.getBirimTipi() ?? 'Unit';
 
-      // ⚠️ KRITIK: Orijinal fiyatı selectedBirim.fiyat7'den al (product.kutuFiyati/adetFiyati DEĞİL!)
-      var orjinalFiyat = widget.selectedBirim != null
-          ? (widget.selectedBirim!.fiyat7 ?? 0)
-          : (currentBirimType == 'Unit' || currentBirimType == 'UNIT')
-              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+      // ✅ FIX: Orijinal fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+      var orjinalFiyat = _getPriceFromBirimler(currentBirimType);
       if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
       // ✅ FİYAT OVERRIDE MANTĞI: Fiyat artışı = Price Override
@@ -2264,9 +2284,8 @@ class _ProductDetailsState extends State<ProductDetails> {
           // ✅ MİMARİ DEĞİŞİKLİK: Sadece discount controller'ı güncelle
           // Provider'a KAYDETME (onEditingComplete'te kaydedilecek)
           final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
-          var orjinalFiyat = selectedType == 'Unit'
-              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+          // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+          var orjinalFiyat = _getPriceFromBirimler(selectedType);
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
@@ -2280,11 +2299,10 @@ class _ProductDetailsState extends State<ProductDetails> {
         },
         onEditingComplete: () {
           widget.formatPriceField();
-          // ✅ Provider'a KAYDETMartık burada kaydet (focus kaybında)
+          // ✅ Provider'a KAYDET (focus kaybında)
           final yeniFiyat = double.tryParse(widget.priceController.text.replaceAll(',', '.')) ?? 0;
-          var orjinalFiyat = selectedType == 'Unit'
-              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+          // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+          var orjinalFiyat = _getPriceFromBirimler(selectedType);
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
@@ -2311,9 +2329,8 @@ class _ProductDetailsState extends State<ProductDetails> {
           widget.formatPriceField();
           // ✅ Provider'a KAYDET (submit'te)
           final yeniFiyat = double.tryParse(value.replaceAll(',', '.')) ?? 0;
-          var orjinalFiyat = selectedType == 'Unit'
-              ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-              : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+          // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+          var orjinalFiyat = _getPriceFromBirimler(selectedType);
           if (orjinalFiyat <= 0) orjinalFiyat = yeniFiyat;
 
           final indirimOrani = (orjinalFiyat > 0 && yeniFiyat < orjinalFiyat)
@@ -2365,19 +2382,14 @@ class _ProductDetailsState extends State<ProductDetails> {
               final cartKey = '${widget.product.stokKodu}_${selectedType == 'Unit' ? 'UNIT' : 'BOX'}';
               final cartItem = widget.provider.items[cartKey];
 
-              // ✅ FIX: Mevcut birimFiyat'ı al (selectedBirim.fiyat7'den!)
+              // ✅ FIX: Mevcut birimFiyat'ı al - SADECE Birimler tablosundan! (Product tablosu KULLANILMAZ!)
               double currentPrice;
               if (cartItem != null) {
                 // Sepette varsa sepetteki fiyatı kullan (price override olabilir)
                 currentPrice = cartItem.birimFiyat;
-              } else if (widget.selectedBirim != null) {
-                // Sepette yoksa selectedBirim.fiyat7'den al
-                currentPrice = widget.selectedBirim!.fiyat7 ?? 0;
               } else {
-                // Yoksa fallback: eski mantık
-                currentPrice = (selectedType.toUpperCase() == 'UNIT')
-                    ? (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-                    : (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0);
+                // ✅ FIX: Birimler tablosundan fiyat7 al (Product tablosu KULLANILMAZ!)
+                currentPrice = _getPriceFromBirimler(selectedType);
               }
 
               if (val.isEmpty) {
@@ -2712,14 +2724,8 @@ class _ProductDetailsState extends State<ProductDetails> {
             final cartKey = '${widget.product.stokKodu}_$selectedType';
             final existingCartItem = widget.provider.items[cartKey];
 
-            // Eğer sepette bu birim için custom fiyat varsa onu kullan, yoksa orijinal fiyatı al
-            final fiyat = existingCartItem?.birimFiyat ?? (
-                widget.selectedBirim != null
-                    ? (widget.selectedBirim!.fiyat7 ?? 0)
-                    : (selectedType == 'Box' || selectedType == 'BOX')
-                        ? (double.tryParse(widget.product.kutuFiyati.toString()) ?? 0)
-                        : (double.tryParse(widget.product.adetFiyati.toString()) ?? 0)
-            );
+            // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+            final fiyat = existingCartItem?.birimFiyat ?? _getPriceFromBirimler(selectedType);
 
             print('➕ Increment/Decrement Button:');
             print('   selectedBirim: ${widget.selectedBirim?.birimadi} (fiyat7: ${widget.selectedBirim?.fiyat7})');

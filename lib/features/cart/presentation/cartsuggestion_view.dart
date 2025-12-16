@@ -53,6 +53,47 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   // Scanner'dan controller güncellenirken TextField onChanged'in tetiklenmemesi için
   bool _isUpdatingFromScanner = false;
 
+  /// ✅ HELPER: Birimler listesinden birimTipi al (Product tablosu KULLANILMAZ!)
+  String _getBirimTipiFromProduct(String stokKodu) {
+    final selectedBirim = _selectedBirimMap[stokKodu];
+    if (selectedBirim != null) {
+      return (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase();
+    }
+
+    final birimler = _productBirimlerMap[stokKodu];
+    if (birimler != null && birimler.isNotEmpty) {
+      final firstBirim = birimler.first;
+      return (firstBirim.birimkod ?? firstBirim.birimadi ?? 'UNIT').toUpperCase();
+    }
+
+    return 'UNIT'; // Default
+  }
+
+  /// ✅ HELPER: Birimler listesinden fiyat7 al (Product tablosu KULLANILMAZ!)
+  double _getPriceFromBirimler(String stokKodu, String? birimTipi) {
+    final selectedBirim = _selectedBirimMap[stokKodu];
+    if (selectedBirim != null) {
+      return selectedBirim.fiyat7 ?? 0;
+    }
+
+    final birimler = _productBirimlerMap[stokKodu];
+    if (birimler == null || birimler.isEmpty) return 0;
+
+    // birimTipi'ye göre birimi bul
+    if (birimTipi != null) {
+      final matchingBirim = birimler.cast<BirimModel?>().firstWhere(
+        (b) => (b?.birimkod ?? b?.birimadi ?? '').toUpperCase() == birimTipi.toUpperCase(),
+        orElse: () => null,
+      );
+      if (matchingBirim != null) {
+        return matchingBirim.fiyat7 ?? 0;
+      }
+    }
+
+    // Fallback: İlk birimin fiyatını al
+    return birimler.first.fiyat7 ?? 0;
+  }
+
   // cart_view2.dart'tan eklenen image download timer
   Timer? _imageDownloadTimer;
 
@@ -631,15 +672,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
         final product = _filteredProducts[index];
         final stokKodu = product.stokKodu;
 
-        // ✅ BirimTipi'ni önce selectedBirimMap'ten al, sonra fallback
+        // ✅ FIX: BirimTipi'ni SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
         final selectedBirim = _selectedBirimMap[stokKodu];
-        String birimTipi;
-        if (selectedBirim != null) {
-          birimTipi = (selectedBirim.birimkod ?? selectedBirim.birimadi ?? 'UNIT').toUpperCase();
-        } else {
-          // Fallback: Kutu fiyatı varsa BOX, yoksa UNIT
-          birimTipi = ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0) ? 'BOX' : 'UNIT';
-        }
+        final birimTipi = _getBirimTipiFromProduct(stokKodu);
 
         // ✅ DOĞRU cartKey kullan: stokKodu_birimTipi
         final cartKey = '${stokKodu}_$birimTipi';
@@ -887,15 +922,9 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
             final discountAmount = (cartItem.birimFiyat * cartItem.iskonto) / 100;
             final discountedPrice = cartItem.birimFiyat - discountAmount;
             expectedPrice = discountedPrice.toStringAsFixed(2);
-          } else if (selectedBirim != null) {
-            // BirimModel'den fiyat al (fiyat7)
-            final orjinalFiyat = selectedBirim.fiyat7 ?? 0.0;
-            expectedPrice = orjinalFiyat.toStringAsFixed(2);
           } else {
-            // Fallback: Eski sistem
-            final orjinalFiyat = birimTipi == 'UNIT'
-                ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-                : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
+            // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+            final orjinalFiyat = _getPriceFromBirimler(stokKodu, birimTipi);
             expectedPrice = orjinalFiyat.toStringAsFixed(2);
           }
 
@@ -985,10 +1014,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
       return;
     }
 
-    final fiyat = selectedBirim?.fiyat7 ??
-        (birimTipi == 'UNIT'
-            ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-            : double.tryParse(product.kutuFiyati.toString()) ?? 0.0);
+    // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+    final fiyat = _getPriceFromBirimler(key, birimTipi);
 
     cartProvider.customerKod = customerProvider.selectedCustomer!.kod!;
     cartProvider.customerName = customerProvider.selectedCustomer!.unvan ?? customerProvider.selectedCustomer!.kod!;
@@ -1108,7 +1135,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
   }
 
   Widget _buildPriceField(ProductModel product, CartItem? cartItem, TextEditingController priceController, FocusNode priceFocusNode, TextEditingController discountController, FocusNode discountFocusNode, CartProvider cartProvider, SalesCustomerProvider customerProvider) {
-    final birimTipi = cartItem?.birimTipi ?? ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'BOX' : 'UNIT');
+    // ✅ FIX: birimTipi'yi SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+    final birimTipi = cartItem?.birimTipi ?? _getBirimTipiFromProduct(product.stokKodu);
 
     return Container(
       height: 8.w,
@@ -1137,10 +1165,8 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
           final yeniFiyat = double.tryParse(value.replaceAll(',', '.'));
           if (yeniFiyat == null || yeniFiyat < 0) return;
 
-          var orjinalFiyatHesap = birimTipi == 'UNIT'
-              ? double.tryParse(product.adetFiyati.toString()) ?? 0.0
-              : double.tryParse(product.kutuFiyati.toString()) ?? 0.0;
-
+          // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+          var orjinalFiyatHesap = _getPriceFromBirimler(product.stokKodu, birimTipi);
           if (orjinalFiyatHesap <= 0) orjinalFiyatHesap = yeniFiyat;
 
           final indirimOrani = (orjinalFiyatHesap > 0 && yeniFiyat < orjinalFiyatHesap)
@@ -1269,53 +1295,78 @@ class _CartsuggestionViewState extends State<CartsuggestionView> {
     CartProvider cartProvider,
     SalesCustomerProvider customerProvider,
   ) async {
-    String selectedBirimTipi = (double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0 ? 'Box' : 'Unit';
+    // ✅ FIX: Birimler listesinden dinamik seçenekler oluştur (Product tablosu KULLANILMAZ!)
+    final birimler = _productBirimlerMap[product.stokKodu] ?? [];
+
+    // Default birim seç
+    String selectedBirimTipi = _getBirimTipiFromProduct(product.stokKodu);
     final miktarController = TextEditingController(text: '1');
+
+    // Eğer birimler boşsa uyarı göster
+    if (birimler.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bu ürün için birim tanımı bulunamadı.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('cart.add_free_product'.tr()),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedBirimTipi,
-                items: [
-                  if ((double.tryParse(product.adetFiyati.toString()) ?? 0) > 0)
-                    DropdownMenuItem(value: 'Unit', child: Text('cart.unit'.tr())),
-                  if ((double.tryParse(product.kutuFiyati.toString()) ?? 0) > 0)
-                    DropdownMenuItem(value: 'Box', child: Text('cart.box'.tr())),
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('cart.add_free_product'.tr()),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ✅ Dinamik birim dropdown (Birimler tablosundan)
+                  DropdownButtonFormField<String>(
+                    value: selectedBirimTipi,
+                    items: birimler.map((birim) {
+                      final birimKod = (birim.birimkod ?? birim.birimadi ?? 'UNIT').toUpperCase();
+                      return DropdownMenuItem(
+                        value: birimKod,
+                        child: Text(birim.birimadi ?? birimKod),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          selectedBirimTipi = value;
+                        });
+                      }
+                    },
+                    decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: miktarController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
+                  ),
                 ],
-                onChanged: (value) {
-                  if (value != null) selectedBirimTipi = value;
-                },
-                decoration: InputDecoration(labelText: 'cart.unit_type'.tr()),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: miktarController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: 'cart.quantity'.tr()),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('cart.cancel'.tr()),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final miktar = int.tryParse(miktarController.text);
-                if (miktar != null && miktar > 0) {
-                  Navigator.pop(context, {'birimTipi': selectedBirimTipi, 'miktar': miktar});
-                }
-              },
-              child: Text('cart.add'.tr()),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('cart.cancel'.tr()),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final miktar = int.tryParse(miktarController.text);
+                    if (miktar != null && miktar > 0) {
+                      Navigator.pop(context, {'birimTipi': selectedBirimTipi, 'miktar': miktar});
+                    }
+                  },
+                  child: Text('cart.add'.tr()),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1893,10 +1944,8 @@ class _ProductListItemSuggestionState extends State<ProductListItemSuggestion> {
         child: InkWell(
           onTap: isEnabled
               ? () {
-                  final fiyat = widget.selectedBirim?.fiyat7 ??
-                      (widget.birimTipi == 'UNIT'
-                          ? double.tryParse(widget.product.adetFiyati.toString()) ?? 0.0
-                          : double.tryParse(widget.product.kutuFiyati.toString()) ?? 0.0);
+                  // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
+                  final fiyat = widget.selectedBirim?.fiyat7 ?? 0.0;
 
                   final iskonto = cartItem?.iskonto ?? 0.0;
 

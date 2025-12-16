@@ -1507,15 +1507,27 @@ class RefundProductDetails extends StatelessWidget {
               final latestRefund = matchingRefunds.isNotEmpty ? matchingRefunds.first : null;
 
               return latestRefund?.birimFiyat ?? (() {
-                // ✅ Önce selectedBirim'den fiyat7'yi al
+                // ✅ FIX: Fiyatı SADECE Birimler tablosundan al (Product tablosu KULLANILMAZ!)
                 if (selectedBirim != null && selectedBirim!.fiyat7 != null && selectedBirim!.fiyat7! > 0) {
                   return selectedBirim!.fiyat7! * 0.7; // %70 indirimli fiyat
                 }
-                // Fallback: Eski sistem (sadece birim yüklenmemişse)
-                final originalPrice = selectedType == 'Box'
-                  ? double.tryParse(product.kutuFiyati.toString()) ?? 0
-                  : double.tryParse(product.adetFiyati.toString()) ?? 0;
-                return originalPrice * 0.7; // %70 çarpılı
+                // ✅ FIX: Birimler listesinden fiyat7 al (Product tablosu KULLANILMAZ!)
+                if (birimler.isNotEmpty) {
+                  // birimTipi'ye göre birimi bul
+                  final matchingBirim = birimler.cast<BirimModel?>().firstWhere(
+                    (b) => (b?.birimkod ?? b?.birimadi ?? '').toUpperCase() == selectedType.toUpperCase(),
+                    orElse: () => null,
+                  );
+                  if (matchingBirim != null && matchingBirim.fiyat7 != null && matchingBirim.fiyat7! > 0) {
+                    return matchingBirim.fiyat7! * 0.7; // %70 indirimli fiyat
+                  }
+                  // Fallback: İlk birimin fiyatını al
+                  final firstBirim = birimler.first;
+                  if (firstBirim.fiyat7 != null && firstBirim.fiyat7! > 0) {
+                    return firstBirim.fiyat7! * 0.7; // %70 indirimli fiyat
+                  }
+                }
+                return 0.0; // Hiçbir fiyat bulunamazsa 0
               })();
             })();
 

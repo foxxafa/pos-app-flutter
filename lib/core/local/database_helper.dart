@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 
 class DatabaseHelper {
   static const _databaseName = "pos_database.db";
-  static const _databaseVersion = 13;  // Version artırıldı (cartrefund_items tablosuna fisNo ve customerKod eklendi)
+  static const _databaseVersion = 14;  // Version artırıldı (refund_queue tablosu eklendi)
 
   // Singleton pattern
   static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
@@ -109,6 +109,19 @@ class DatabaseHelper {
       } catch (e) {
         debugPrint('ℹ️ customerKod column already exists: $e');
       }
+    }
+
+    // Version 14: refund_queue tablosu ekle (offline iade sync için)
+    if (oldVersion < 14) {
+      debugPrint('Creating refund_queue table...');
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS refund_queue (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          fisNo TEXT,
+          data TEXT
+        )
+      ''');
+      debugPrint('✅ refund_queue table created successfully');
     }
   }
 
@@ -350,10 +363,17 @@ class DatabaseHelper {
       ON Depostok(StokKodu, birim)
     ''');
 
-    // NOTE: AppState and refund_queue tables are created dynamically
-    // at runtime in their respective services (sync_service.dart and
-    // refund_repository_impl.dart) using CREATE TABLE IF NOT EXISTS.
-    // This maintains backward compatibility with existing databases.
+    // Refund queue table - Bekleyen iade işlemleri (offline sync için)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS refund_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fisNo TEXT,
+        data TEXT
+      )
+    ''');
+
+    // NOTE: AppState table is created dynamically at runtime in sync_service.dart
+    // using CREATE TABLE IF NOT EXISTS. This maintains backward compatibility.
 
     // NOTE: UpdateDates tablosu kaldırıldı - Artık son senkronizasyon zamanı
     // SharedPreferences'ta 'last_sync_time' anahtarı ile saklanıyor (sync_service.dart)
